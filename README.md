@@ -47,7 +47,7 @@ DATABASE_URL_DEVELOPMENT=postgres://postgres:postgres@localhost:5432/promise9
 DATABASE_URL_PRODUCTION=postgres://user:password@host:5432/promise9?sslmode=verify-full
 ```
 
-`APP_ENV=production`일 때는 `DATABASE_URL_PRODUCTION`을 사용하고, 그 외 환경에서는 `DATABASE_URL_DEVELOPMENT`를 사용합니다.
+`APP_ENV=development`일 때는 `DATABASE_URL_DEVELOPMENT`, `APP_ENV=production`일 때는 `DATABASE_URL_PRODUCTION`을 사용합니다.
 Render 같은 managed PostgreSQL이 SSL을 요구하면 URL 끝에 `?sslmode=verify-full`을 붙입니다.
 
 ## 데이터베이스
@@ -108,10 +108,10 @@ bun run format
     </td>
     <td align="center" width="160">
       <a href="https://github.com/ninaxlee">
-        <img src="https://github.com/ninaxlee.png?size=120" width="100" height="100" alt="Nina 프로필 이미지" />
+        <img src="https://github.com/ninaxlee.png?size=120" width="100" height="100" alt="이미나 프로필 이미지" />
       </a>
       <br />
-      <strong>Nina</strong>
+      <strong>이미나</strong>
       <br />
       <a href="https://github.com/ninaxlee">@ninaxlee</a>
       <br />
