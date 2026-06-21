@@ -42,12 +42,12 @@ bun run start:prod
 `.env.example`을 참고해 `.env`를 생성합니다.
 
 ```bash
-NODE_ENV=development
+APP_ENV=development
 DATABASE_URL_DEVELOPMENT=postgres://postgres:postgres@localhost:5432/promise9
 DATABASE_URL_PRODUCTION=postgres://user:password@host:5432/promise9?sslmode=verify-full
 ```
 
-`NODE_ENV=production`일 때는 `DATABASE_URL_PRODUCTION`을 사용하고, 그 외 환경에서는 `DATABASE_URL_DEVELOPMENT`를 사용합니다.
+`APP_ENV=production`일 때는 `DATABASE_URL_PRODUCTION`을 사용하고, 그 외 환경에서는 `DATABASE_URL_DEVELOPMENT`를 사용합니다.
 Render 같은 managed PostgreSQL이 SSL을 요구하면 URL 끝에 `?sslmode=verify-full`을 붙입니다.
 
 ## 데이터베이스
