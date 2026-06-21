@@ -1,14 +1,16 @@
-import 'dotenv/config';
-import { defineConfig } from 'drizzle-kit';
-import { resolveDatabaseUrl } from './src/config/environment';
+import { defineConfig } from 'drizzle-kit'
 
-const databaseUrl = resolveDatabaseUrl(process.env);
+import { validateEnvironment } from './src/config/environment'
+
+import 'dotenv/config'
+
+const env = validateEnvironment(process.env)
 
 export default defineConfig({
-  schema: './src/database/schema.ts',
-  out: './drizzle',
-  dialect: 'postgresql',
-  dbCredentials: {
-    url: databaseUrl,
-  },
-});
+    schema: './src/database/schema.ts',
+    out: './drizzle',
+    dialect: 'postgresql',
+    dbCredentials: {
+        url: env.DATABASE_URL,
+    },
+})

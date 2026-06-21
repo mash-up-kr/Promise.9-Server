@@ -52,10 +52,6 @@ export function validateEnvironment(
     return result.data
 }
 
-export function resolveDatabaseUrl(config: NodeJS.ProcessEnv) {
-    return validateEnvironment(config).DATABASE_URL
-}
-
 function getDatabaseUrlKey(appEnv: RuntimeEnvironment) {
     return appEnv === 'production'
         ? 'DATABASE_URL_PRODUCTION'
