@@ -92,8 +92,7 @@ jobs:
           {body}
           """)
 
-          document_path.parent.mkdir(parents=True, exist_ok=True)
-          document_path.write_text(document, encoding="utf-8")
+          Path("/tmp/issue-document.md").write_text(document, encoding="utf-8")
 
           pr_body = textwrap.dedent(f"""\
           ## 📌 작업 내용
@@ -151,11 +150,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git ls-remote --exit-code --heads origin "${BRANCH_NAME}" > /dev/null 2>&1; then
-            git fetch origin "${BRANCH_NAME}"
+            git fetch origin "refs/heads/${BRANCH_NAME}:refs/remotes/origin/${BRANCH_NAME}"
             git switch -c "${BRANCH_NAME}" --track "origin/${BRANCH_NAME}" || git switch "${BRANCH_NAME}"
           else
             git switch -c "${BRANCH_NAME}"
           fi
+
+          mkdir -p "$(dirname "${DOCUMENT_PATH}")"
+          cp /tmp/issue-document.md "${DOCUMENT_PATH}"
 
           git add "${DOCUMENT_PATH}"
           if git diff --cached --quiet; then
