@@ -42,6 +42,9 @@ lerna-debug.log*
 .env.production.local
 .env.local
 
+# Drizzle local artifacts
+.drizzle/
+
 # temp directory
 .temp
 .tmp
