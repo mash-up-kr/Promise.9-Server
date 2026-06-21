@@ -64,6 +64,9 @@ jobs:
           else:
               issue_type = "chore"
 
+          managed_labels = {"agreement", "bug", "docs", "feature", "hotfix"}
+          pr_labels = [label for label in labels if label.lower() in managed_labels]
+
           clean_title = re.sub(r"^\s*\[[^\]]+\]\s*", "", title).strip() or f"Issue {number}"
           slug_source = unicodedata.normalize("NFKC", clean_title).lower()
           slug = "".join(char if char.isalnum() else "-" for char in slug_source)
@@ -136,6 +139,7 @@ jobs:
           emit("CLEAN_TITLE", clean_title)
           emit("BRANCH_NAME", branch_name)
           emit("DOCUMENT_PATH", document_path)
+          emit("PR_LABELS", ",".join(pr_labels))
           PY
 
           source /tmp/issue-context.env
@@ -145,6 +149,7 @@ jobs:
             echo "clean_title=${CLEAN_TITLE}"
             echo "branch_name=${BRANCH_NAME}"
             echo "document_path=${DOCUMENT_PATH}"
+            echo "pr_labels=${PR_LABELS}"
           } >> "$GITHUB_OUTPUT"
 
           git config user.name "github-actions[bot]"
@@ -173,6 +178,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           BRANCH_NAME: ${{ steps.issue.outputs.branch_name }}
           PR_TITLE: "[${{ steps.issue.outputs.issue_type }}] ${{ steps.issue.outputs.clean_title }}"
+          PR_LABELS: ${{ steps.issue.outputs.pr_labels }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
@@ -180,11 +186,20 @@ jobs:
           existing_pr="$(gh pr list --head "${BRANCH_NAME}" --state open --json number --jq '.[0].number // empty')"
           if [ -n "${existing_pr}" ]; then
             echo "Draft PR already exists: #${existing_pr}"
+            if [ -n "${PR_LABELS}" ]; then
+              gh pr edit "${existing_pr}" --add-label "${PR_LABELS}"
+            fi
           else
+            label_args=()
+            if [ -n "${PR_LABELS}" ]; then
+              label_args=(--label "${PR_LABELS}")
+            fi
+
             gh pr create \
               --base "${DEFAULT_BRANCH}" \
               --head "${BRANCH_NAME}" \
               --title "${PR_TITLE}" \
               --body-file /tmp/pr-body.md \
-              --draft
+              --draft \
+              "${label_args[@]}"
           fi
