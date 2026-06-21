@@ -5,18 +5,19 @@ export type RuntimeEnvironment = 'development' | 'production'
 const envSchema = z
     .object({
         APP_ENV: z.enum(['development', 'production']).default('development'),
-        DATABASE_URL_DEVELOPMENT: z.string().url().optional(),
-        DATABASE_URL_PRODUCTION: z.string().url().optional(),
+        DATABASE_URL_DEVELOPMENT: z.url().optional(),
+        DATABASE_URL_PRODUCTION: z.url().optional(),
         DB_POOL_SIZE: z.coerce.number().int().positive().default(5),
     })
     .superRefine((env, ctx) => {
+        // APP_ENV에 따라 DATABASE_URL_DEVELOPMENT 또는 DATABASE_URL_PRODUCTION을 요구한다.
         const databaseUrlKey = getDatabaseUrlKey(env.APP_ENV)
 
         if (!env[databaseUrlKey]) {
             ctx.addIssue({
                 code: 'custom',
                 path: [databaseUrlKey],
-                message: `${databaseUrlKey} is required.`,
+                message: `${databaseUrlKey} 환경변수가 필요합니다.`,
             })
         }
     })
@@ -45,7 +46,7 @@ export function validateEnvironment(
             })
             .join('\n')
 
-        throw new Error(`Invalid environment variables:\n${messages}`)
+        throw new Error(`환경변수 설정이 올바르지 않습니다:\n${messages}`)
     }
 
     return result.data

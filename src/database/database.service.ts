@@ -29,6 +29,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
         this.db = drizzle(this.client, {
             schema,
+            // TypeScript의 camelCase 필드를 PostgreSQL의 snake_case 컬럼으로 매핑
             casing: 'snake_case',
         })
     }
@@ -36,9 +37,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     async onModuleInit() {
         try {
             await this.client`select 1`
-            this.logger.log('Database connection established.')
+            this.logger.log('데이터베이스 연결이 완료되었습니다.')
         } catch (error) {
-            this.logger.error('Failed to connect to the database.')
+            this.logger.error('데이터베이스 연결에 실패했습니다.')
             throw error
         }
     }
