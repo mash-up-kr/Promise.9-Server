@@ -1,0 +1,188 @@
+name: Issue to Draft PR
+
+on:
+  issues:
+    types:
+      - opened
+
+permissions:
+  contents: write
+  issues: read
+  pull-requests: write
+
+jobs:
+  create-draft-pr:
+    name: Create branch, issue document, and draft PR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v4
+
+      - name: Create branch and issue document
+        id: issue
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          ISSUE_LABELS: ${{ toJson(github.event.issue.labels.*.name) }}
+          CREATED_AT: ${{ github.event.issue.created_at }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          python3 <<'PY' > /tmp/issue-context.env
+          import json
+          import os
+          import re
+          import shlex
+          import textwrap
+          import unicodedata
+          from pathlib import Path
+
+          number = os.environ["ISSUE_NUMBER"]
+          title = os.environ["ISSUE_TITLE"].strip()
+          body = os.environ.get("ISSUE_BODY") or ""
+          author = os.environ["ISSUE_AUTHOR"]
+          issue_url = os.environ["ISSUE_URL"]
+          created_at = os.environ["CREATED_AT"]
+          labels = json.loads(os.environ.get("ISSUE_LABELS") or "[]")
+
+          label_set = {label.lower() for label in labels}
+          if "feature" in label_set:
+              issue_type = "feature"
+          elif "bug" in label_set or "fix" in label_set or "hotfix" in label_set:
+              issue_type = "fix"
+          elif "docs" in label_set or "agreement" in label_set:
+              issue_type = "docs"
+          elif "refactor" in label_set:
+              issue_type = "refactor"
+          elif "chore" in label_set:
+              issue_type = "chore"
+          else:
+              issue_type = "chore"
+
+          clean_title = re.sub(r"^\s*\[[^\]]+\]\s*", "", title).strip() or f"Issue {number}"
+          slug_source = unicodedata.normalize("NFKC", clean_title).lower()
+          slug = "".join(char if char.isalnum() else "-" for char in slug_source)
+          slug = re.sub(r"-+", "-", slug).strip("-")
+          if not slug:
+              slug = "issue"
+          slug = slug[:80].strip("-") or "issue"
+
+          branch_name = f"{issue_type}/{number}-{slug}"
+          document_path = Path("docs/issues") / f"{number}-{slug}.md"
+          labels_text = ", ".join(labels) if labels else "none"
+          body = body.rstrip() or "_No description provided._"
+
+          document = textwrap.dedent(f"""\
+          # {clean_title}
+
+          - Issue: #{number}
+          - URL: {issue_url}
+          - Author: @{author}
+          - Type: {issue_type}
+          - Labels: {labels_text}
+          - Created: {created_at}
+
+          ## Body
+
+          {body}
+          """)
+
+          document_path.parent.mkdir(parents=True, exist_ok=True)
+          document_path.write_text(document, encoding="utf-8")
+
+          pr_body = textwrap.dedent(f"""\
+          ## 📌 작업 내용
+          이슈 내용을 바탕으로 작업 브랜치와 Draft PR을 자동 생성했습니다.
+
+          이 PR은 이슈 내용을 레포 문서로 기록하고, 이후 작업 커밋을 이어가기 위한 시작점입니다.
+
+          <br>
+
+          ## ✅ 변경 사항
+          - [x] 이슈 내용을 `{document_path}`로 기록
+          - [ ] 구현
+          - [ ] 테스트 및 확인
+
+          <br>
+
+          ## 📷 스크린샷 (선택)
+          해당 없음
+
+          <br>
+
+          ## 🔗 관련 이슈
+          close #{number}
+
+          <br>
+
+          ## 💬 리뷰어에게
+          작업 중인 PR이므로 Draft 상태로 생성되었습니다.
+
+          작업 완료 후 `Ready for review`로 전환하면 `CODEOWNERS` 기준으로 리뷰어가 자동 요청됩니다.
+
+          병합 시 팀 컨벤션에 따라 Merge commit을 사용합니다.
+          """)
+
+          Path("/tmp/pr-body.md").write_text(pr_body, encoding="utf-8")
+
+          def emit(key, value):
+              print(f"{key}={shlex.quote(str(value))}")
+
+          emit("ISSUE_TYPE", issue_type)
+          emit("CLEAN_TITLE", clean_title)
+          emit("BRANCH_NAME", branch_name)
+          emit("DOCUMENT_PATH", document_path)
+          PY
+
+          source /tmp/issue-context.env
+
+          {
+            echo "issue_type=${ISSUE_TYPE}"
+            echo "clean_title=${CLEAN_TITLE}"
+            echo "branch_name=${BRANCH_NAME}"
+            echo "document_path=${DOCUMENT_PATH}"
+          } >> "$GITHUB_OUTPUT"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin "${BRANCH_NAME}" > /dev/null 2>&1; then
+            git fetch origin "${BRANCH_NAME}"
+            git switch -c "${BRANCH_NAME}" --track "origin/${BRANCH_NAME}" || git switch "${BRANCH_NAME}"
+          else
+            git switch -c "${BRANCH_NAME}"
+          fi
+
+          git add "${DOCUMENT_PATH}"
+          if git diff --cached --quiet; then
+            echo "No issue document changes to commit."
+          else
+            git commit -m "docs: record issue #${ISSUE_NUMBER}"
+          fi
+
+          git push origin "${BRANCH_NAME}"
+
+      - name: Create draft pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH_NAME: ${{ steps.issue.outputs.branch_name }}
+          PR_TITLE: "[${{ steps.issue.outputs.issue_type }}] ${{ steps.issue.outputs.clean_title }}"
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          existing_pr="$(gh pr list --head "${BRANCH_NAME}" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "${existing_pr}" ]; then
+            echo "Draft PR already exists: #${existing_pr}"
+          else
+            gh pr create \
+              --base "${DEFAULT_BRANCH}" \
+              --head "${BRANCH_NAME}" \
+              --title "${PR_TITLE}" \
+              --body-file /tmp/pr-body.md \
+              --draft
+          fi
