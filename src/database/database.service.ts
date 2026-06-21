@@ -5,30 +5,37 @@ import {
     OnModuleInit,
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { drizzle } from 'drizzle-orm/node-postgres'
-import { NodePgDatabase } from 'drizzle-orm/node-postgres'
-import { Pool } from 'pg'
+import { drizzle, PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import postgres from 'postgres'
+
+import { ValidatedEnvironment } from '../config/environment'
 
 import * as schema from './schema'
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     private readonly logger = new Logger(DatabaseService.name)
-    private readonly pool: Pool
+    private readonly client: ReturnType<typeof postgres>
 
-    readonly db: NodePgDatabase<typeof schema>
+    readonly db: PostgresJsDatabase<typeof schema>
 
-    constructor(config: ConfigService) {
-        this.pool = new Pool({
-            connectionString: config.getOrThrow<string>('DATABASE_URL'),
+    constructor(config: ConfigService<ValidatedEnvironment, true>) {
+        this.client = postgres(
+            config.getOrThrow('DATABASE_URL', { infer: true }),
+            {
+                max: config.get('DB_POOL_SIZE', { infer: true }),
+            },
+        )
+
+        this.db = drizzle(this.client, {
+            schema,
+            casing: 'snake_case',
         })
-
-        this.db = drizzle(this.pool, { schema })
     }
 
     async onModuleInit() {
         try {
-            await this.pool.query('select 1')
+            await this.client`select 1`
             this.logger.log('Database connection established.')
         } catch (error) {
             this.logger.error('Failed to connect to the database.')
@@ -37,6 +44,6 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     }
 
     async onModuleDestroy() {
-        await this.pool.end()
+        await this.client.end()
     }
 }

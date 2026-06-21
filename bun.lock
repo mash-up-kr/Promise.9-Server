@@ -12,7 +12,7 @@
         "@nestjs/swagger": "^11.4.4",
         "dotenv": "^17.4.2",
         "drizzle-orm": "^0.45.2",
-        "pg": "^8.22.0",
+        "postgres": "^3.4.9",
         "reflect-metadata": "^0.2.2",
         "rxjs": "^7.8.1",
       },
@@ -27,7 +27,6 @@
         "@types/express": "^5.0.0",
         "@types/jest": "^29.5.14",
         "@types/node": "^22.10.7",
-        "@types/pg": "^8.20.0",
         "@types/supertest": "^6.0.2",
         "drizzle-kit": "^0.31.10",
         "eslint": "^9.18.0",
@@ -1278,6 +1277,8 @@
     "pkg-dir": ["pkg-dir@4.2.0", "", { "dependencies": { "find-up": "^4.0.0" } }, "sha512-HRDzbaKjC+AOWVXxAU/x54COGeIv9eb+6CkDSQoNTt4XyWoIJvuPsXizxu/Fr23EiekbtZwmh1IcIG/l/a10GQ=="],
 
     "pluralize": ["pluralize@8.0.0", "", {}, "sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA=="],
+
+    "postgres": ["postgres@3.4.9", "", {}, "sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw=="],
 
     "postgres-array": ["postgres-array@2.0.0", "", {}, "sha512-VpZrUqU5A69eQyW2c5CA1jtLecCsN2U/bD6VilrFDWq5+5UIEVO7nazS3TEcHf1zuPYO/sqGvUvW62g86RXZuA=="],
 

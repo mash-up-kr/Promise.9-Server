@@ -8,9 +8,10 @@ const databaseUrlByEnvironment: Record<
     production: 'DATABASE_URL_PRODUCTION',
 }
 
-export type ValidatedEnvironment = NodeJS.ProcessEnv & {
+export type ValidatedEnvironment = {
     APP_ENV: RuntimeEnvironment
     DATABASE_URL: string
+    DB_POOL_SIZE: number
 }
 
 export function validateEnvironment(
@@ -24,6 +25,11 @@ export function validateEnvironment(
         ...config,
         APP_ENV: appEnv,
         DATABASE_URL: databaseUrl,
+        DB_POOL_SIZE: parsePositiveInteger(
+            config.DB_POOL_SIZE,
+            'DB_POOL_SIZE',
+            5,
+        ),
     }
 }
 
@@ -64,4 +70,22 @@ function parseDatabaseUrl(value: unknown, key: string) {
     }
 
     return databaseUrl
+}
+
+function parsePositiveInteger(
+    value: unknown,
+    key: string,
+    defaultValue: number,
+) {
+    if (value === undefined || value === '') {
+        return defaultValue
+    }
+
+    const parsedValue = Number(value)
+
+    if (!Number.isInteger(parsedValue) || parsedValue < 1) {
+        throw new Error(`${key} must be a positive integer.`)
+    }
+
+    return parsedValue
 }
