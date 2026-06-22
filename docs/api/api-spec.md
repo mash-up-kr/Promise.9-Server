@@ -52,7 +52,7 @@ GET /users/me
 ```json
 {
   "data": {
-    "userId": "string",
+    "userId": 1,
     "email": "string",
     "provider": "kakao" | "google",
     "createdAt": "2026-02-26T00:00:00Z"
@@ -77,7 +77,7 @@ GET /home
   "data": {
     "recentLinks": [
       {
-        "linkId": "string",
+        "linkId": 1,
         "title": "string",
         "thumbnailUrl": "string | null",
         "savedAt": "2026-02-26T00:00:00Z"
@@ -85,11 +85,11 @@ GET /home
     ],
     "recentFolders": [
       {
-        "folderId": "string",
+        "folderId": 1,
         "folderName": "string",
         "previewLinks": [
           {
-            "linkId": "string",
+            "linkId": 1,
             "title": "string",
             "thumbnailUrl": "string | null"
           }
@@ -139,7 +139,7 @@ POST /links
 ```json
 {
   "url": "string",
-  "folderId": "string | null",
+  "folderId": "number | null",
   "memo": "string | null"
 }
 ```
@@ -147,7 +147,7 @@ POST /links
 ```json
 {
   "data": {
-    "linkId": "string",
+    "linkId": 1,
     "url": "string",
     "status": "processing",
     "savedAt": "2026-02-26T00:00:00Z"
@@ -167,10 +167,10 @@ GET /links/{linkId}
 ```json
 {
   "data": {
-    "linkId": "string",
+    "linkId": 1,
     "url": "string",
     "folder": {
-      "folderId": "string",
+      "folderId": 1,
       "folderName": "string"
     },
     "thumbnailUrl": "string | null",
@@ -181,7 +181,7 @@ GET /links/{linkId}
     "status": "done | processing | failed",
     "tags": [
       {
-        "tagId": "string",
+        "tagId": 1,
         "name": "string"
       }
     ],
@@ -189,7 +189,7 @@ GET /links/{linkId}
     "memo": "string | null",
     "relatedLinks": [
       {
-        "linkId": "string",
+        "linkId": 1,
         "title": "string",
         "thumbnailUrl": "string | null"
       }
@@ -211,7 +211,7 @@ PATCH /links/{linkId}
 **Request Body** (변경할 필드만 포함)
 ```json
 {
-  "folderId": "string | null",
+  "folderId": "number | null",
   "memo": "string | null"
 }
 ```
@@ -219,8 +219,8 @@ PATCH /links/{linkId}
 ```json
 {
   "data": {
-    "linkId": "string",
-    "folderId": "string | null",
+    "linkId": 1,
+    "folderId": "number | null",
     "memo": "string | null",
     "updatedAt": "2026-02-26T00:00:00Z"
   }
@@ -249,7 +249,7 @@ POST /links/{linkId}/restore
 ```json
 {
   "data": {
-    "linkId": "string",
+    "linkId": 1,
     "folderId": null,
     "restoredAt": "2026-02-26T00:00:00Z"
   }
@@ -275,7 +275,7 @@ GET /links/search?q={keyword}&folderId={folderId}
   "data": {
     "results": [
       {
-        "linkId": "string",
+        "linkId": 1,
         "title": "string",
         "source": "string",
         "thumbnailUrl": "string | null",
@@ -340,7 +340,7 @@ GET /folders
     },
     "folders": [
       {
-        "folderId": "string",
+        "folderId": 1,
         "folderName": "string",
         "linkCount": 12
       }
@@ -368,7 +368,7 @@ POST /folders
 ```json
 {
   "data": {
-    "folderId": "string",
+    "folderId": 1,
     "folderName": "string",
     "createdAt": "2026-02-26T00:00:00Z"
   }
@@ -391,7 +391,7 @@ PATCH /folders/{folderId}
 ```json
 {
   "data": {
-    "folderId": "string",
+    "folderId": 1,
     "folderName": "string",
     "updatedAt": "2026-02-26T00:00:00Z"
   }
@@ -419,12 +419,12 @@ GET /folders/{folderId}/links
 {
   "data": {
     "folder": {
-      "folderId": "string",
+      "folderId": 1,
       "folderName": "string"
     },
     "links": [
       {
-        "linkId": "string",
+        "linkId": 1,
         "title": "string",
         "thumbnailUrl": "string | null",
         "savedAt": "2026-02-26T00:00:00Z"
