@@ -7,7 +7,7 @@ import 'dotenv/config'
 const env = validateEnvironment(process.env)
 
 export default defineConfig({
-    schema: './src/database/schema.ts',
+    schema: './src/config/database/schema.ts',
     out: './drizzle',
     dialect: 'postgresql',
     casing: 'snake_case',

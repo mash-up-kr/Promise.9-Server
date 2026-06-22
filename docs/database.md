@@ -15,11 +15,11 @@
 
 ## Schema
 
-도메인별 schema를 정의하고, `src/database/schema.ts`에서 모아서 export한다.
+도메인별 schema를 정의하고, `src/config/database/schema.ts`에서 모아서 export한다.
 
 ```text
 src/modules/{domain}/{domain}.schema.ts
-src/database/schema.ts
+src/config/database/schema.ts
 ```
 
 ## Migration
@@ -51,5 +51,5 @@ bun run db:migrate
 실패 로그:
 
 ```text
-데이터베이스 연결에 실패했습니다.
+데이터베이스 연결에 실패했습니다: {error message}
 ```

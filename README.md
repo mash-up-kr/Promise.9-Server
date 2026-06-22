@@ -52,7 +52,7 @@ Render 같은 managed PostgreSQL이 SSL을 요구하면 URL 끝에 `?sslmode=ver
 
 ## 데이터베이스
 
-스키마는 `src/database/schema.ts`에 정의합니다. PostgreSQL `jsonb` 컬럼은 Drizzle의 `jsonb().$type<T>()`로 타입을 지정해서 사용할 수 있습니다.
+스키마는 `src/config/database/schema.ts`에 정의합니다. PostgreSQL `jsonb` 컬럼은 Drizzle의 `jsonb().$type<T>()`로 타입을 지정해서 사용할 수 있습니다.
 
 ```bash
 # 마이그레이션 파일 생성
