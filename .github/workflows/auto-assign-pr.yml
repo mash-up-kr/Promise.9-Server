@@ -1,0 +1,61 @@
+name: Auto assign PR reviewers and assignee
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  assign-pr:
+    name: Assign PR reviewers and assignee
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Assign author and request reviewers
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+          REVIEWER_CANDIDATES: hyoinkang ninaxlee vcz-Chan Choi-JY1107
+        run: |
+          set -euo pipefail
+
+          if ! gh pr edit "${PR_NUMBER}" \
+            --repo "${REPOSITORY}" \
+            --add-assignee "${PR_AUTHOR}"; then
+            echo "::warning::Failed to assign PR author ${PR_AUTHOR}."
+          fi
+
+          if [ "${IS_DRAFT}" = "true" ]; then
+            echo "Draft PR: reviewers will be requested when the PR is ready for review."
+            exit 0
+          fi
+
+          author_lower="$(printf '%s' "${PR_AUTHOR}" | tr '[:upper:]' '[:lower:]')"
+          reviewers=()
+          for reviewer in ${REVIEWER_CANDIDATES}; do
+            reviewer_lower="$(printf '%s' "${reviewer}" | tr '[:upper:]' '[:lower:]')"
+            if [ "${reviewer_lower}" != "${author_lower}" ]; then
+              reviewers+=("${reviewer}")
+            fi
+          done
+
+          if [ "${#reviewers[@]}" -eq 0 ]; then
+            echo "No reviewers to request."
+            exit 0
+          fi
+
+          reviewers_csv="$(IFS=,; echo "${reviewers[*]}")"
+          gh pr edit "${PR_NUMBER}" \
+            --repo "${REPOSITORY}" \
+            --add-reviewer "${reviewers_csv}"
