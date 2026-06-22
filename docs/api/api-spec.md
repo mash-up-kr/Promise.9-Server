@@ -25,7 +25,7 @@
 
 ```json
 {
-  "data": {}
+  "data": {...}
 }
 ```
 
@@ -51,10 +51,12 @@ GET /users/me
 **Response `200`**
 ```json
 {
-  "userId": "string",
-  "email": "string",
-  "provider": "kakao" | "google",
-  "createdAt": "2026-02-26T00:00:00Z"
+  "data": {
+    "userId": "string",
+    "email": "string",
+    "provider": "kakao" | "google",
+    "createdAt": "2026-02-26T00:00:00Z"
+  }
 }
 ```
 
@@ -72,27 +74,29 @@ GET /home
 **Response `200`**
 ```json
 {
-  "recentLinks": [
-    {
-      "linkId": "string",
-      "title": "string",
-      "thumbnailUrl": "string | null",
-      "savedAt": "2026-02-26T00:00:00Z"
-    }
-  ],
-  "recentFolders": [
-    {
-      "folderId": "string",
-      "folderName": "string",
-      "previewLinks": [
-        {
-          "linkId": "string",
-          "title": "string",
-          "thumbnailUrl": "string | null"
-        }
-      ]
-    }
-  ]
+  "data": {
+    "recentLinks": [
+      {
+        "linkId": "string",
+        "title": "string",
+        "thumbnailUrl": "string | null",
+        "savedAt": "2026-02-26T00:00:00Z"
+      }
+    ],
+    "recentFolders": [
+      {
+        "folderId": "string",
+        "folderName": "string",
+        "previewLinks": [
+          {
+            "linkId": "string",
+            "title": "string",
+            "thumbnailUrl": "string | null"
+          }
+        ]
+      }
+    ]
+  }
 }
 ```
 
@@ -115,9 +119,11 @@ GET /links/preview?url={url}
 **Response `200`**
 ```json
 {
-  "title": "string",
-  "source": "toss.tech",
-  "thumbnailUrl": "string | null"
+  "data": {
+    "title": "string",
+    "source": "toss.tech",
+    "thumbnailUrl": "string | null"
+  }
 }
 ```
 
@@ -140,10 +146,12 @@ POST /links
 **Response `202`**
 ```json
 {
-  "linkId": "string",
-  "url": "string",
-  "status": "processing",
-  "savedAt": "2026-02-26T00:00:00Z"
+  "data": {
+    "linkId": "string",
+    "url": "string",
+    "status": "processing",
+    "savedAt": "2026-02-26T00:00:00Z"
+  }
 }
 ```
 
@@ -158,33 +166,35 @@ GET /links/{linkId}
 **Response `200`**
 ```json
 {
-  "linkId": "string",
-  "url": "string",
-  "folder": {
-    "folderId": "string",
-    "folderName": "string"
-  },
-  "thumbnailUrl": "string | null",
-  "title": "string",
-  "source": "toss.tech",
-  "publishedAt": "2026-02-26T00:00:00Z",
-  "savedAt": "2026-02-26T00:00:00Z",
-  "status": "done | processing | failed",
-  "tags": [
-    {
-      "tagId": "string",
-      "name": "string"
-    }
-  ],
-  "aiSummary": "string | null",
-  "memo": "string | null",
-  "relatedLinks": [
-    {
-      "linkId": "string",
-      "title": "string",
-      "thumbnailUrl": "string | null"
-    }
-  ]
+  "data": {
+    "linkId": "string",
+    "url": "string",
+    "folder": {
+      "folderId": "string",
+      "folderName": "string"
+    },
+    "thumbnailUrl": "string | null",
+    "title": "string",
+    "source": "toss.tech",
+    "publishedAt": "2026-02-26T00:00:00Z",
+    "savedAt": "2026-02-26T00:00:00Z",
+    "status": "done | processing | failed",
+    "tags": [
+      {
+        "tagId": "string",
+        "name": "string"
+      }
+    ],
+    "aiSummary": "string | null",
+    "memo": "string | null",
+    "relatedLinks": [
+      {
+        "linkId": "string",
+        "title": "string",
+        "thumbnailUrl": "string | null"
+      }
+    ]
+  }
 }
 ```
 
@@ -208,10 +218,12 @@ PATCH /links/{linkId}
 **Response `200`**
 ```json
 {
-  "linkId": "string",
-  "folderId": "string | null",
-  "memo": "string | null",
-  "updatedAt": "2026-02-26T00:00:00Z"
+  "data": {
+    "linkId": "string",
+    "folderId": "string | null",
+    "memo": "string | null",
+    "updatedAt": "2026-02-26T00:00:00Z"
+  }
 }
 ```
 
@@ -236,9 +248,11 @@ POST /links/{linkId}/restore
 **Response `200`**
 ```json
 {
-  "linkId": "string",
-  "folderId": null,
-  "restoredAt": "2026-02-26T00:00:00Z"
+  "data": {
+    "linkId": "string",
+    "folderId": null,
+    "restoredAt": "2026-02-26T00:00:00Z"
+  }
 }
 ```
 
@@ -258,16 +272,18 @@ GET /links/search?q={keyword}&folderId={folderId}
 **Response `200`**
 ```json
 {
-  "results": [
-    {
-      "linkId": "string",
-      "title": "string",
-      "source": "string",
-      "thumbnailUrl": "string | null",
-      "savedAt": "2026-02-26T00:00:00Z"
-    }
-  ],
-  "totalCount": 0
+  "data": {
+    "results": [
+      {
+        "linkId": "string",
+        "title": "string",
+        "source": "string",
+        "thumbnailUrl": "string | null",
+        "savedAt": "2026-02-26T00:00:00Z"
+      }
+    ],
+    "totalCount": 0
+  }
 }
 ```
 
@@ -290,8 +306,10 @@ POST /links/{linkId}/tags
 **Response `201`**
 ```json
 {
-  "tagId": "string",
-  "name": "string"
+  "data": {
+    "tagId": "string",
+    "name": "string"
+  }
 }
 ```
 
@@ -314,18 +332,20 @@ GET /folders
 **Response `200`**
 ```json
 {
-  "systemFolders": {
-    "all": { "linkCount": 42 },
-    "uncategorized": { "linkCount": 5 },
-    "recentlyDeleted": { "linkCount": 3 }
-  },
-  "folders": [
-    {
-      "folderId": "string",
-      "folderName": "string",
-      "linkCount": 12
-    }
-  ]
+  "data": {
+    "systemFolders": {
+      "all": { "linkCount": 42 },
+      "uncategorized": { "linkCount": 5 },
+      "recentlyDeleted": { "linkCount": 3 }
+    },
+    "folders": [
+      {
+        "folderId": "string",
+        "folderName": "string",
+        "linkCount": 12
+      }
+    ]
+  }
 }
 ```
 
@@ -347,9 +367,11 @@ POST /folders
 **Response `201`**
 ```json
 {
-  "folderId": "string",
-  "folderName": "string",
-  "createdAt": "2026-02-26T00:00:00Z"
+  "data": {
+    "folderId": "string",
+    "folderName": "string",
+    "createdAt": "2026-02-26T00:00:00Z"
+  }
 }
 ```
 
@@ -368,9 +390,11 @@ PATCH /folders/{folderId}
 **Response `200`**
 ```json
 {
-  "folderId": "string",
-  "folderName": "string",
-  "updatedAt": "2026-02-26T00:00:00Z"
+  "data": {
+    "folderId": "string",
+    "folderName": "string",
+    "updatedAt": "2026-02-26T00:00:00Z"
+  }
 }
 ```
 
@@ -393,19 +417,21 @@ GET /folders/{folderId}/links
 **Response `200`**
 ```json
 {
-  "folder": {
-    "folderId": "string",
-    "folderName": "string"
-  },
-  "links": [
-    {
-      "linkId": "string",
-      "title": "string",
-      "thumbnailUrl": "string | null",
-      "savedAt": "2026-02-26T00:00:00Z"
-    }
-  ],
-  "totalCount": 12
+  "data": {
+    "folder": {
+      "folderId": "string",
+      "folderName": "string"
+    },
+    "links": [
+      {
+        "linkId": "string",
+        "title": "string",
+        "thumbnailUrl": "string | null",
+        "savedAt": "2026-02-26T00:00:00Z"
+      }
+    ],
+    "totalCount": 12
+  }
 }
 ```
 
