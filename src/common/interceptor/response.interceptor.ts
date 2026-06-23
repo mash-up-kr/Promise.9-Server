@@ -20,6 +20,7 @@ export class CommonResponseInterceptor<T> implements NestInterceptor<
         return next.handle().pipe(
             map((data) => {
                 return {
+                    success: true,
                     data: data,
                 }
             }),
