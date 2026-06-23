@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common'
 import { Response } from 'express'
 
-import { BaseException, ErrorResponse } from '../errors/base.exception'
+import { BaseException, ErrorResponse } from '../exception/base.exception'
 
 @Catch(HttpException)
 export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
@@ -19,9 +19,9 @@ export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
         const response = ctx.getResponse<Response>()
         const body = this.toErrorResponse(exception)
 
-        this.log(exception, body.statusCode)
+        this.log(exception, body.error.code)
 
-        response.status(body.statusCode).json(body)
+        response.status(body.error.code).json(body)
     }
 
     // baseException 기반의 예외는 그대로 사용하고, 아닌 경우(httpException)는 공통 포맷으로 감싸는 과정 진행
@@ -35,14 +35,17 @@ export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
 
     // Nest 기본 HttpException을 공통 포맷으로 감싸기
     private fromHttpException(exception: HttpException): ErrorResponse {
-        const statusCode = exception.getStatus()
+        const code = exception.getStatus()
         const response = exception.getResponse()
 
         return {
-            statusCode,
-            errorCode: this.getErrorCode(statusCode, response),
-            message: this.getMessage(response, exception.message),
-            timestamp: new Date().toISOString(),
+            success: false,
+            error: {
+                code,
+                errorCode: this.getErrorCode(code, response),
+                message: this.getMessage(response, exception.message),
+                timestamp: new Date().toISOString(),
+            },
         }
     }
 
