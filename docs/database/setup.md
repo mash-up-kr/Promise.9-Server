@@ -1,4 +1,4 @@
-# Database
+# Database Setup
 
 이 프로젝트는 PostgreSQL과 Drizzle ORM을 사용한다.
 
