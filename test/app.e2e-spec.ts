@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common'
 import { Test, TestingModule } from '@nestjs/testing'
-import * as request from 'supertest'
+import request from 'supertest'
 import { App } from 'supertest/types'
 
 import { AppModule } from './../src/app.module'
@@ -15,6 +15,10 @@ describe('AppController (e2e)', () => {
 
         app = moduleFixture.createNestApplication()
         await app.init()
+    })
+
+    afterEach(async () => {
+        await app?.close()
     })
 
     it('/ (GET)', () => {
