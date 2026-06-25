@@ -25,6 +25,7 @@
 
 ```json
 {
+  "success": true,
   "data": {...}
 }
 ```
@@ -33,10 +34,13 @@
 
 ```json
 {
-  "statusCode": 400,
-  "errorCode": "string",
-  "message": "string",
-  "timestamp": "2026-02-26T00:00:00.000Z"
+  "success": false,
+  "error": {
+    "code": 400,
+    "errorCode": "string",
+    "message": "string",
+    "timestamp": "2026-02-26T00:00:00.000Z"
+  }
 }
 ```
 
