@@ -69,13 +69,13 @@ GET /users/me
 GET /home
 ```
 > 최근 저장 링크 + 최근 활동한 폴더(폴더별 미리보기 링크 포함)를 한 번에 반환  
-> 정렬: `recentLinks` — 저장 시각 최신순 / `recentFolders` — 마지막 활동 시각 최신순 / `previewLinks` — 저장 시각 최신순
+> 정렬: `links` — 저장 시각 최신순 / `recentFolders` — 마지막 활동 시각 최신순 / `previewLinks` — 저장 시각 최신순
 
 **Response `200`**
 ```json
 {
   "data": {
-    "recentLinks": [
+    "links": [
       {
         "linkId": 1,
         "title": "string",
@@ -100,7 +100,7 @@ GET /home
 }
 ```
 
-> `recentLinks`, `recentFolders`, `previewLinks` 각 개수 제한은 추후 확정 예정
+> `links`, `recentFolders`, `previewLinks` 각 개수 제한은 추후 확정 예정
 
 ---
 
@@ -149,13 +149,10 @@ POST /links
   "data": {
     "linkId": 1,
     "url": "string",
-    "status": "processing",
     "savedAt": "2026-02-26T00:00:00Z"
   }
 }
 ```
-
-> AI 요약 처리 완료 후 `status`는 `done` / `failed` 로 업데이트됨 (폴링 또는 웹소켓 연동 검토)
 
 ---
 
@@ -178,7 +175,6 @@ GET /links/{linkId}
     "source": "toss.tech",
     "publishedAt": "2026-02-26T00:00:00Z",
     "savedAt": "2026-02-26T00:00:00Z",
-    "status": "done | processing | failed",
     "tags": [
       {
         "tagId": 1,
@@ -273,7 +269,7 @@ GET /links/search?q={keyword}&folderId={folderId}
 ```json
 {
   "data": {
-    "results": [
+    "links": [
       {
         "linkId": 1,
         "title": "string",
