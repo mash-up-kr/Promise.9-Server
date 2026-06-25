@@ -21,10 +21,8 @@ erDiagram
     varchar metadata_status
     timestamptz metadata_fetched_at
     text ai_summary
+    uuid ai_summary_metric_id
     varchar ai_summary_status
-    varchar ai_summary_model_provider
-    varchar ai_summary_model_name
-    varchar ai_summary_prompt_key
     timestamptz ai_summary_processed_at
     text memo
     timestamptz deleted_at
@@ -53,10 +51,8 @@ erDiagram
 | metadata_status | varchar | Y | 메타데이터 수집 상태. 예: `PENDING`, `SUCCESS`, `FAILED` |
 | metadata_fetched_at | timestamptz | N | 메타데이터 수집 완료 일시 |
 | ai_summary | text | N | AI 요약 결과 |
+| ai_summary_metric_id | uuid | N | 현재 `ai_summary`의 출처가 된 AI 요약 메트릭 ID. 물리 FK 없이 논리 참조로 저장 |
 | ai_summary_status | varchar | Y | AI 요약 처리 상태. 예: `PENDING`, `SUCCESS`, `NEEDS_REVIEW`, `FAILED` |
-| ai_summary_model_provider | varchar | N | AI 요약에 사용한 모델 제공자. 예: `openai` |
-| ai_summary_model_name | varchar | N | AI 요약에 사용한 모델명 |
-| ai_summary_prompt_key | varchar | N | AI 요약 프롬프트 식별 키. 버전이 필요한 프롬프트는 키에 포함 |
 | ai_summary_processed_at | timestamptz | N | AI 요약 처리 완료 일시 |
 | memo | text | N | 사용자 메모. 최대 500자 |
 | deleted_at | timestamptz | N | 최근 삭제된 항목으로 이동한 일시 |
@@ -74,6 +70,9 @@ erDiagram
 - 링크 저장 최신순 정렬은 `created_at`을 기준으로 한다.
 - 검색 대상은 `title`, `site_name`, `domain`, `original_url`, `final_url`, `ai_summary`, `memo`이며, `deleted_at IS NULL`인 링크만 포함한다.
 - 메타데이터 수집과 AI 요약은 독립적으로 실패할 수 있으므로 각각 `metadata_status`, `ai_summary_status`를 둔다.
+- `ai_summary_status`는 사용자 저장 링크에 반영된 대표 요약 상태를 저장한다.
+- AI 요약 시도의 모델, 프롬프트, 토큰, 비용, TTLB, 에러, 생성 요약문은 `ai_summary_metrics`에 저장한다.
+- `ai_summary_metric_id`는 현재 `ai_summary`의 출처를 추적하기 위한 논리 참조이며 물리 FK를 두지 않는다.
 - `metadata`는 확장 정보 보관용이며, 목록/검색/정렬에 자주 쓰는 값은 별도 컬럼으로 둔다.
 
 ## 인덱스 설계
@@ -101,5 +100,4 @@ CREATE INDEX user_links_user_id_deleted_at_idx
 
 ## 향후 확장
 
-- AI 호출 비용, 토큰, TTLB 같은 실행 메트릭이 필요해지면 별도 관측 테이블을 논의한다.
 - 사용자가 AI 요약을 직접 수정할 수 있게 되면 원본 AI 요약과 사용자 수정 요약을 분리할지 결정한다.
