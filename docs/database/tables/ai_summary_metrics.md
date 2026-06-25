@@ -13,6 +13,7 @@ erDiagram
   USER_LINKS {
     bigint id PK
     text ai_summary
+    varchar ai_summary_status
   }
 
   AI_SUMMARY_METRICS {
@@ -75,7 +76,7 @@ erDiagram
 - 같은 사용자 저장 링크 안에서 가장 큰 `attempt_number`를 가진 `SUCCESS` 메트릭의 `generated_summary`를 `user_links.ai_summary`의 기본 채택 대상으로 본다.
 - `status = NEEDS_REVIEW`는 요약은 생성됐지만 품질 확인이 필요한 시도를 의미한다. 예: 300자 미만, 처리 시간 임계값 초과, 원문 부족.
 - `status = FAILED`는 재시도 한도 초과 또는 복구 불가 오류를 의미한다.
-- `status`는 개별 요약 시도의 상태이며, `user_links`에는 별도 AI 처리 상태 컬럼을 두지 않는다.
+- `ai_summary_metrics.status`는 개별 요약 시도의 상태이며, 사용자 저장 링크 단위 대표 상태는 `user_links.ai_summary_status`에 저장한다.
 - 비용은 호출 당시 단가 기준으로 저장한다. 이후 모델 단가가 바뀌어도 과거 실행 비용은 재계산하지 않는다.
 - 입력/출력 토큰 또는 비용을 제공하지 않는 모델은 해당 필드를 `NULL`로 둘 수 있다.
 - 프롬프트 버전이 필요한 경우 별도 컬럼을 두지 않고 `prompt_key`에 포함한다. 예: `link_summary_default_v1`.
@@ -102,6 +103,6 @@ CREATE INDEX ai_summary_metrics_model_created_at_idx
 ## 재시도 정책
 
 - 최초 실행 실패 시 1회 재시도한다.
-- 재시도까지 실패하면 실패 메트릭 row를 남기고 `user_links.ai_summary`는 갱신하지 않는다.
+- 재시도까지 실패하면 실패 메트릭 row를 남기고 `user_links.ai_summary_status`를 `FAILED`로 전환한다.
 - 재시도 횟수 제한은 `ai_summary_metrics`의 row 수 또는 `attempt_number`로 판단한다.
 - 재시도 대상 에러와 즉시 실패 처리할 에러는 애플리케이션 정책에서 구분한다.
