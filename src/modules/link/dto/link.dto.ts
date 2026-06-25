@@ -1,17 +1,19 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { z } from 'zod'
 
+import { LINK_MEMO_MAX_LENGTH } from '../link.constants'
+
 export const createLinkSchema = z.object({
     url: z.url(),
     folderId: z.uuid().nullish(),
-    memo: z.string().max(1000).nullish(),
+    memo: z.string().max(LINK_MEMO_MAX_LENGTH).nullish(),
 })
 export type CreateLinkInput = z.infer<typeof createLinkSchema>
 
 export const updateLinkSchema = z
     .object({
         folderId: z.uuid().nullish(),
-        memo: z.string().max(1000).nullish(),
+        memo: z.string().max(LINK_MEMO_MAX_LENGTH).nullish(),
     })
     .refine(
         (value) => value.folderId !== undefined || value.memo !== undefined,

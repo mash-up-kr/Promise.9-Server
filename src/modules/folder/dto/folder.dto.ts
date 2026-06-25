@@ -1,13 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { z } from 'zod'
 
+import { FOLDER_NAME_MAX_LENGTH } from '../folder.constants'
+
 export const createFolderSchema = z.object({
-    folderName: z.string().trim().min(1).max(255),
+    folderName: z.string().trim().min(1).max(FOLDER_NAME_MAX_LENGTH),
 })
 export type CreateFolderInput = z.infer<typeof createFolderSchema>
 
 export const updateFolderSchema = z.object({
-    folderName: z.string().trim().min(1).max(255),
+    folderName: z.string().trim().min(1).max(FOLDER_NAME_MAX_LENGTH),
 })
 export type UpdateFolderInput = z.infer<typeof updateFolderSchema>
 
