@@ -18,6 +18,7 @@ erDiagram
     text thumbnail_url
     jsonb metadata
     text ai_summary
+    varchar ai_summary_status
     text memo
     timestamptz deleted_at
     timestamptz created_at
@@ -40,6 +41,7 @@ erDiagram
 | thumbnail_url | text | N | 수집된 대표 이미지 URL |
 | metadata | jsonb | N | Open Graph, favicon, description 등 확장 메타데이터 |
 | ai_summary | text | N | AI 요약 결과 |
+| ai_summary_status | varchar | Y | AI 요약 대표 상태. 예: `PENDING`, `SUCCESS`, `NEEDS_REVIEW`, `FAILED` |
 | memo | text | N | 사용자 메모. 최대 500자 |
 | deleted_at | timestamptz | N | 최근 삭제된 항목으로 이동한 일시 |
 | created_at | timestamptz | Y | 링크 저장 일시이자 레코드 생성 일시 |
@@ -55,7 +57,9 @@ erDiagram
 - 영구 삭제 대상은 별도 컬럼 없이 `deleted_at <= now() - interval '30 days'` 조건으로 판단한다.
 - 복원 시 `deleted_at`을 `NULL`로 되돌린다.
 - 검색 대상은 `title`, `domain`, `original_url`, `final_url`, `ai_summary`, `memo`이며, `deleted_at IS NULL`인 링크만 포함한다.
+- `ai_summary_status`는 목록/상세 화면에서 사용하는 사용자 저장 링크 단위 대표 상태다.
 - AI 요약 시도의 모델, 프롬프트, 토큰, 비용, TTLB, 에러, 생성 요약문은 `ai_summary_metrics`에 저장한다.
+- `ai_summary_metrics.status`는 개별 요약 시도 상태이며, `user_links.ai_summary_status`와 범위가 다르다.
 - `metadata`는 확장 정보 보관용이며, 목록/검색/정렬에 자주 쓰는 값은 별도 컬럼으로 둔다.
 
 ## 인덱스 설계
