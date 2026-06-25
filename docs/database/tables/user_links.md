@@ -26,7 +26,6 @@ erDiagram
     timestamptz ai_summary_processed_at
     text memo
     timestamptz deleted_at
-    timestamptz purge_at
     timestamptz restored_at
     timestamptz created_at
     timestamptz updated_at
@@ -56,7 +55,6 @@ erDiagram
 | ai_summary_processed_at | timestamptz | N | AI 요약 처리 완료 일시 |
 | memo | text | N | 사용자 메모. 최대 500자 |
 | deleted_at | timestamptz | N | 최근 삭제된 항목으로 이동한 일시 |
-| purge_at | timestamptz | N | 자동 영구 삭제 예정 일시. `deleted_at + 30일` |
 | restored_at | timestamptz | N | 최근 삭제된 항목에서 복원한 일시 |
 | created_at | timestamptz | Y | 링크 저장 일시이자 레코드 생성 일시 |
 | updated_at | timestamptz | Y | 레코드 수정 일시 |
@@ -68,6 +66,8 @@ erDiagram
 - 같은 URL이 최근 삭제된 항목에 있을 때 새 저장을 막을지, 새 저장을 허용할지, 복원으로 유도할지는 기획 논의가 필요하다.
 - 폴더 미선택 상태와 복원 후 미분류 상태는 `folder_id IS NULL`로 표현한다.
 - 링크 저장 최신순 정렬은 `created_at`을 기준으로 한다.
+- 영구 삭제 대상은 별도 컬럼 없이 `deleted_at <= now() - interval '30 days'` 조건으로 판단한다.
+- 복원 시 `deleted_at`을 `NULL`로 되돌리고 `restored_at`을 기록한다.
 - 검색 대상은 `title`, `site_name`, `domain`, `original_url`, `final_url`, `ai_summary`, `memo`이며, `deleted_at IS NULL`인 링크만 포함한다.
 - 메타데이터 수집과 AI 요약은 독립적으로 실패할 수 있으므로 각각 `metadata_status`, `ai_summary_status`를 둔다.
 - `ai_summary_status`는 사용자 저장 링크에 반영된 대표 요약 상태를 저장한다.
@@ -91,12 +91,17 @@ CREATE INDEX user_links_user_id_folder_id_created_at_idx
 
 CREATE INDEX user_links_user_id_deleted_at_idx
   ON user_links (user_id, deleted_at);
+
+CREATE INDEX user_links_deleted_at_idx
+  ON user_links (deleted_at)
+  WHERE deleted_at IS NOT NULL;
 ```
 
 - `user_id + normalized_url`: 사용자별 활성 링크 중복 저장 방지.
 - `user_id + created_at`: 내 링크 목록 최신순 조회용.
 - `user_id + folder_id + created_at`: 폴더별 링크 목록 조회용.
-- `user_id + deleted_at`: 최근 삭제된 항목 조회와 영구 삭제 배치 대상 조회용.
+- `user_id + deleted_at`: 사용자별 최근 삭제된 항목 조회용.
+- `deleted_at`: 전체 영구 삭제 배치 대상 조회용.
 
 ## 향후 확장
 
