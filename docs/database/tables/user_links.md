@@ -15,18 +15,11 @@ erDiagram
     text final_url
     varchar domain
     varchar title
-    varchar site_name
     text thumbnail_url
     jsonb metadata
-    varchar metadata_status
-    timestamptz metadata_fetched_at
     text ai_summary
-    uuid ai_summary_metric_id
-    varchar ai_summary_status
-    timestamptz ai_summary_processed_at
     text memo
     timestamptz deleted_at
-    timestamptz restored_at
     timestamptz created_at
     timestamptz updated_at
   }
@@ -44,18 +37,11 @@ erDiagram
 | final_url | text | N | redirect 이후 최종 URL |
 | domain | varchar | N | 출처 표시와 검색에 사용하는 도메인 |
 | title | varchar | N | 수집된 제목. 수집 실패 시 `NULL` 가능 |
-| site_name | varchar | N | 수집된 사이트명 또는 출처 표시명 |
 | thumbnail_url | text | N | 수집된 대표 이미지 URL |
 | metadata | jsonb | N | Open Graph, favicon, description 등 확장 메타데이터 |
-| metadata_status | varchar | Y | 메타데이터 수집 상태. 예: `PENDING`, `SUCCESS`, `FAILED` |
-| metadata_fetched_at | timestamptz | N | 메타데이터 수집 완료 일시 |
 | ai_summary | text | N | AI 요약 결과 |
-| ai_summary_metric_id | uuid | N | 현재 `ai_summary`의 출처가 된 AI 요약 메트릭 ID. 물리 FK 없이 논리 참조로 저장 |
-| ai_summary_status | varchar | Y | AI 요약 처리 상태. 예: `PENDING`, `SUCCESS`, `NEEDS_REVIEW`, `FAILED` |
-| ai_summary_processed_at | timestamptz | N | AI 요약 처리 완료 일시 |
 | memo | text | N | 사용자 메모. 최대 500자 |
 | deleted_at | timestamptz | N | 최근 삭제된 항목으로 이동한 일시 |
-| restored_at | timestamptz | N | 최근 삭제된 항목에서 복원한 일시 |
 | created_at | timestamptz | Y | 링크 저장 일시이자 레코드 생성 일시 |
 | updated_at | timestamptz | Y | 레코드 수정 일시 |
 
@@ -67,12 +53,9 @@ erDiagram
 - 폴더 미선택 상태와 복원 후 미분류 상태는 `folder_id IS NULL`로 표현한다.
 - 링크 저장 최신순 정렬은 `created_at`을 기준으로 한다.
 - 영구 삭제 대상은 별도 컬럼 없이 `deleted_at <= now() - interval '30 days'` 조건으로 판단한다.
-- 복원 시 `deleted_at`을 `NULL`로 되돌리고 `restored_at`을 기록한다.
-- 검색 대상은 `title`, `site_name`, `domain`, `original_url`, `final_url`, `ai_summary`, `memo`이며, `deleted_at IS NULL`인 링크만 포함한다.
-- 메타데이터 수집과 AI 요약은 독립적으로 실패할 수 있으므로 각각 `metadata_status`, `ai_summary_status`를 둔다.
-- `ai_summary_status`는 사용자 저장 링크에 반영된 대표 요약 상태를 저장한다.
+- 복원 시 `deleted_at`을 `NULL`로 되돌린다.
+- 검색 대상은 `title`, `domain`, `original_url`, `final_url`, `ai_summary`, `memo`이며, `deleted_at IS NULL`인 링크만 포함한다.
 - AI 요약 시도의 모델, 프롬프트, 토큰, 비용, TTLB, 에러, 생성 요약문은 `ai_summary_metrics`에 저장한다.
-- `ai_summary_metric_id`는 현재 `ai_summary`의 출처를 추적하기 위한 논리 참조이며 물리 FK를 두지 않는다.
 - `metadata`는 확장 정보 보관용이며, 목록/검색/정렬에 자주 쓰는 값은 별도 컬럼으로 둔다.
 
 ## 인덱스 설계
