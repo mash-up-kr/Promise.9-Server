@@ -19,7 +19,6 @@ erDiagram
     varchar provider
     varchar provider_user_id
     varchar provider_email
-    timestamptz connected_at
     timestamptz created_at
     timestamptz updated_at
   }
@@ -34,7 +33,6 @@ erDiagram
 | provider | varchar | Y | 소셜 로그인 제공자. 예: `google`, `kakao` |
 | provider_user_id | varchar | Y | 제공자 내 사용자 고유 ID |
 | provider_email | varchar | N | 제공자가 내려준 이메일 |
-| connected_at | timestamptz | Y | 소셜 계정 최초 연결 일시 |
 | created_at | timestamptz | Y | 레코드 생성 일시 |
 | updated_at | timestamptz | Y | 레코드 수정 일시 |
 
