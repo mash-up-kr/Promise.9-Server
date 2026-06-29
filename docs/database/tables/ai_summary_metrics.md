@@ -26,17 +26,13 @@ erDiagram
     varchar prompt_key
     integer input_tokens
     integer output_tokens
-    integer total_tokens
     text generated_summary
     numeric input_cost
     numeric output_cost
-    numeric total_cost
     varchar currency
     integer ttlb_ms
-    integer summary_char_count
     text error_code
     text error_message
-    timestamptz started_at
     timestamptz completed_at
     timestamptz created_at
   }
@@ -55,17 +51,13 @@ erDiagram
 | prompt_key | varchar | N | 요약 프롬프트 식별 키. 버전이 필요한 프롬프트는 키에 포함 |
 | input_tokens | integer | N | 입력 토큰 수 |
 | output_tokens | integer | N | 출력 토큰 수 |
-| total_tokens | integer | N | 전체 토큰 수 |
 | generated_summary | text | N | 이 요약 시도에서 생성된 요약문 |
 | input_cost | numeric | N | 입력 토큰 비용 |
 | output_cost | numeric | N | 출력 토큰 비용 |
-| total_cost | numeric | N | 전체 비용 |
 | currency | varchar | N | 비용 통화. 예: `USD`, `KRW` |
 | ttlb_ms | integer | N | AI 요약 요청 시작부터 전체 응답 수신 완료까지 걸린 시간(ms) |
-| summary_char_count | integer | N | 생성된 요약 문자열 길이 |
 | error_code | text | N | 실패 또는 비정상 처리 코드 |
 | error_message | text | N | 실패 또는 비정상 처리 메시지 |
-| started_at | timestamptz | Y | 요약 시도 시작 일시 |
 | completed_at | timestamptz | N | 요약 시도 완료 일시 |
 | created_at | timestamptz | Y | 레코드 생성 일시 |
 
@@ -75,8 +67,9 @@ erDiagram
 - 같은 사용자 저장 링크 안에서는 `user_link_id + attempt_number`가 유니크해야 한다.
 - 같은 사용자 저장 링크 안에서 가장 큰 `attempt_number`를 가진 `SUCCESS` 메트릭의 `generated_summary`를 `user_links.ai_summary`의 기본 채택 대상으로 본다.
 - `status = NEEDS_REVIEW`는 요약은 생성됐지만 품질 확인이 필요한 시도를 의미한다. 예: 300자 미만, 처리 시간 임계값 초과, 원문 부족.
-- `status = FAILED`는 재시도 한도 초과 또는 복구 불가 오류를 의미한다.
+- `status = FAILED`는 해당 요약 시도가 실패해 `error_code`, `error_message`가 기록된 상태를 의미한다.
 - `ai_summary_metrics.status`는 개별 요약 시도의 상태이며, 사용자 저장 링크 단위 대표 상태는 `user_links.ai_summary_status`에 저장한다.
+- 재시도 한도 초과 또는 복구 불가 오류로 인한 링크 단위 최종 실패는 `user_links.ai_summary_status = FAILED`로 표현한다.
 - 비용은 호출 당시 단가 기준으로 저장한다. 이후 모델 단가가 바뀌어도 과거 실행 비용은 재계산하지 않는다.
 - 입력/출력 토큰 또는 비용을 제공하지 않는 모델은 해당 필드를 `NULL`로 둘 수 있다.
 - 프롬프트 버전이 필요한 경우 별도 컬럼을 두지 않고 `prompt_key`에 포함한다. 예: `link_summary_default_v1`.
@@ -103,6 +96,7 @@ CREATE INDEX ai_summary_metrics_model_created_at_idx
 ## 재시도 정책
 
 - 최초 실행 실패 시 1회 재시도한다.
+- 각 실패 시도는 `status = FAILED`로 마감하고 실패 사유를 남긴다.
 - 재시도까지 실패하면 실패 메트릭 row를 남기고 `user_links.ai_summary_status`를 `FAILED`로 전환한다.
 - 재시도 횟수 제한은 `ai_summary_metrics`의 row 수 또는 `attempt_number`로 판단한다.
 - 재시도 대상 에러와 즉시 실패 처리할 에러는 애플리케이션 정책에서 구분한다.
