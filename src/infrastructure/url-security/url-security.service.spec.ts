@@ -68,7 +68,6 @@ describe('UrlSecurityService', () => {
                 service.resolvePublicUrl(new URL('https://8.8.8.8/image.jpg')),
             ).resolves.toMatchObject({
                 address: '8.8.8.8',
-                family: 4,
             })
             expect(lookupMock).not.toHaveBeenCalled()
         })
@@ -119,7 +118,6 @@ describe('UrlSecurityService', () => {
                 ),
             ).resolves.toMatchObject({
                 address: '93.184.216.34',
-                family: 4,
             })
         })
 

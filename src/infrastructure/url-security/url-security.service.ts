@@ -4,9 +4,7 @@ import { isIP } from 'node:net'
 import { BadRequestException, HttpException, Injectable } from '@nestjs/common'
 
 export interface ResolvedPublicUrl {
-    url: URL
     address: string
-    family: 4 | 6
 }
 
 @Injectable()
@@ -48,9 +46,7 @@ export class UrlSecurityService {
             this.assertPublicIp(hostname)
 
             return {
-                url,
                 address: hostname,
-                family: ipVersion as 4 | 6,
             }
         }
 
@@ -73,9 +69,7 @@ export class UrlSecurityService {
             const [resolvedAddress] = addresses
 
             return {
-                url,
                 address: resolvedAddress.address,
-                family: resolvedAddress.family as 4 | 6,
             }
         } catch (error) {
             if (error instanceof HttpException) {
