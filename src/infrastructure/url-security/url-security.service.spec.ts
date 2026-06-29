@@ -63,6 +63,16 @@ describe('UrlSecurityService', () => {
             expect(lookupMock).not.toHaveBeenCalled()
         })
 
+        it('공개 IP 주소를 연결 대상으로 반환한다', async () => {
+            await expect(
+                service.resolvePublicUrl(new URL('https://8.8.8.8/image.jpg')),
+            ).resolves.toMatchObject({
+                address: '8.8.8.8',
+                family: 4,
+            })
+            expect(lookupMock).not.toHaveBeenCalled()
+        })
+
         it('localhost 호스트를 거부한다', async () => {
             await expect(
                 service.assertPublicUrl(new URL('http://localhost/image.jpg')),
@@ -96,6 +106,21 @@ describe('UrlSecurityService', () => {
                     new URL('https://example.com/image.jpg'),
                 ),
             ).resolves.toBeUndefined()
+        })
+
+        it('DNS 조회 결과의 공개 IP를 연결 대상으로 반환한다', async () => {
+            lookupMock.mockResolvedValueOnce([
+                { address: '93.184.216.34', family: 4 },
+            ])
+
+            await expect(
+                service.resolvePublicUrl(
+                    new URL('https://example.com/image.jpg'),
+                ),
+            ).resolves.toMatchObject({
+                address: '93.184.216.34',
+                family: 4,
+            })
         })
 
         it('DNS 조회 결과에 내부 IP가 있으면 거부한다', async () => {

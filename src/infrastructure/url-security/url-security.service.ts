@@ -3,6 +3,12 @@ import { isIP } from 'node:net'
 
 import { BadRequestException, HttpException, Injectable } from '@nestjs/common'
 
+export interface ResolvedPublicUrl {
+    url: URL
+    address: string
+    family: 4 | 6
+}
+
 @Injectable()
 export class UrlSecurityService {
     parseHttpUrl(rawUrl: string, baseUrl?: URL): URL {
@@ -24,6 +30,10 @@ export class UrlSecurityService {
     }
 
     async assertPublicUrl(url: URL) {
+        await this.resolvePublicUrl(url)
+    }
+
+    async resolvePublicUrl(url: URL): Promise<ResolvedPublicUrl> {
         const hostname = this.normalizeHostname(url.hostname)
 
         if (this.isBlockedHostname(hostname)) {
@@ -32,9 +42,16 @@ export class UrlSecurityService {
             )
         }
 
-        if (isIP(hostname)) {
+        const ipVersion = isIP(hostname)
+
+        if (ipVersion) {
             this.assertPublicIp(hostname)
-            return
+
+            return {
+                url,
+                address: hostname,
+                family: ipVersion as 4 | 6,
+            }
         }
 
         try {
@@ -51,6 +68,14 @@ export class UrlSecurityService {
 
             for (const { address } of addresses) {
                 this.assertPublicIp(address)
+            }
+
+            const [resolvedAddress] = addresses
+
+            return {
+                url,
+                address: resolvedAddress.address,
+                family: resolvedAddress.family as 4 | 6,
             }
         } catch (error) {
             if (error instanceof HttpException) {
