@@ -1,0 +1,120 @@
+name: Archive merged PR
+
+on:
+  pull_request_target:
+    types:
+      - closed
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: archive-merged-pr-${{ github.event.pull_request.base.ref }}
+  cancel-in-progress: false
+
+jobs:
+  archive-merged-pr:
+    name: Archive merged PR document
+    if: ${{ github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - name: Write PR document
+        id: pr-doc
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          import textwrap
+          import unicodedata
+          from pathlib import Path
+
+          event_path = Path(os.environ["GITHUB_EVENT_PATH"])
+          event = json.loads(event_path.read_text(encoding="utf-8"))
+          pr = event["pull_request"]
+
+          number = str(pr["number"])
+          title = re.sub(r"\s+", " ", pr["title"]).strip() or f"PR {number}"
+          body = (pr.get("body") or "").rstrip() or "_No PR body provided._"
+          author = pr["user"]["login"]
+          base_ref = pr["base"]["ref"]
+          head_ref = pr["head"]["ref"]
+          merged_at = pr.get("merged_at") or ""
+          url = pr["html_url"]
+
+          slug_source = unicodedata.normalize("NFKC", title).lower()
+          slug = "".join(char if char.isalnum() else "-" for char in slug_source)
+          slug = re.sub(r"-+", "-", slug).strip("-")[:80] or "pull-request"
+
+          document_path = Path("docs/pull-requests") / f"{number}-{slug}.md"
+          document_path.parent.mkdir(parents=True, exist_ok=True)
+
+          document = textwrap.dedent(f"""\
+          # PR #{number}: {title}
+
+          - URL: {url}
+          - Author: @{author}
+          - Base: {base_ref}
+          - Head: {head_ref}
+          - Merged: {merged_at}
+
+          ## PR Body
+
+          {body}
+          """)
+          document_path.write_text(document, encoding="utf-8")
+
+          commit_message = f"docs: PR #{number} {title} \ubb38\uc11c\ud654"
+
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              print(f"document_path={document_path}", file=output)
+              print(f"commit_message={commit_message}", file=output)
+          PY
+
+      - name: Commit and push PR document
+        shell: bash
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          COMMIT_MESSAGE: ${{ steps.pr-doc.outputs.commit_message }}
+          DOCUMENT_PATH: ${{ steps.pr-doc.outputs.document_path }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git pull --ff-only origin "${BASE_REF}"
+          git add "${DOCUMENT_PATH}"
+
+          if git diff --cached --quiet; then
+            echo "No PR document changes to commit."
+            exit 0
+          fi
+
+          git commit -m "${COMMIT_MESSAGE}"
+
+          max_attempts=3
+          for attempt in $(seq 1 "${max_attempts}"); do
+            if git push origin "HEAD:${BASE_REF}"; then
+              exit 0
+            fi
+
+            if [ "${attempt}" -eq "${max_attempts}" ]; then
+              echo "::error::Failed to push PR document after ${max_attempts} attempts."
+              exit 1
+            fi
+
+            echo "Push failed. Rebasing on latest ${BASE_REF} and retrying."
+            git fetch origin "${BASE_REF}"
+            git rebase "origin/${BASE_REF}"
+          done
