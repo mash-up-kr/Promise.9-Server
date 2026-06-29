@@ -1,6 +1,6 @@
 # users
 
-회원 계정의 기준 테이블이다. 설정 화면의 이메일 표시, 회원 탈퇴 상태, 사용자별 링크/폴더 소유권의 기준이 된다.
+회원 계정의 기준 테이블이다. 설정 화면의 이메일 표시, 회원 탈퇴 처리 시점, 사용자별 링크/폴더 소유권의 기준이 된다.
 
 ## ERD
 
@@ -14,9 +14,6 @@ erDiagram
   USERS {
     bigint id PK
     varchar email UK
-    varchar display_name
-    varchar profile_image_url
-    varchar status
     timestamptz created_at
     timestamptz updated_at
     timestamptz deleted_at
@@ -49,9 +46,6 @@ erDiagram
 | --- | --- | --- | --- |
 | id | bigint | Y | 회원 식별자 |
 | email | varchar | Y | 설정 화면에 표시할 대표 이메일 |
-| display_name | varchar | N | 소셜 계정에서 제공받은 이름 또는 서비스 내 표시명 |
-| profile_image_url | varchar | N | 소셜 계정에서 제공받은 프로필 이미지 URL |
-| status | varchar | Y | 회원 상태. 예: `ACTIVE`, `WITHDRAWN` |
 | created_at | timestamptz | Y | 회원 생성 일시 |
 | updated_at | timestamptz | Y | 회원 정보 수정 일시 |
 | deleted_at | timestamptz | N | 회원 탈퇴 또는 소프트 삭제 일시 |
