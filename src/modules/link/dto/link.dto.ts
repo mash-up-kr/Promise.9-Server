@@ -5,14 +5,14 @@ import { LINK_MEMO_MAX_LENGTH } from '../link.constants'
 
 export const createLinkSchema = z.object({
     url: z.url(),
-    folderId: z.uuid().nullish(),
+    folderId: z.number().int().positive().nullish(),
     memo: z.string().max(LINK_MEMO_MAX_LENGTH).nullish(),
 })
 export type CreateLinkInput = z.infer<typeof createLinkSchema>
 
 export const updateLinkSchema = z
     .object({
-        folderId: z.uuid().nullish(),
+        folderId: z.number().int().positive().nullish(),
         memo: z.string().max(LINK_MEMO_MAX_LENGTH).nullish(),
     })
     .refine(
@@ -25,7 +25,8 @@ export type UpdateLinkInput = z.infer<typeof updateLinkSchema>
 
 export const searchLinkSchema = z.object({
     q: z.string().trim().min(1),
-    folderId: z.uuid().optional(),
+    // 쿼리스트링은 문자열로 들어오므로 숫자로 변환한다.
+    folderId: z.coerce.number().int().positive().optional(),
 })
 export type SearchLinkInput = z.infer<typeof searchLinkSchema>
 
@@ -39,9 +40,10 @@ export class CreateLinkDto {
 
     @ApiPropertyOptional({
         nullable: true,
+        type: Number,
         description: '저장할 폴더 ID (없으면 미분류)',
     })
-    folderId?: string | null
+    folderId?: number | null
 
     @ApiPropertyOptional({ nullable: true, description: '메모' })
     memo?: string | null
@@ -50,9 +52,10 @@ export class CreateLinkDto {
 export class UpdateLinkDto {
     @ApiPropertyOptional({
         nullable: true,
+        type: Number,
         description: '이동할 폴더 ID (null이면 미분류)',
     })
-    folderId?: string | null
+    folderId?: number | null
 
     @ApiPropertyOptional({ nullable: true, description: '메모' })
     memo?: string | null

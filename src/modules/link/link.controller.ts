@@ -5,7 +5,7 @@ import {
     Get,
     HttpCode,
     Param,
-    ParseUUIDPipe,
+    ParseIntPipe,
     Patch,
     Post,
     Query,
@@ -55,7 +55,7 @@ export class LinkController {
 
     @Get(':linkId')
     @ApiOperation({ summary: '링크 상세 조회' })
-    detail(@Param('linkId', ParseUUIDPipe) linkId: string) {
+    detail(@Param('linkId', ParseIntPipe) linkId: number) {
         return this.linkService.detail(DEV_USER_ID, linkId)
     }
 
@@ -63,7 +63,7 @@ export class LinkController {
     @ApiOperation({ summary: '링크 수정 (폴더 변경 / 메모 수정)' })
     @ApiBody({ type: UpdateLinkDto })
     update(
-        @Param('linkId', ParseUUIDPipe) linkId: string,
+        @Param('linkId', ParseIntPipe) linkId: number,
         @Body(new ZodValidationPipe(updateLinkSchema)) body: UpdateLinkInput,
     ) {
         return this.linkService.update(DEV_USER_ID, linkId, body)
@@ -72,13 +72,13 @@ export class LinkController {
     @Delete(':linkId')
     @HttpCode(204)
     @ApiOperation({ summary: '링크 삭제 (최근 삭제된 항목으로 이동)' })
-    remove(@Param('linkId', ParseUUIDPipe) linkId: string) {
+    remove(@Param('linkId', ParseIntPipe) linkId: number) {
         return this.linkService.remove(DEV_USER_ID, linkId)
     }
 
     @Post(':linkId/restore')
     @ApiOperation({ summary: '링크 복구 (미분류로 복원)' })
-    restore(@Param('linkId', ParseUUIDPipe) linkId: string) {
+    restore(@Param('linkId', ParseIntPipe) linkId: number) {
         return this.linkService.restore(DEV_USER_ID, linkId)
     }
 }

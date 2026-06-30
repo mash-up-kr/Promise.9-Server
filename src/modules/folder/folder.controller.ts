@@ -5,7 +5,7 @@ import {
     Get,
     HttpCode,
     Param,
-    ParseUUIDPipe,
+    ParseIntPipe,
     Patch,
     Post,
 } from '@nestjs/common'
@@ -50,7 +50,7 @@ export class FolderController {
     @ApiOperation({ summary: '폴더 이름 변경' })
     @ApiBody({ type: UpdateFolderDto })
     rename(
-        @Param('folderId', ParseUUIDPipe) folderId: string,
+        @Param('folderId', ParseIntPipe) folderId: number,
         @Body(new ZodValidationPipe(updateFolderSchema))
         body: UpdateFolderInput,
     ) {
@@ -62,13 +62,13 @@ export class FolderController {
     @ApiOperation({
         summary: '폴더 삭제 (하위 링크는 최근 삭제된 항목으로 이동)',
     })
-    remove(@Param('folderId', ParseUUIDPipe) folderId: string) {
+    remove(@Param('folderId', ParseIntPipe) folderId: number) {
         return this.folderService.remove(DEV_USER_ID, folderId)
     }
 
     @Get(':folderId/links')
     @ApiOperation({ summary: '폴더 내 링크 목록 조회' })
-    getLinks(@Param('folderId', ParseUUIDPipe) folderId: string) {
+    getLinks(@Param('folderId', ParseIntPipe) folderId: number) {
         return this.folderService.getLinks(DEV_USER_ID, folderId)
     }
 }
