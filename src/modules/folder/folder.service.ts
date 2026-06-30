@@ -16,7 +16,7 @@ export class FolderService {
         return this.databaseService.db
     }
 
-    async create(userId: string, input: CreateFolderInput) {
+    async create(userId: number, input: CreateFolderInput) {
         const [row] = await this.db
             .insert(folders)
             .values({ userId, name: input.folderName })
@@ -29,7 +29,7 @@ export class FolderService {
         }
     }
 
-    async list(userId: string) {
+    async list(userId: number) {
         const systemFolders = await this.getSystemFolders(userId)
 
         const folderList = await this.db
@@ -51,7 +51,7 @@ export class FolderService {
     }
 
     // 시스템 폴더(전체/미분류/최근삭제)의 링크 수를 한 번에 계산한다.
-    private async getSystemFolders(userId: string) {
+    private async getSystemFolders(userId: number) {
         const owned = eq(links.userId, userId)
 
         const [all, uncategorized, recentlyDeleted] = await Promise.all([
@@ -71,7 +71,7 @@ export class FolderService {
         }
     }
 
-    async rename(userId: string, folderId: string, input: UpdateFolderInput) {
+    async rename(userId: number, folderId: number, input: UpdateFolderInput) {
         await this.getOwnedFolder(userId, folderId)
 
         const [row] = await this.db
@@ -87,7 +87,7 @@ export class FolderService {
         }
     }
 
-    async remove(userId: string, folderId: string) {
+    async remove(userId: number, folderId: number) {
         // 링크 이동과 폴더 삭제를 하나의 트랜잭션으로 묶고, 폴더 row를 FOR UPDATE로 잠가
         // 삭제 도중 같은 폴더로 링크가 새로 유입되어 활성 미분류로 남는 경합을 막는다.
         // TODO: DB 관련 로직은 추후 service 계층이 아닌 repository 계층으로 리팩토링
@@ -129,7 +129,7 @@ export class FolderService {
         })
     }
 
-    async getLinks(userId: string, folderId: string) {
+    async getLinks(userId: number, folderId: number) {
         const folder = await this.getOwnedFolder(userId, folderId)
 
         const rows = await this.db
@@ -168,8 +168,8 @@ export class FolderService {
 
     // 폴더 소유권을 확인하고, 없거나 타 사용자 소유면 404로 처리한다.
     private async getOwnedFolder(
-        userId: string,
-        folderId: string,
+        userId: number,
+        folderId: number,
     ): Promise<FolderRow> {
         const [row] = await this.db
             .select()

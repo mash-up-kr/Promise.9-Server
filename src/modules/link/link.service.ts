@@ -24,7 +24,7 @@ export class LinkService {
         return this.databaseService.db
     }
 
-    async create(userId: string, input: CreateLinkInput) {
+    async create(userId: number, input: CreateLinkInput) {
         if (input.folderId) {
             await this.assertOwnedFolder(userId, input.folderId)
         }
@@ -46,7 +46,7 @@ export class LinkService {
         }
     }
 
-    async detail(userId: string, linkId: string) {
+    async detail(userId: number, linkId: number) {
         const link = await this.getOwnedLink(userId, linkId)
         const folder = await this.findFolderRef(link.folderId)
 
@@ -68,7 +68,7 @@ export class LinkService {
         }
     }
 
-    async update(userId: string, linkId: string, input: UpdateLinkInput) {
+    async update(userId: number, linkId: number, input: UpdateLinkInput) {
         await this.getOwnedLink(userId, linkId)
 
         const patch: Partial<typeof links.$inferInsert> = {
@@ -101,7 +101,7 @@ export class LinkService {
         }
     }
 
-    async remove(userId: string, linkId: string) {
+    async remove(userId: number, linkId: number) {
         await this.getOwnedLink(userId, linkId)
 
         // "최근 삭제된 항목"으로 이동 (30일 유예 후 영구 삭제 — 배치는 추후)
@@ -111,7 +111,7 @@ export class LinkService {
             .where(and(eq(links.id, linkId), eq(links.userId, userId)))
     }
 
-    async restore(userId: string, linkId: string) {
+    async restore(userId: number, linkId: number) {
         // 삭제된 링크도 대상이므로 includeDeleted로 조회
         const link = await this.getOwnedLink(userId, linkId, {
             includeDeleted: true,
@@ -136,7 +136,7 @@ export class LinkService {
         }
     }
 
-    async search(userId: string, input: SearchLinkInput) {
+    async search(userId: number, input: SearchLinkInput) {
         const keyword = `%${input.q}%`
         // title/source는 메타데이터 추출(후속 작업) 전까지 비어 있을 수 있어 url도 함께 검색한다.
         const conditions = [
@@ -172,7 +172,7 @@ export class LinkService {
     }
 
     // 링크에 연결된 폴더 참조를 조회한다. 폴더가 없으면 null.
-    private async findFolderRef(folderId: string | null) {
+    private async findFolderRef(folderId: number | null) {
         if (!folderId) {
             return null
         }
@@ -188,8 +188,8 @@ export class LinkService {
 
     // 링크 소유권을 확인하고, 없거나 타 사용자 소유면 404로 처리한다.
     private async getOwnedLink(
-        userId: string,
-        linkId: string,
+        userId: number,
+        linkId: number,
         options: { includeDeleted?: boolean } = {},
     ): Promise<LinkRow> {
         const conditions = [eq(links.id, linkId), eq(links.userId, userId)]
@@ -211,7 +211,7 @@ export class LinkService {
         return row
     }
 
-    private async assertOwnedFolder(userId: string, folderId: string) {
+    private async assertOwnedFolder(userId: number, folderId: number) {
         const [row] = await this.db
             .select({ id: folders.id })
             .from(folders)
