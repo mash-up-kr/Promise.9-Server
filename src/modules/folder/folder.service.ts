@@ -88,27 +88,45 @@ export class FolderService {
     }
 
     async remove(userId: string, folderId: string) {
-        await this.getOwnedFolder(userId, folderId)
+        // 링크 이동과 폴더 삭제를 하나의 트랜잭션으로 묶고, 폴더 row를 FOR UPDATE로 잠가
+        // 삭제 도중 같은 폴더로 링크가 새로 유입되어 활성 미분류로 남는 경합을 막는다.
+        // TODO: DB 관련 로직은 추후 service 계층이 아닌 repository 계층으로 리팩토링
+        await this.db.transaction(async (tx) => {
+            const [folder] = await tx
+                .select({ id: folders.id })
+                .from(folders)
+                .where(
+                    and(eq(folders.id, folderId), eq(folders.userId, userId)),
+                )
+                .for('update')
+                .limit(1)
 
-        // 폴더에 속한 링크는 "최근 삭제된 항목"으로 이동 (soft delete + 미분류 처리)
-        await this.db
-            .update(links)
-            .set({
-                deletedAt: new Date(),
-                folderId: null,
-                updatedAt: new Date(),
-            })
-            .where(
-                and(
-                    eq(links.folderId, folderId),
-                    eq(links.userId, userId),
-                    isNull(links.deletedAt),
-                ),
-            )
+            if (!folder) {
+                throw new FolderNotFoundException()
+            }
 
-        await this.db
-            .delete(folders)
-            .where(and(eq(folders.id, folderId), eq(folders.userId, userId)))
+            // 폴더에 속한 링크는 "최근 삭제된 항목"으로 이동 (soft delete + 미분류 처리)
+            await tx
+                .update(links)
+                .set({
+                    deletedAt: new Date(),
+                    folderId: null,
+                    updatedAt: new Date(),
+                })
+                .where(
+                    and(
+                        eq(links.folderId, folderId),
+                        eq(links.userId, userId),
+                        isNull(links.deletedAt),
+                    ),
+                )
+
+            await tx
+                .delete(folders)
+                .where(
+                    and(eq(folders.id, folderId), eq(folders.userId, userId)),
+                )
+        })
     }
 
     async getLinks(userId: string, folderId: string) {
