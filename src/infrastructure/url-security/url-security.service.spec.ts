@@ -95,6 +95,15 @@ describe('UrlSecurityService', () => {
             expect(lookupMock).not.toHaveBeenCalled()
         })
 
+        it('IPv4-mapped IPv6로 표현된 내부 IPv4 주소를 거부한다', async () => {
+            await expect(
+                service.assertPublicUrl(
+                    new URL('http://[::ffff:c0a8:1]/image.jpg'),
+                ),
+            ).rejects.toBeInstanceOf(BadRequestException)
+            expect(lookupMock).not.toHaveBeenCalled()
+        })
+
         it('DNS 조회 결과가 공개 IP이면 허용한다', async () => {
             lookupMock.mockResolvedValueOnce([
                 { address: '93.184.216.34', family: 4 },
@@ -125,6 +134,18 @@ describe('UrlSecurityService', () => {
             lookupMock.mockResolvedValueOnce([
                 { address: '93.184.216.34', family: 4 },
                 { address: '192.168.0.10', family: 4 },
+            ])
+
+            await expect(
+                service.assertPublicUrl(
+                    new URL('https://example.com/image.jpg'),
+                ),
+            ).rejects.toBeInstanceOf(BadRequestException)
+        })
+
+        it('DNS 조회 결과의 IPv4-mapped IPv6가 내부 IPv4이면 거부한다', async () => {
+            lookupMock.mockResolvedValueOnce([
+                { address: '::ffff:c0a8:1', family: 6 },
             ])
 
             await expect(

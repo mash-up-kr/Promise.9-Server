@@ -62,6 +62,7 @@ export class UrlSecurityService {
                 )
             }
 
+            // DNS rebinding과 혼합 응답을 막기 위해 조회된 모든 주소가 공개 IP인지 확인한다.
             for (const { address } of addresses) {
                 this.assertPublicIp(address)
             }
@@ -106,12 +107,11 @@ export class UrlSecurityService {
 
     private isBlockedIp(address: string): boolean {
         const normalizedAddress = address.toLowerCase()
-        const ipv4MappedPrefix = '::ffff:'
+        const ipv4MappedAddress = this.getIpv4MappedAddress(normalizedAddress)
 
-        if (normalizedAddress.startsWith(ipv4MappedPrefix)) {
-            return this.isBlockedIp(
-                normalizedAddress.slice(ipv4MappedPrefix.length),
-            )
+        if (ipv4MappedAddress) {
+            // IPv4-mapped IPv6는 숨겨진 IPv4 주소일 수 있어 IPv4 규칙으로 다시 검사한다.
+            return this.isBlockedIp(ipv4MappedAddress)
         }
 
         const version = isIP(normalizedAddress)
@@ -125,6 +125,48 @@ export class UrlSecurityService {
         }
 
         return true
+    }
+
+    private getIpv4MappedAddress(address: string): string | null {
+        const ipv4MappedPrefix = '::ffff:'
+
+        if (!address.startsWith(ipv4MappedPrefix)) {
+            return null
+        }
+
+        const mappedAddress = address.slice(ipv4MappedPrefix.length)
+
+        if (isIP(mappedAddress) === 4) {
+            return mappedAddress
+        }
+
+        const blocks = mappedAddress.split(':')
+
+        if (blocks.length !== 2) {
+            return null
+        }
+
+        const [firstBlock, secondBlock] = blocks.map((block) =>
+            Number.parseInt(block, 16),
+        )
+
+        if (
+            !Number.isInteger(firstBlock) ||
+            !Number.isInteger(secondBlock) ||
+            firstBlock < 0 ||
+            firstBlock > 0xffff ||
+            secondBlock < 0 ||
+            secondBlock > 0xffff
+        ) {
+            return null
+        }
+
+        return [
+            (firstBlock >> 8) & 0xff,
+            firstBlock & 0xff,
+            (secondBlock >> 8) & 0xff,
+            secondBlock & 0xff,
+        ].join('.')
     }
 
     private isBlockedIpv4(address: string): boolean {
