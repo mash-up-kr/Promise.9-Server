@@ -2,24 +2,24 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
-import { NodeVibrantImageColorAnalyzer } from '../../src/infrastructure/image-color/analyzers/node-vibrant-image-color.analyzer'
-import { SharpImageColorAnalyzer } from '../../src/infrastructure/image-color/analyzers/sharp-image-color.analyzer'
-import { ImageColorService } from '../../src/infrastructure/image-color/image-color.service'
-import { ImageFetcherService } from '../../src/infrastructure/image-color/image-fetcher/image-fetcher.service'
+import { UrlSecurityService } from '../../src/infrastructure/url-security/url-security.service'
+import { NodeVibrantImageColorAnalyzer } from '../../src/modules/image-color/analyzers/node-vibrant-image-color.analyzer'
+import { SharpImageColorAnalyzer } from '../../src/modules/image-color/analyzers/sharp-image-color.analyzer'
+import { ImageColorService } from '../../src/modules/image-color/image-color.service'
+import { ImageFetcherService } from '../../src/modules/image-color/image-fetcher/image-fetcher.service'
 import {
     FetchedImage,
     ImageFetchOptions,
-} from '../../src/infrastructure/image-color/image-fetcher/image-fetcher.type'
-import { ImageResponseReader } from '../../src/infrastructure/image-color/image-fetcher/image-response.reader'
+} from '../../src/modules/image-color/image-fetcher/image-fetcher.type'
+import { ImageResponseReader } from '../../src/modules/image-color/image-fetcher/image-response.reader'
 import {
     ImageColorAnalysisResult,
     ImageColorValue,
-} from '../../src/infrastructure/image-color/types/image-color.type'
+} from '../../src/modules/image-color/types/image-color.type'
 import {
     NodeVibrantImageColorResult,
     NodeVibrantPaletteColor,
-} from '../../src/infrastructure/image-color/types/node-vibrant-image-color.type'
-import { UrlSecurityService } from '../../src/infrastructure/url-security/url-security.service'
+} from '../../src/modules/image-color/types/node-vibrant-image-color.type'
 
 const DEFAULT_IMAGE_URL =
     'https://storage.ghost.io/c/01/4c/014cfdd2-a50d-44fc-9553-614de7a69e87/content/images/size/w2000/2023/12/tirza-van-dijk-o1SKqmgSDbg-unsplash.jpg'
