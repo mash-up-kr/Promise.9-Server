@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
-import { UrlSecurityService } from '../../src/infrastructure/url-security/url-security.service'
+import { UrlSecurityService } from '../../src/common/security/url-security/url-security.service'
 import { NodeVibrantImageColorAnalyzer } from '../../src/modules/image-color/analyzers/node-vibrant-image-color.analyzer'
 import { SharpImageColorAnalyzer } from '../../src/modules/image-color/analyzers/sharp-image-color.analyzer'
 import { ImageColorService } from '../../src/modules/image-color/image-color.service'
