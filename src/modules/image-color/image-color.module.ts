@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common'
 
-import { UrlSecurityModule } from '../../infrastructure/url-security/url-security.module'
+import { UrlSecurityModule } from '../../common/security/url-security/url-security.module'
 
 import { NodeVibrantImageColorAnalyzer } from './analyzers/node-vibrant-image-color.analyzer'
 import { SharpImageColorAnalyzer } from './analyzers/sharp-image-color.analyzer'
