@@ -138,10 +138,15 @@ export class LinkService {
 
     async search(userId: string, input: SearchLinkInput) {
         const keyword = `%${input.q}%`
+        // title/source는 메타데이터 추출(후속 작업) 전까지 비어 있을 수 있어 url도 함께 검색한다.
         const conditions = [
             eq(links.userId, userId),
             isNull(links.deletedAt),
-            or(ilike(links.title, keyword), ilike(links.source, keyword)),
+            or(
+                ilike(links.title, keyword),
+                ilike(links.source, keyword),
+                ilike(links.url, keyword),
+            ),
         ]
 
         if (input.folderId) {
