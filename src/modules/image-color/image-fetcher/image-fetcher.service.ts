@@ -11,7 +11,7 @@ import {
     Injectable,
 } from '@nestjs/common'
 
-import { UrlSecurityService } from '../../../infrastructure/url-security/url-security.service'
+import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
 
 import {
     DEFAULT_IMAGE_FETCH_OPTIONS,

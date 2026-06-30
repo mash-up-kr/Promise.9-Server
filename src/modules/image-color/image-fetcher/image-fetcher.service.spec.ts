@@ -3,7 +3,7 @@ import { BadGatewayException, BadRequestException } from '@nestjs/common'
 import {
     ResolvedPublicUrl,
     UrlSecurityService,
-} from '../../../infrastructure/url-security/url-security.service'
+} from '../../../common/security/url-security/url-security.service'
 
 import { MAX_IMAGE_FETCH_OPTIONS } from './image-fetcher.constants'
 import { ImageFetcherService } from './image-fetcher.service'
