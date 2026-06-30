@@ -1,11 +1,11 @@
-import { pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import { bigint, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core'
 
 import { FOLDER_NAME_MAX_LENGTH } from './folder.constants'
 
 // 사용자가 생성하는 일반 폴더. 시스템 폴더(전체/미분류/최근삭제)는 row가 아니라 계산값으로 처리한다.
 export const folders = pgTable('folders', {
-    id: uuid().primaryKey().defaultRandom(),
-    userId: uuid().notNull(),
+    id: bigint({ mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    userId: bigint({ mode: 'number' }).notNull(),
     name: varchar({ length: FOLDER_NAME_MAX_LENGTH }).notNull(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
