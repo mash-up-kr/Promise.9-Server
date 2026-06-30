@@ -10,7 +10,10 @@ import {
     SearchLinkInput,
     UpdateLinkInput,
 } from './dto/link.dto'
-import { LinkNotFoundException } from './link.exception'
+import {
+    LinkNotDeletedException,
+    LinkNotFoundException,
+} from './link.exception'
 import { LinkRow, links } from './link.schema'
 
 @Injectable()
@@ -110,7 +113,14 @@ export class LinkService {
 
     async restore(userId: string, linkId: string) {
         // 삭제된 링크도 대상이므로 includeDeleted로 조회
-        await this.getOwnedLink(userId, linkId, { includeDeleted: true })
+        const link = await this.getOwnedLink(userId, linkId, {
+            includeDeleted: true,
+        })
+
+        // 활성 링크에 복구를 호출하면 폴더가 미분류로 날아가므로 거부한다.
+        if (!link.deletedAt) {
+            throw new LinkNotDeletedException()
+        }
 
         // 복구된 링크는 "미분류"로 복원
         const [row] = await this.db

@@ -11,3 +11,13 @@ export class LinkNotFoundException extends BaseException {
         )
     }
 }
+
+export class LinkNotDeletedException extends BaseException {
+    constructor() {
+        super(
+            HttpStatus.CONFLICT,
+            'LINK_NOT_DELETED',
+            '삭제된 링크가 아니므로 복구할 수 없습니다.',
+        )
+    }
+}
