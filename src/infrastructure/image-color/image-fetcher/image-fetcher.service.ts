@@ -121,6 +121,7 @@ export class ImageFetcherService {
             redirectCount <= options.maxRedirects;
             redirectCount++
         ) {
+            // 리다이렉트 대상도 사용자 입력 URL과 같은 보안 기준으로 다시 검증한다.
             const { address } =
                 await this.urlSecurity.resolvePublicUrl(currentUrl)
 
@@ -174,6 +175,7 @@ export class ImageFetcherService {
         const defaultPort = url.protocol === 'https:' ? 443 : 80
         const port = url.port ? Number(url.port) : defaultPort
 
+        // 검증된 IP로 직접 연결하되, 가상 호스트와 TLS 검증은 원래 호스트 기준으로 유지한다.
         return {
             hostname: address,
             port,
