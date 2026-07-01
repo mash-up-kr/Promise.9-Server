@@ -1,6 +1,7 @@
-import { Injectable, UnprocessableEntityException } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import sharp, { type Stats } from 'sharp'
 
+import { ImageColorAnalysisFailedException } from '../image-color.exception'
 import { toImageColorValue } from '../image-color.util'
 import { FetchedImage } from '../image-fetcher/image-fetcher.type'
 import { SharpImageColorResult } from '../types/image-color.type'
@@ -21,7 +22,7 @@ export class SharpImageColorAnalyzer {
                 ]),
             }
         } catch (_error) {
-            throw new UnprocessableEntityException(
+            throw new ImageColorAnalysisFailedException(
                 'sharp로 이미지 색상을 추출할 수 없습니다.',
             )
         }

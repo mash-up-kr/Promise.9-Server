@@ -25,6 +25,7 @@ import {
     ImageColorSelectionSource,
     NODE_VIBRANT_COLOR_KEY_BY_SOURCE,
 } from './image-color.constants'
+import { ImageColorAnalysisFailedException } from './image-color.exception'
 import { toImageColorValue } from './image-color.util'
 
 @Injectable()
@@ -92,8 +93,12 @@ export class ImageColorService {
     ): Promise<NodeVibrantImageColorResult> {
         try {
             return await this.nodeVibrantAnalyzer.analyze(image)
-        } catch (_error) {
-            return EMPTY_NODE_VIBRANT_RESULT
+        } catch (error) {
+            if (error instanceof ImageColorAnalysisFailedException) {
+                return EMPTY_NODE_VIBRANT_RESULT
+            }
+
+            throw error
         }
     }
 
