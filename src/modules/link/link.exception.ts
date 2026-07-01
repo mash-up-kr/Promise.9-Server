@@ -21,3 +21,13 @@ export class LinkNotDeletedException extends BaseException {
         )
     }
 }
+
+export class LinkAlreadyExistsException extends BaseException {
+    constructor() {
+        super(
+            HttpStatus.CONFLICT,
+            'LINK_ALREADY_EXISTS',
+            '이미 저장한 링크입니다.',
+        )
+    }
+}

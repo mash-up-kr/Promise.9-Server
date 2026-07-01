@@ -11,6 +11,7 @@ import {
     UpdateLinkInput,
 } from './dto/link.dto'
 import {
+    LinkAlreadyExistsException,
     LinkNotDeletedException,
     LinkNotFoundException,
 } from './link.exception'
@@ -28,6 +29,8 @@ export class LinkService {
         if (input.folderId) {
             await this.assertOwnedFolder(userId, input.folderId)
         }
+
+        await this.assertNotDuplicated(userId, input.url)
 
         const [row] = await this.db
             .insert(links)
@@ -209,6 +212,25 @@ export class LinkService {
         }
 
         return row
+    }
+
+    // 같은 사용자가 이미 저장한(삭제되지 않은) 동일 URL이 있으면 중복 저장을 막는다.
+    private async assertNotDuplicated(userId: number, url: string) {
+        const [row] = await this.db
+            .select({ id: links.id })
+            .from(links)
+            .where(
+                and(
+                    eq(links.userId, userId),
+                    eq(links.url, url),
+                    isNull(links.deletedAt),
+                ),
+            )
+            .limit(1)
+
+        if (row) {
+            throw new LinkAlreadyExistsException()
+        }
     }
 
     private async assertOwnedFolder(userId: number, folderId: number) {
