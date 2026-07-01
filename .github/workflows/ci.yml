@@ -4,9 +4,6 @@ on:
   pull_request:
     branches:
       - main
-  push:
-    branches:
-      - main
 
 jobs:
   ci:
@@ -30,5 +27,5 @@ jobs:
       - name: Test
         run: bun run test -- --runInBand
 
-      - name: Build
+      - name: Type check and build
         run: bun run build
