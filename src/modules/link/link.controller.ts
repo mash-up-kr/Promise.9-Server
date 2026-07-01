@@ -10,22 +10,28 @@ import {
     Post,
     Query,
 } from '@nestjs/common'
-import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger'
+import { ApiTags } from '@nestjs/swagger'
 
 import { DEV_USER_ID } from '../../common/constants/dev-user'
 import { ZodValidationPipe } from '../../common/pipe/zod-validation.pipe'
 
 import {
-    CreateLinkDto,
     CreateLinkInput,
     createLinkSchema,
     SearchLinkInput,
     searchLinkSchema,
-    UpdateLinkDto,
     UpdateLinkInput,
     updateLinkSchema,
 } from './dto/link.dto'
 import { LinkService } from './link.service'
+import {
+    ApiCreateLink,
+    ApiLinkDetail,
+    ApiRemoveLink,
+    ApiRestoreLink,
+    ApiSearchLinks,
+    ApiUpdateLink,
+} from './link.swagger'
 
 @ApiTags('Link')
 @Controller('links')
@@ -34,8 +40,7 @@ export class LinkController {
 
     @Post()
     @HttpCode(201)
-    @ApiOperation({ summary: '링크 저장' })
-    @ApiBody({ type: CreateLinkDto })
+    @ApiCreateLink()
     create(
         @Body(new ZodValidationPipe(createLinkSchema)) body: CreateLinkInput,
     ) {
@@ -44,9 +49,7 @@ export class LinkController {
 
     // 정적 경로(:linkId 보다 먼저 선언) — /links/search
     @Get('search')
-    @ApiOperation({ summary: '링크 검색 (제목·출처 기준)' })
-    @ApiQuery({ name: 'q', required: true })
-    @ApiQuery({ name: 'folderId', required: false })
+    @ApiSearchLinks()
     search(
         @Query(new ZodValidationPipe(searchLinkSchema)) query: SearchLinkInput,
     ) {
@@ -54,14 +57,13 @@ export class LinkController {
     }
 
     @Get(':linkId')
-    @ApiOperation({ summary: '링크 상세 조회' })
+    @ApiLinkDetail()
     detail(@Param('linkId', ParseIntPipe) linkId: number) {
         return this.linkService.detail(DEV_USER_ID, linkId)
     }
 
     @Patch(':linkId')
-    @ApiOperation({ summary: '링크 수정 (폴더 변경 / 메모 수정)' })
-    @ApiBody({ type: UpdateLinkDto })
+    @ApiUpdateLink()
     update(
         @Param('linkId', ParseIntPipe) linkId: number,
         @Body(new ZodValidationPipe(updateLinkSchema)) body: UpdateLinkInput,
@@ -71,13 +73,13 @@ export class LinkController {
 
     @Delete(':linkId')
     @HttpCode(204)
-    @ApiOperation({ summary: '링크 삭제 (최근 삭제된 항목으로 이동)' })
+    @ApiRemoveLink()
     remove(@Param('linkId', ParseIntPipe) linkId: number) {
         return this.linkService.remove(DEV_USER_ID, linkId)
     }
 
     @Post(':linkId/restore')
-    @ApiOperation({ summary: '링크 복구 (미분류로 복원)' })
+    @ApiRestoreLink()
     restore(@Param('linkId', ParseIntPipe) linkId: number) {
         return this.linkService.restore(DEV_USER_ID, linkId)
     }
