@@ -1,10 +1,10 @@
-import {
-    BadGatewayException,
-    Injectable,
-    PayloadTooLargeException,
-    UnsupportedMediaTypeException,
-} from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 
+import {
+    ImageFetchFailedException,
+    ImageTooLargeException,
+    UnsupportedImageContentTypeException,
+} from './image-fetcher.exception'
 import { ReadImageResponseResult } from './image-fetcher.type'
 
 @Injectable()
@@ -14,23 +14,34 @@ export class ImageResponseReader {
         maxBytes: number,
         signal: AbortSignal,
     ): Promise<ReadImageResponseResult> {
-        const contentType = this.getImageContentType(
-            response.headers.get('content-type'),
-        )
-        this.assertContentLength(
-            response.headers.get('content-length'),
-            maxBytes,
-        )
+        try {
+            const contentType = this.getImageContentType(
+                response.headers.get('content-type'),
+            )
+            this.assertContentLength(
+                response.headers.get('content-length'),
+                maxBytes,
+            )
 
-        const buffer = await this.readLimitedBody(response, maxBytes, signal)
+            const buffer = await this.readLimitedBody(
+                response,
+                maxBytes,
+                signal,
+            )
 
-        if (buffer.byteLength === 0) {
-            throw new BadGatewayException('이미지 응답이 비어 있습니다.')
-        }
+            if (buffer.byteLength === 0) {
+                throw new ImageFetchFailedException(
+                    '이미지 응답이 비어 있습니다.',
+                )
+            }
 
-        return {
-            contentType,
-            buffer,
+            return {
+                contentType,
+                buffer,
+            }
+        } catch (error) {
+            await this.cancelResponseBody(response)
+            throw error
         }
     }
 
@@ -45,9 +56,7 @@ export class ImageResponseReader {
             !contentType.startsWith('image/') ||
             contentType === 'image/svg+xml'
         ) {
-            throw new UnsupportedMediaTypeException(
-                '이미지 응답의 Content-Type이 지원되지 않습니다.',
-            )
+            throw new UnsupportedImageContentTypeException()
         }
 
         return contentType
@@ -64,9 +73,7 @@ export class ImageResponseReader {
         const contentLength = Number(contentLengthHeader)
 
         if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-            throw new PayloadTooLargeException(
-                `이미지 크기는 ${maxBytes} bytes를 초과할 수 없습니다.`,
-            )
+            throw new ImageTooLargeException(maxBytes)
         }
     }
 
@@ -82,13 +89,13 @@ export class ImageResponseReader {
         const reader = response.body.getReader()
         const chunks: Uint8Array[] = []
         let receivedBytes = 0
-        const cancelReader = () => {
+        const cancelOnAbort = () => {
             void reader.cancel().catch(() => undefined)
         }
 
         try {
             signal.throwIfAborted()
-            signal.addEventListener('abort', cancelReader, { once: true })
+            signal.addEventListener('abort', cancelOnAbort, { once: true })
 
             while (true) {
                 const { done, value } = await reader.read()
@@ -107,18 +114,28 @@ export class ImageResponseReader {
 
                 if (receivedBytes > maxBytes) {
                     await reader.cancel()
-                    throw new PayloadTooLargeException(
-                        `이미지 크기는 ${maxBytes} bytes를 초과할 수 없습니다.`,
-                    )
+                    throw new ImageTooLargeException(maxBytes)
                 }
 
                 chunks.push(value)
             }
         } finally {
-            signal.removeEventListener('abort', cancelReader)
+            signal.removeEventListener('abort', cancelOnAbort)
             reader.releaseLock()
         }
 
         return Buffer.concat(chunks, receivedBytes)
+    }
+
+    private async cancelResponseBody(response: Response) {
+        if (!response.body) {
+            return
+        }
+
+        try {
+            await response.body.cancel()
+        } catch (_error) {
+            // 이미 reader가 닫았거나 lock이 해제되는 중인 body는 추가 정리가 필요 없다.
+        }
     }
 }

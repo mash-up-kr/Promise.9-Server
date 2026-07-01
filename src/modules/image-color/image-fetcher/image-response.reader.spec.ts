@@ -1,8 +1,7 @@
 import {
-    PayloadTooLargeException,
-    UnsupportedMediaTypeException,
-} from '@nestjs/common'
-
+    ImageTooLargeException,
+    UnsupportedImageContentTypeException,
+} from './image-fetcher.exception'
 import { ImageResponseReader } from './image-response.reader'
 
 describe('ImageResponseReader', () => {
@@ -33,10 +32,14 @@ describe('ImageResponseReader', () => {
                 'content-type': 'text/html',
             },
         })
+        const cancelSpy = jest
+            .spyOn(response.body!, 'cancel')
+            .mockResolvedValue(undefined)
 
         await expect(reader.read(response, 10, signal)).rejects.toBeInstanceOf(
-            UnsupportedMediaTypeException,
+            UnsupportedImageContentTypeException,
         )
+        expect(cancelSpy).toHaveBeenCalledTimes(1)
     })
 
     it('Content-Length가 maxBytes보다 크면 body를 읽기 전에 거부한다', async () => {
@@ -46,10 +49,14 @@ describe('ImageResponseReader', () => {
                 'content-length': '3',
             },
         })
+        const cancelSpy = jest
+            .spyOn(response.body!, 'cancel')
+            .mockResolvedValue(undefined)
 
         await expect(reader.read(response, 2, signal)).rejects.toBeInstanceOf(
-            PayloadTooLargeException,
+            ImageTooLargeException,
         )
+        expect(cancelSpy).toHaveBeenCalledTimes(1)
     })
 
     it('읽는 중 maxBytes를 초과하면 거부한다', async () => {
@@ -60,7 +67,7 @@ describe('ImageResponseReader', () => {
         })
 
         await expect(reader.read(response, 2, signal)).rejects.toBeInstanceOf(
-            PayloadTooLargeException,
+            ImageTooLargeException,
         )
     })
 })

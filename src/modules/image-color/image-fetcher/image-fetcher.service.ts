@@ -3,13 +3,7 @@ import https, { type RequestOptions } from 'node:https'
 import { isIP } from 'node:net'
 import { Readable } from 'node:stream'
 
-import {
-    BadGatewayException,
-    BadRequestException,
-    GatewayTimeoutException,
-    HttpException,
-    Injectable,
-} from '@nestjs/common'
+import { BadRequestException, HttpException, Injectable } from '@nestjs/common'
 
 import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
 
@@ -18,6 +12,10 @@ import {
     IMAGE_REDIRECT_STATUSES,
     MAX_IMAGE_FETCH_OPTIONS,
 } from './image-fetcher.constants'
+import {
+    ImageFetchFailedException,
+    ImageFetchTimeoutException,
+} from './image-fetcher.exception'
 import {
     FetchedImage,
     ImageFetchOptions,
@@ -29,6 +27,8 @@ type ImageFetchTimeout = {
     promise: Promise<never>
     timeout: ReturnType<typeof setTimeout>
 }
+
+const RESPONSE_STATUSES_WITHOUT_BODY = new Set([204, 205, 304])
 
 @Injectable()
 export class ImageFetcherService {
@@ -42,13 +42,11 @@ export class ImageFetcherService {
         options: ImageFetchOptions = {},
     ): Promise<FetchedImage> {
         const resolvedOptions = this.resolveOptions(options)
-        const controller = new AbortController()
-        const timeoutError = new GatewayTimeoutException(
-            '이미지 요청 시간이 초과되었습니다.',
-        )
-        const imageFetchTimeout = this.createTimeout(
+        const abortController = new AbortController()
+        const timeoutError = new ImageFetchTimeoutException()
+        const timeoutTask = this.createTimeout(
             resolvedOptions.timeoutMs,
-            controller,
+            abortController,
             timeoutError,
         )
 
@@ -57,9 +55,9 @@ export class ImageFetcherService {
                 this.fetchWithSignal(
                     imageUrl,
                     resolvedOptions,
-                    controller.signal,
+                    abortController.signal,
                 ),
-                imageFetchTimeout.promise,
+                timeoutTask.promise,
             ])
         } catch (error) {
             if (error instanceof HttpException) {
@@ -70,9 +68,9 @@ export class ImageFetcherService {
                 throw timeoutError
             }
 
-            throw new BadGatewayException('이미지 URL 요청에 실패했습니다.')
+            throw new ImageFetchFailedException()
         } finally {
-            clearTimeout(imageFetchTimeout.timeout)
+            clearTimeout(timeoutTask.timeout)
         }
     }
 
@@ -90,7 +88,7 @@ export class ImageFetcherService {
 
         if (!response.ok) {
             this.cancelResponseBody(response)
-            throw new BadGatewayException(
+            throw new ImageFetchFailedException(
                 `이미지 요청에 실패했습니다. status=${response.status}`,
             )
         }
@@ -122,10 +120,14 @@ export class ImageFetcherService {
             redirectCount++
         ) {
             // 리다이렉트 대상도 사용자 입력 URL과 같은 보안 기준으로 다시 검증한다.
-            const { address } =
+            const { address: resolvedAddress } =
                 await this.urlSecurity.resolvePublicUrl(currentUrl)
 
-            const response = await this.request(currentUrl, address, signal)
+            const response = await this.request(
+                currentUrl,
+                resolvedAddress,
+                signal,
+            )
 
             if (!IMAGE_REDIRECT_STATUSES.includes(response.status)) {
                 return { response, finalUrl: currentUrl }
@@ -133,7 +135,7 @@ export class ImageFetcherService {
 
             try {
                 if (redirectCount === options.maxRedirects) {
-                    throw new BadGatewayException(
+                    throw new ImageFetchFailedException(
                         '이미지 URL 리다이렉트 횟수가 너무 많습니다.',
                     )
                 }
@@ -144,22 +146,35 @@ export class ImageFetcherService {
             }
         }
 
-        throw new BadGatewayException(
+        throw new ImageFetchFailedException(
             '이미지 URL 리다이렉트 처리에 실패했습니다.',
         )
     }
 
     private request(
         url: URL,
-        address: string,
+        resolvedAddress: string,
         signal: AbortSignal,
     ): Promise<Response> {
         const transport = url.protocol === 'https:' ? https : http
-        const requestOptions = this.createRequestOptions(url, address, signal)
+        const requestOptions = this.createRequestOptions(
+            url,
+            resolvedAddress,
+            signal,
+        )
 
         return new Promise((resolve, reject) => {
             const request = transport.request(requestOptions, (response) => {
-                resolve(this.toFetchResponse(response))
+                try {
+                    resolve(this.toFetchResponse(response))
+                } catch (error) {
+                    response.destroy()
+                    reject(
+                        error instanceof Error
+                            ? error
+                            : new Error('이미지 응답 변환에 실패했습니다.'),
+                    )
+                }
             })
 
             request.on('error', reject)
@@ -169,7 +184,7 @@ export class ImageFetcherService {
 
     private createRequestOptions(
         url: URL,
-        address: string,
+        resolvedAddress: string,
         signal: AbortSignal,
     ): RequestOptions {
         const defaultPort = url.protocol === 'https:' ? 443 : 80
@@ -177,7 +192,7 @@ export class ImageFetcherService {
 
         // 검증된 IP로 직접 연결하되, 가상 호스트와 TLS 검증은 원래 호스트 기준으로 유지한다.
         return {
-            hostname: address,
+            hostname: resolvedAddress,
             port,
             path: `${url.pathname}${url.search}`,
             method: 'GET',
@@ -196,11 +211,25 @@ export class ImageFetcherService {
     }
 
     private toFetchResponse(response: IncomingMessage): Response {
-        return new Response(Readable.toWeb(response) as ReadableStream, {
-            status: response.statusCode,
+        const status = response.statusCode ?? 502
+        // Response 생성자는 204, 205, 304 상태 코드에 body stream을 허용하지 않는다.
+        const body = this.canHaveResponseBody(status)
+            ? (Readable.toWeb(response) as ReadableStream)
+            : null
+
+        if (!body) {
+            response.destroy()
+        }
+
+        return new Response(body, {
+            status,
             statusText: response.statusMessage,
             headers: this.toHeaders(response.headers),
         })
+    }
+
+    private canHaveResponseBody(status: number): boolean {
+        return !RESPONSE_STATUSES_WITHOUT_BODY.has(status)
     }
 
     private toHeaders(headers: IncomingHttpHeaders): Headers {
@@ -227,7 +256,7 @@ export class ImageFetcherService {
         const location = response.headers.get('location')
 
         if (!location) {
-            throw new BadGatewayException(
+            throw new ImageFetchFailedException(
                 '이미지 URL 리다이렉트 위치가 없습니다.',
             )
         }
@@ -302,9 +331,9 @@ export class ImageFetcherService {
     private createTimeout(
         timeoutMs: number,
         controller: AbortController,
-        timeoutError: GatewayTimeoutException,
+        timeoutError: ImageFetchTimeoutException,
     ): ImageFetchTimeout {
-        let rejectTimeout!: (error: GatewayTimeoutException) => void
+        let rejectTimeout!: (error: ImageFetchTimeoutException) => void
         const promise = new Promise<never>((_, reject) => {
             rejectTimeout = reject
         })

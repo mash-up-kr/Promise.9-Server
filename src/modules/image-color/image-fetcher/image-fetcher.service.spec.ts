@@ -1,4 +1,11 @@
-import { BadGatewayException, BadRequestException } from '@nestjs/common'
+import http, {
+    type ClientRequest,
+    type IncomingHttpHeaders,
+    type IncomingMessage,
+} from 'node:http'
+import { PassThrough } from 'node:stream'
+
+import { BadRequestException } from '@nestjs/common'
 
 import {
     ResolvedPublicUrl,
@@ -6,6 +13,7 @@ import {
 } from '../../../common/security/url-security/url-security.service'
 
 import { MAX_IMAGE_FETCH_OPTIONS } from './image-fetcher.constants'
+import { ImageFetchFailedException } from './image-fetcher.exception'
 import { ImageFetcherService } from './image-fetcher.service'
 import { ImageResponseReader } from './image-response.reader'
 
@@ -114,10 +122,93 @@ describe('ImageFetcherService', () => {
         )
 
         await expect(service.fetch(imageUrl)).rejects.toBeInstanceOf(
-            BadGatewayException,
+            ImageFetchFailedException,
         )
         expect(requestMock).toHaveBeenCalledTimes(1)
         expect(cancelSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('URL 보안 검증 실패는 요청 전에 중단한다', async () => {
+        const imageUrl = 'https://example.com/image.png'
+        const requestMock = mockRequest(service, createImageResponse())
+
+        urlSecurity.resolvePublicUrl.mockRejectedValueOnce(
+            new BadRequestException(
+                '내부망 또는 로컬 주소는 사용할 수 없습니다.',
+            ),
+        )
+
+        await expect(service.fetch(imageUrl)).rejects.toBeInstanceOf(
+            BadRequestException,
+        )
+        expect(requestMock).not.toHaveBeenCalled()
+    })
+
+    it('body를 가질 수 없는 상태 코드는 null body로 변환한다', () => {
+        const incomingMessage = createIncomingMessage(204, {
+            'content-type': 'image/png',
+        })
+        const destroySpy = jest.spyOn(incomingMessage, 'destroy')
+
+        const response = (
+            service as unknown as {
+                toFetchResponse(response: IncomingMessage): Response
+            }
+        ).toFetchResponse(incomingMessage)
+
+        expect(response.status).toBe(204)
+        expect(response.body).toBeNull()
+        expect(destroySpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('응답 변환 중 예외가 나면 request promise rejection으로 처리한다', async () => {
+        const clientRequest = {
+            on: jest.fn().mockReturnThis(),
+            end: jest.fn(),
+        } as unknown as ClientRequest
+        const requestSpy = jest.spyOn(http, 'request').mockImplementation(((
+            _options: unknown,
+            callback?: (response: IncomingMessage) => void,
+        ) => {
+            callback?.(
+                createIncomingMessage(200, {
+                    'content-type': 'image/png',
+                }),
+            )
+
+            return clientRequest
+        }) as unknown as typeof http.request)
+        const toFetchResponseSpy = jest
+            .spyOn(
+                service as unknown as {
+                    toFetchResponse(response: unknown): Response
+                },
+                'toFetchResponse',
+            )
+            .mockImplementation(() => {
+                throw new Error('response conversion failed')
+            })
+
+        try {
+            await expect(
+                (
+                    service as unknown as {
+                        request(
+                            url: URL,
+                            address: string,
+                            signal: AbortSignal,
+                        ): Promise<Response>
+                    }
+                ).request(
+                    new URL('http://example.com/image.png'),
+                    '127.0.0.1',
+                    new AbortController().signal,
+                ),
+            ).rejects.toThrow('response conversion failed')
+        } finally {
+            toFetchResponseSpy.mockRestore()
+            requestSpy.mockRestore()
+        }
     })
 
     it.each([
@@ -192,4 +283,17 @@ function createResolvedPublicUrl(address: string): ResolvedPublicUrl {
     return {
         address,
     }
+}
+
+function createIncomingMessage(
+    statusCode: number,
+    headers: IncomingHttpHeaders = {},
+): IncomingMessage {
+    const incomingMessage = new PassThrough() as unknown as IncomingMessage
+
+    incomingMessage.statusCode = statusCode
+    incomingMessage.statusMessage = ''
+    incomingMessage.headers = headers
+
+    return incomingMessage
 }
