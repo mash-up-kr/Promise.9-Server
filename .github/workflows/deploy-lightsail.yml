@@ -1,6 +1,11 @@
 name: Deploy To Lightsail
 
 on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
   workflow_dispatch:
 
 permissions:
@@ -8,7 +13,9 @@ permissions:
 
 jobs:
   deploy:
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
 
     steps:
@@ -106,4 +113,4 @@ jobs:
             chmod 600 .env
             APP_IMAGE="${{ steps.image.outputs.name }}:${{ github.sha }}" docker compose -f docker-compose.prod.yml pull api
             APP_IMAGE="${{ steps.image.outputs.name }}:${{ github.sha }}" docker compose -f docker-compose.prod.yml up -d api
-            docker image prune -af --filter "until=168h"
+            docker image prune -af --filter "until=72h"

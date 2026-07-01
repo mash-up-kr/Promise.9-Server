@@ -16,7 +16,8 @@ AWS와 Docker Hub는 팀 계정을 사용한다.
 
 ## 배포 흐름
 
-배포는 GitHub Actions의 `Deploy To Lightsail` workflow를 `main` 브랜치에서 수동 실행할 때만 진행한다.
+배포는 PR이 `main` 브랜치에 merge될 때 GitHub Actions의 `Deploy To Lightsail` workflow로 자동 진행한다.
+필요하면 같은 workflow를 `main` 브랜치에서 수동 실행할 수 있다.
 
 ```text
 GitHub Actions
@@ -67,3 +68,4 @@ Lightsail firewall은 다음 포트만 연다.
 - 운영 환경변수는 배포 중 `.env.production`으로 만들고 서버의 `/opt/promise9/.env`로 반영한다.
 - PostgreSQL은 compose에 포함하지 않고 외부 DB를 사용한다.
 - DB migration은 현재 배포 workflow에서 자동 실행하지 않는다.
+- 배포 후 72시간 이상 지난 미사용 Docker image를 정리한다.
