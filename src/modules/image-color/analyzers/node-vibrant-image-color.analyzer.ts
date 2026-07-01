@@ -1,0 +1,57 @@
+import { Injectable } from '@nestjs/common'
+import { Vibrant } from 'node-vibrant/node'
+
+import { ImageColorAnalysisFailedException } from '../image-color.exception'
+import { FetchedImage } from '../image-fetcher/image-fetcher.type'
+import {
+    NodeVibrantImageColorResult,
+    NodeVibrantPaletteColor,
+} from '../types/node-vibrant-image-color.type'
+
+type VibrantPalette = Awaited<
+    ReturnType<ReturnType<typeof Vibrant.from>['getPalette']>
+>
+type VibrantSwatch = NonNullable<VibrantPalette['Vibrant']>
+
+@Injectable()
+export class NodeVibrantImageColorAnalyzer {
+    async analyze(image: FetchedImage): Promise<NodeVibrantImageColorResult> {
+        try {
+            const builder = Vibrant.from(image.buffer)
+            const palette = await builder.getPalette()
+
+            return {
+                // node-vibrant는 이미지 분위기를 설명하는 6개 팔레트 색상을 만든다.
+                colors: {
+                    vibrant: this.toColor(palette.Vibrant),
+                    muted: this.toColor(palette.Muted),
+                    darkVibrant: this.toColor(palette.DarkVibrant),
+                    darkMuted: this.toColor(palette.DarkMuted),
+                    lightVibrant: this.toColor(palette.LightVibrant),
+                    lightMuted: this.toColor(palette.LightMuted),
+                },
+            }
+        } catch (_error) {
+            throw new ImageColorAnalysisFailedException(
+                '이미지 색상 팔레트를 추출할 수 없습니다.',
+            )
+        }
+    }
+
+    private toColor(
+        swatch: VibrantSwatch | null,
+    ): NodeVibrantPaletteColor | null {
+        if (!swatch) {
+            return null
+        }
+
+        return {
+            hex: swatch.hex,
+            rgb: swatch.rgb,
+            hsl: swatch.hsl,
+            population: swatch.population,
+            titleTextColor: swatch.titleTextColor,
+            bodyTextColor: swatch.bodyTextColor,
+        }
+    }
+}
