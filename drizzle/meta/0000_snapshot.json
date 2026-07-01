@@ -1,5 +1,5 @@
 {
-  "id": "42a7f31d-6b67-4deb-bf47-e89dd75341e9",
+  "id": "a7f20604-799f-448f-8db5-2b0d1ce6c144",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -55,7 +55,16 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "folders_user_id_name_unique": {
+          "name": "folders_user_id_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id",
+            "name"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

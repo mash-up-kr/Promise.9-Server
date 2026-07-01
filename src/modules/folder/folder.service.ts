@@ -5,7 +5,10 @@ import { DatabaseService } from '../../config/database/database.service'
 import { links } from '../link/link.schema'
 
 import { CreateFolderInput, UpdateFolderInput } from './dto/folder.dto'
-import { FolderNotFoundException } from './folder.exception'
+import {
+    FolderNameDuplicateException,
+    FolderNotFoundException,
+} from './folder.exception'
 import { FolderRow, folders } from './folder.schema'
 
 @Injectable()
@@ -17,15 +20,22 @@ export class FolderService {
     }
 
     async create(userId: number, input: CreateFolderInput) {
-        const [row] = await this.db
-            .insert(folders)
-            .values({ userId, name: input.folderName })
-            .returning()
+        try {
+            const [row] = await this.db
+                .insert(folders)
+                .values({ userId, name: input.folderName })
+                .returning()
 
-        return {
-            folderId: row.id,
-            folderName: row.name,
-            createdAt: row.createdAt,
+            return {
+                folderId: row.id,
+                folderName: row.name,
+                createdAt: row.createdAt,
+            }
+        } catch (error) {
+            if (this.isDuplicateNameError(error)) {
+                throw new FolderNameDuplicateException()
+            }
+            throw error
         }
     }
 
@@ -74,16 +84,25 @@ export class FolderService {
     async rename(userId: number, folderId: number, input: UpdateFolderInput) {
         await this.getOwnedFolder(userId, folderId)
 
-        const [row] = await this.db
-            .update(folders)
-            .set({ name: input.folderName, updatedAt: new Date() })
-            .where(and(eq(folders.id, folderId), eq(folders.userId, userId)))
-            .returning()
+        try {
+            const [row] = await this.db
+                .update(folders)
+                .set({ name: input.folderName, updatedAt: new Date() })
+                .where(
+                    and(eq(folders.id, folderId), eq(folders.userId, userId)),
+                )
+                .returning()
 
-        return {
-            folderId: row.id,
-            folderName: row.name,
-            updatedAt: row.updatedAt,
+            return {
+                folderId: row.id,
+                folderName: row.name,
+                updatedAt: row.updatedAt,
+            }
+        } catch (error) {
+            if (this.isDuplicateNameError(error)) {
+                throw new FolderNameDuplicateException()
+            }
+            throw error
         }
     }
 
@@ -164,6 +183,16 @@ export class FolderService {
             .where(and(...conditions))
 
         return row.value
+    }
+
+    // (user_id, name) 유니크 제약 위반(Postgres 23505)인지 판별한다.
+    private isDuplicateNameError(error: unknown): boolean {
+        return (
+            typeof error === 'object' &&
+            error !== null &&
+            'code' in error &&
+            (error as { code?: unknown }).code === '23505'
+        )
     }
 
     // 폴더 소유권을 확인하고, 없거나 타 사용자 소유면 404로 처리한다.

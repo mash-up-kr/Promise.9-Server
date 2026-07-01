@@ -3,7 +3,8 @@ CREATE TABLE "folders" (
 	"user_id" bigint NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "folders_user_id_name_unique" UNIQUE("user_id","name")
 );
 --> statement-breakpoint
 CREATE TABLE "links" (

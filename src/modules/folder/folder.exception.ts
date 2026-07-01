@@ -11,3 +11,13 @@ export class FolderNotFoundException extends BaseException {
         )
     }
 }
+
+export class FolderNameDuplicateException extends BaseException {
+    constructor() {
+        super(
+            HttpStatus.CONFLICT,
+            'FOLDER_NAME_DUPLICATE',
+            '이미 존재하는 폴더 이름입니다.',
+        )
+    }
+}
