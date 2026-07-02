@@ -1,0 +1,5 @@
+export const LINK_ERROR_CODE = {
+    NOT_FOUND: 301001,
+    NOT_DELETED: 302001,
+    ALREADY_EXISTS: 302002,
+} as const

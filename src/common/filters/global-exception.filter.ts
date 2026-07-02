@@ -53,17 +53,17 @@ export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
     private getErrorCode(
         statusCode: HttpStatus,
         response?: string | object,
-    ): string {
+    ): number {
         if (
             response &&
             typeof response === 'object' &&
             'errorCode' in response &&
-            typeof response.errorCode === 'string'
+            typeof response.errorCode === 'number'
         ) {
             return response.errorCode
         }
 
-        return HttpStatus[statusCode] ?? 'INTERNAL_SERVER_ERROR'
+        return statusCode
     }
 
     // httpException용, Nest 기본 응답의 message가 문자열일 때만 사용하고 아니면 예외 메시지로 대체
