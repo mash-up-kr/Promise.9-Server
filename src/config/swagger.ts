@@ -5,6 +5,7 @@ export function swaggerConfig(app: INestApplication) {
     const config = new DocumentBuilder()
         .setTitle('Promise.9 API')
         .setDescription('Mash-Up Promise.9팀 API 문서입니다.')
+        .addBearerAuth()
         .build()
 
     const document = () => SwaggerModule.createDocument(app, config)
