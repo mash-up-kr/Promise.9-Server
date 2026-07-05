@@ -90,15 +90,6 @@ export class UrlSecurityService {
             .toLowerCase()
     }
 
-    private isBlockedHostname(hostname: string): boolean {
-        return (
-            hostname.length === 0 ||
-            hostname === 'localhost' ||
-            hostname.endsWith('.localhost') ||
-            hostname.endsWith('.local')
-        )
-    }
-
     private assertPublicIp(address: string) {
         if (isBlockedIp(address)) {
             throw new BadRequestException(
