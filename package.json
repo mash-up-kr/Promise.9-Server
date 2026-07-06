@@ -34,9 +34,11 @@
         "@nestjs/swagger": "^11.4.4",
         "dotenv": "^17.4.2",
         "drizzle-orm": "^0.45.2",
+        "node-vibrant": "^4.0.4",
         "postgres": "^3.4.9",
         "reflect-metadata": "^0.2.2",
         "rxjs": "^7.8.1",
+        "sharp": "^0.35.2",
         "zod": "^4.4.3"
     },
     "devDependencies": {
