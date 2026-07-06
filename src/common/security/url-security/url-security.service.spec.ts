@@ -55,11 +55,18 @@ describe('UrlSecurityService', () => {
         })
     })
 
-    describe('assertPublicUrl', () => {
+    describe('resolvePublicUrl', () => {
+        it('URL 객체를 직접 받아도 http/https가 아닌 프로토콜을 거부한다', async () => {
+            await expect(
+                service.resolvePublicUrl(new URL('ftp://8.8.8.8/image.jpg')),
+            ).rejects.toBeInstanceOf(BadRequestException)
+            expect(lookupMock).not.toHaveBeenCalled()
+        })
+
         it('공개 IP 주소를 허용한다', async () => {
             await expect(
-                service.assertPublicUrl(new URL('https://8.8.8.8/image.jpg')),
-            ).resolves.toBeUndefined()
+                service.resolvePublicUrl(new URL('https://8.8.8.8/image.jpg')),
+            ).resolves.toBeDefined()
             expect(lookupMock).not.toHaveBeenCalled()
         })
 
@@ -74,21 +81,21 @@ describe('UrlSecurityService', () => {
 
         it('localhost 호스트를 거부한다', async () => {
             await expect(
-                service.assertPublicUrl(new URL('http://localhost/image.jpg')),
+                service.resolvePublicUrl(new URL('http://localhost/image.jpg')),
             ).rejects.toBeInstanceOf(BadRequestException)
             expect(lookupMock).not.toHaveBeenCalled()
         })
 
         it('사설 IPv4 주소를 거부한다', async () => {
             await expect(
-                service.assertPublicUrl(new URL('http://10.0.0.1/image.jpg')),
+                service.resolvePublicUrl(new URL('http://10.0.0.1/image.jpg')),
             ).rejects.toBeInstanceOf(BadRequestException)
             expect(lookupMock).not.toHaveBeenCalled()
         })
 
         it('EC2 metadata 주소를 거부한다', async () => {
             await expect(
-                service.assertPublicUrl(
+                service.resolvePublicUrl(
                     new URL('http://169.254.169.254/latest/meta-data'),
                 ),
             ).rejects.toBeInstanceOf(BadRequestException)
@@ -97,7 +104,7 @@ describe('UrlSecurityService', () => {
 
         it('IPv4-mapped IPv6로 표현된 내부 IPv4 주소를 거부한다', async () => {
             await expect(
-                service.assertPublicUrl(
+                service.resolvePublicUrl(
                     new URL('http://[::ffff:c0a8:1]/image.jpg'),
                 ),
             ).rejects.toBeInstanceOf(BadRequestException)
@@ -110,10 +117,10 @@ describe('UrlSecurityService', () => {
             ])
 
             await expect(
-                service.assertPublicUrl(
+                service.resolvePublicUrl(
                     new URL('https://example.com/image.jpg'),
                 ),
-            ).resolves.toBeUndefined()
+            ).resolves.toBeDefined()
         })
 
         it('DNS 조회 결과의 공개 IP를 연결 대상으로 반환한다', async () => {
@@ -137,7 +144,7 @@ describe('UrlSecurityService', () => {
             ])
 
             await expect(
-                service.assertPublicUrl(
+                service.resolvePublicUrl(
                     new URL('https://example.com/image.jpg'),
                 ),
             ).rejects.toBeInstanceOf(BadRequestException)
@@ -149,7 +156,7 @@ describe('UrlSecurityService', () => {
             ])
 
             await expect(
-                service.assertPublicUrl(
+                service.resolvePublicUrl(
                     new URL('https://example.com/image.jpg'),
                 ),
             ).rejects.toBeInstanceOf(BadRequestException)
@@ -159,7 +166,7 @@ describe('UrlSecurityService', () => {
             lookupMock.mockRejectedValueOnce(new Error('ENOTFOUND'))
 
             await expect(
-                service.assertPublicUrl(new URL('https://unknown.example')),
+                service.resolvePublicUrl(new URL('https://unknown.example')),
             ).rejects.toBeInstanceOf(BadRequestException)
         })
     })

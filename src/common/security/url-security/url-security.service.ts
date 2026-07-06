@@ -20,20 +20,14 @@ export class UrlSecurityService {
             throw new BadRequestException('URL 형식이 올바르지 않습니다.')
         }
 
-        if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-            throw new BadRequestException(
-                'URL은 http 또는 https만 사용할 수 있습니다.',
-            )
-        }
+        this.assertHttpProtocol(url)
 
         return url
     }
 
-    async assertPublicUrl(url: URL) {
-        await this.resolvePublicUrl(url)
-    }
-
     async resolvePublicUrl(url: URL): Promise<ResolvedPublicUrl> {
+        this.assertHttpProtocol(url)
+
         const hostname = this.normalizeHostname(url.hostname)
 
         if (isBlockedHostname(hostname)) {
@@ -88,6 +82,14 @@ export class UrlSecurityService {
             .trim()
             .replace(/^\[(.*)]$/, '$1')
             .toLowerCase()
+    }
+
+    private assertHttpProtocol(url: URL) {
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+            throw new BadRequestException(
+                'URL은 http 또는 https만 사용할 수 있습니다.',
+            )
+        }
     }
 
     private assertPublicIp(address: string) {
