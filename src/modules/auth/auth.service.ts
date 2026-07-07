@@ -11,6 +11,7 @@ import { users } from '../users/users.schema'
 import { SupportedProvider } from './dto/auth.dto'
 import { GoogleProvider } from './providers/google.provider'
 import { SocialProvider } from './providers/social-provider.interface'
+import { TOKEN_TYPE, TokenType } from './auth.constants'
 import {
     ExpiredTokenException,
     InvalidTokenException,
@@ -30,7 +31,7 @@ export interface SocialLoginResult extends TokenPair {
 
 interface JwtRefreshPayload {
     sub: number
-    type: string
+    type: TokenType
 }
 
 @Injectable()
@@ -193,7 +194,7 @@ export class AuthService {
 
     private async issueTokens(userId: number): Promise<TokenPair> {
         const accessToken = this.jwtService.sign(
-            { sub: userId, type: 'access' },
+            { sub: userId, type: TOKEN_TYPE.ACCESS },
             {
                 secret: this.accessSecret,
                 expiresIn: this.accessExpiresIn as StringValue,
@@ -202,7 +203,7 @@ export class AuthService {
 
         const refreshExpiresAt = parseExpiresIn(this.refreshExpiresIn)
         const rawRefreshToken = this.jwtService.sign(
-            { sub: userId, type: 'refresh' },
+            { sub: userId, type: TOKEN_TYPE.REFRESH },
             {
                 secret: this.refreshSecret,
                 expiresIn: this.refreshExpiresIn as StringValue,
@@ -224,7 +225,7 @@ export class AuthService {
                 secret: this.refreshSecret,
             })
 
-            if (payload.type !== 'refresh') {
+            if (payload.type !== TOKEN_TYPE.REFRESH) {
                 throw new InvalidTokenException()
             }
 

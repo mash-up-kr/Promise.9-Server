@@ -5,11 +5,12 @@ import { ExtractJwt, Strategy } from 'passport-jwt'
 
 import { AuthUser } from '../../../common/guards/jwt-auth.guard'
 import { ValidatedEnvironment } from '../../../config/environment'
+import { TOKEN_TYPE, TokenType } from '../auth.constants'
 import { InvalidTokenException } from '../auth.exception'
 
 interface JwtPayload {
     sub: number
-    type: string
+    type: TokenType
 }
 
 @Injectable()
@@ -25,7 +26,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     validate(payload: JwtPayload): AuthUser {
-        if (payload.type !== 'access') {
+        if (payload.type !== TOKEN_TYPE.ACCESS) {
             throw new InvalidTokenException()
         }
         return { userId: payload.sub }
