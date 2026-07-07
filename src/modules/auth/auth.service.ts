@@ -17,6 +17,7 @@ import {
     UnsupportedProviderException,
 } from './auth.exception'
 import { refreshTokens, socialAccounts } from './auth.schema'
+import { parseExpiresIn } from './time.utils'
 
 export interface TokenPair {
     accessToken: string
@@ -199,7 +200,7 @@ export class AuthService {
             },
         )
 
-        const refreshExpiresAt = this.parseExpiresIn(this.refreshExpiresIn)
+        const refreshExpiresAt = parseExpiresIn(this.refreshExpiresIn)
         const rawRefreshToken = this.jwtService.sign(
             { sub: userId, type: 'refresh' },
             {
@@ -243,20 +244,5 @@ export class AuthService {
 
             throw new InvalidTokenException()
         }
-    }
-
-    // "15m" → Date, "30d" → Date
-    private parseExpiresIn(expiresIn: string): Date {
-        const unit = expiresIn.slice(-1)
-        const value = parseInt(expiresIn.slice(0, -1), 10)
-
-        const ms: Record<string, number> = {
-            s: 1000,
-            m: 60 * 1000,
-            h: 60 * 60 * 1000,
-            d: 24 * 60 * 60 * 1000,
-        }
-
-        return new Date(Date.now() + value * (ms[unit] ?? 1000))
     }
 }
