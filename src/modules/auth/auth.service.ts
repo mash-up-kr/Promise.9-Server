@@ -66,43 +66,42 @@ export class AuthService {
         const socialProvider = this.getProvider(provider)
         const { providerId, email } = await socialProvider.verify(idToken)
 
-        const existingAccount = await this.db.db.query.socialAccounts.findFirst(
-            {
-                where: and(
-                    eq(socialAccounts.provider, provider),
-                    eq(socialAccounts.providerUserId, providerId),
-                ),
-            },
-        )
-
-        let userId: number
-        let isNewUser: boolean
-
-        if (existingAccount) {
-            userId = existingAccount.userId
-            isNewUser = false
-        } else {
-            userId = await this.db.db.transaction(async (tx) => {
+        const { userId, isNewUser } = await this.db.db.transaction(
+            async (tx) => {
                 const [user] = await tx
                     .insert(users)
                     .values({ email })
                     .onConflictDoUpdate({
                         target: users.email,
-                        set: { updatedAt: new Date() },
+                        set: { updatedAt: new Date(), deletedAt: null },
                     })
                     .returning({ id: users.id })
 
-                await tx.insert(socialAccounts).values({
-                    userId: user.id,
-                    provider,
-                    providerUserId: providerId,
-                    providerEmail: email,
+                const [inserted] = await tx
+                    .insert(socialAccounts)
+                    .values({
+                        userId: user.id,
+                        provider,
+                        providerUserId: providerId,
+                        providerEmail: email,
+                    })
+                    .onConflictDoNothing()
+                    .returning({ userId: socialAccounts.userId })
+
+                if (inserted) {
+                    return { userId: user.id, isNewUser: true }
+                }
+
+                const existing = await tx.query.socialAccounts.findFirst({
+                    where: and(
+                        eq(socialAccounts.provider, provider),
+                        eq(socialAccounts.providerUserId, providerId),
+                    ),
                 })
 
-                return user.id
-            })
-            isNewUser = true
-        }
+                return { userId: existing!.userId, isNewUser: false }
+            },
+        )
 
         const tokens = await this.issueTokens(userId)
         return { ...tokens, isNewUser }
