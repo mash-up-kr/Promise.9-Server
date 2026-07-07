@@ -22,12 +22,14 @@ export class AuthController {
     constructor(private readonly authService: AuthService) {}
 
     @Post('social')
+    @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: '소셜 로그인' })
     async socialLogin(@Body() dto: SocialLoginDto) {
         return this.authService.socialLogin(dto.provider, dto.idToken)
     }
 
     @Post('refresh')
+    @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: '토큰 재발급' })
     async refresh(@Body() dto: RefreshDto) {
         return this.authService.refresh(dto.refreshToken)
