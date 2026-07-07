@@ -38,6 +38,8 @@ const appEnvSchema = z
         JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
         JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
         GOOGLE_CLIENT_ID: z.string().min(1),
+        MASTER_ACCESS_TOKEN: z.string().optional(),
+        MASTER_USER_ID: z.coerce.number().int().positive().optional(),
     })
     .superRefine((env, ctx) => {
         const key = getDatabaseUrlKey(env.APP_ENV)
