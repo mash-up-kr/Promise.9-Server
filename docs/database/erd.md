@@ -1,0 +1,114 @@
+# ERD
+
+커밋된 테이블 설계 문서(`docs/database/tables/`) 기준의 통합 ERD입니다. 초기에는 단순한 **비정규화** 구조로, URL·수집 메타데이터·AI 요약을 `links` 한 테이블에 통합합니다. (설계 문서의 `user_links` 테이블은 코드에서 `links`로 구현)
+
+<br>
+
+## 전체 ERD
+
+```mermaid
+erDiagram
+  USERS ||--o{ SOCIAL_ACCOUNTS : owns
+  USERS ||--o{ FOLDERS : creates
+  USERS ||--o{ LINKS : saves
+  USERS ||--o{ TAGS : owns
+  FOLDERS ||--o{ LINKS : contains
+  LINKS ||--o{ TAGS : has
+  LINKS ||--o{ AI_SUMMARY_METRICS : summarized_by
+
+  USERS {
+    bigint id PK
+    varchar email UK
+    timestamptz created_at
+    timestamptz updated_at
+    timestamptz deleted_at
+  }
+
+  SOCIAL_ACCOUNTS {
+    bigint id PK
+    bigint user_id FK
+    varchar provider
+    varchar provider_user_id
+    varchar provider_email
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  FOLDERS {
+    bigint id PK
+    bigint user_id FK
+    varchar name
+    integer sort_order
+    timestamptz created_at
+    timestamptz updated_at
+    timestamptz deleted_at
+  }
+
+  LINKS {
+    bigint id PK
+    bigint user_id FK
+    bigint folder_id FK
+    text original_url
+    text normalized_url
+    text final_url
+    varchar domain
+    varchar title
+    jsonb metadata
+    text ai_summary
+    varchar ai_summary_status
+    text memo
+    timestamptz deleted_at
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  TAGS {
+    bigint id PK
+    bigint user_id FK
+    bigint link_id FK
+    varchar name
+    varchar normalized_name
+    varchar source_type
+    integer sort_order
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  AI_SUMMARY_METRICS {
+    uuid id PK
+    bigint link_id
+    integer attempt_number
+    varchar status
+    varchar model_provider
+    varchar model_name
+    varchar prompt_key
+    integer input_tokens
+    integer output_tokens
+    text generated_summary
+    numeric input_cost
+    numeric output_cost
+    varchar currency
+    integer ttlb_ms
+    text error_code
+    text error_message
+    timestamptz completed_at
+    timestamptz created_at
+  }
+```
+
+<br>
+
+## 설계 메모
+
+- URL/제목/이미지/색상 등 메타데이터는 별도 테이블(`link_resources`, `link_snapshots`) 없이 `links`에 통합하고, 확장 정보는 `metadata`(jsonb)에 담는다.
+- `ai_summary_metrics`는 실패 기록 보장을 위해 **물리 FK 없이** `link_id`로 논리 참조한다. (ERD의 `AI_SUMMARY_METRICS` 관계선은 논리 참조를 의미)
+- 기본 폴더(전체 / 미분류 / 최근 삭제된 항목)는 행으로 저장하지 않고 조회 조건으로 표현한다.
+- 세부 컬럼·제약·인덱스는 `docs/database/tables/`의 테이블별 문서를 참조한다.
+
+<br>
+
+## 미확정 / 다음 단계
+
+- `folders`는 DB 유니크 제약을 두지 않고, 애플리케이션에서 `deleted_at IS NULL`인 폴더 기준으로 폴더명 유일성을 검증한다. `sort_order`, `deleted_at` 컬럼을 추가했다.
+- 기존 `links` 테이블은 위 비정규화 구조로 **교체**했고, `LinkService`/`FolderService`도 새 컬럼에 맞춰 재작성했다.
+- 이 스키마는 아직 DB에 적용(`db:generate`/`db:migrate`)하지 않은 초안이다. URL 정규화·메타데이터 수집·AI 요약 파이프라인은 후속 작업이다.
