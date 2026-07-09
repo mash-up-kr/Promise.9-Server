@@ -73,6 +73,7 @@ export class AuthService {
         const { providerId, email } = await socialProvider.verify(idToken)
 
         const { userId, isNewUser } = await this.db.transaction(async (tx) => {
+            // 탈퇴 후 재가입 시 deletedAt을 초기화해 계정을 복구한다.
             const [user] = await tx
                 .insert(users)
                 .values({ email })
@@ -82,6 +83,8 @@ export class AuthService {
                 })
                 .returning({ id: users.id })
 
+            // insert 성공(= 신규 소셜 연동)이면 isNewUser: true,
+            // (provider, providerUserId) 충돌로 doNothing이 발동되면 기존 row를 조회해 isNewUser: false를 반환한다.
             const [inserted] = await tx
                 .insert(socialAccounts)
                 .values({
@@ -114,6 +117,7 @@ export class AuthService {
     async refresh(rawRefreshToken: string): Promise<TokenPair> {
         const payload = this.verifyRefreshToken(rawRefreshToken)
 
+        // DB에 저장된 토큰과 대조해 탈취된 토큰으로 재사용하는 경우를 막는다.
         const stored = await this.db.query.refreshTokens.findFirst({
             where: and(
                 eq(refreshTokens.token, rawRefreshToken),
@@ -126,6 +130,7 @@ export class AuthService {
             throw new InvalidTokenException()
         }
 
+        // Refresh Token Rotation: 기존 토큰을 삭제하고 새 토큰 쌍을 발급한다.
         await this.db
             .delete(refreshTokens)
             .where(eq(refreshTokens.id, stored.id))
@@ -164,6 +169,7 @@ export class AuthService {
 
         const userId = payload.sub
 
+        // 리프레시 토큰·소셜 연동 정보를 먼저 지우고, 유저는 hard delete 대신 soft delete한다.
         await this.db.transaction(async (tx) => {
             await tx
                 .delete(refreshTokens)
@@ -183,6 +189,7 @@ export class AuthService {
     private getProvider(provider: SupportedProvider): SocialProvider {
         const providerMap: Record<string, SocialProvider> = {
             google: this.googleProvider,
+            // TODO: 카카오 provider 추가 필요
             // kakao: this.kakaoProvider,
         }
 
@@ -233,6 +240,7 @@ export class AuthService {
 
             return payload
         } catch (error) {
+            // jsonwebtoken의 TokenExpiredError를 도메인 예외로 변환한다.
             if (
                 error instanceof InvalidTokenException ||
                 error instanceof ExpiredTokenException
