@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { JwtService } from '@nestjs/jwt'
-import { and, eq, gt, isNull } from 'drizzle-orm'
+import { randomUUID } from 'crypto'
+import { and, eq, isNull } from 'drizzle-orm'
 import type { StringValue } from 'ms'
 
 import { DatabaseService } from '../../config/database/database.service'
@@ -18,6 +19,7 @@ import {
     UnsupportedProviderException,
 } from './auth.exception'
 import { refreshTokens, socialAccounts } from './auth.schema'
+import { hashToken } from './crypto.utils'
 import { parseExpiresIn } from './time.utils'
 
 export interface TokenPair {
@@ -116,50 +118,58 @@ export class AuthService {
 
     async refresh(rawRefreshToken: string): Promise<TokenPair> {
         const payload = this.verifyRefreshToken(rawRefreshToken)
+        const tokenHash = hashToken(rawRefreshToken)
 
         // DB에 저장된 토큰과 대조해 탈취된 토큰으로 재사용하는 경우를 막는다.
         const stored = await this.db.query.refreshTokens.findFirst({
-            where: and(
-                eq(refreshTokens.token, rawRefreshToken),
-                eq(refreshTokens.userId, payload.sub),
-                gt(refreshTokens.expiresAt, new Date()),
-            ),
+            where: eq(refreshTokens.tokenHash, tokenHash),
         })
 
         if (!stored) {
             throw new InvalidTokenException()
         }
 
-        // Refresh Token Rotation: 기존 토큰을 삭제하고 새 토큰 쌍을 발급한다.
+        // 이미 폐기된 토큰이 재사용됨 → 탈취로 간주, 해당 family 전체 폐기
+        if (stored.revokedAt) {
+            await this.db
+                .delete(refreshTokens)
+                .where(eq(refreshTokens.tokenFamily, stored.tokenFamily))
+            throw new InvalidTokenException()
+        }
+
+        // Refresh Token Rotation: 기존 토큰을 soft revoke하고 새 토큰 쌍을 발급한다.
+        // 동일 family를 이어받아 rotation 체인을 유지한다.
         await this.db
-            .delete(refreshTokens)
+            .update(refreshTokens)
+            .set({ revokedAt: new Date() })
             .where(eq(refreshTokens.id, stored.id))
 
-        return this.issueTokens(payload.sub)
+        return this.issueTokens(payload.sub, stored.tokenFamily)
     }
 
     async logout(rawRefreshToken: string): Promise<void> {
         const payload = this.verifyRefreshToken(rawRefreshToken)
+        const tokenHash = hashToken(rawRefreshToken)
 
         await this.db
             .delete(refreshTokens)
             .where(
                 and(
-                    eq(refreshTokens.token, rawRefreshToken),
+                    eq(refreshTokens.tokenHash, tokenHash),
                     eq(refreshTokens.userId, payload.sub),
-                    gt(refreshTokens.expiresAt, new Date()),
                 ),
             )
     }
 
     async withdraw(rawRefreshToken: string): Promise<void> {
         const payload = this.verifyRefreshToken(rawRefreshToken)
+        const tokenHash = hashToken(rawRefreshToken)
 
         const stored = await this.db.query.refreshTokens.findFirst({
             where: and(
-                eq(refreshTokens.token, rawRefreshToken),
+                eq(refreshTokens.tokenHash, tokenHash),
                 eq(refreshTokens.userId, payload.sub),
-                gt(refreshTokens.expiresAt, new Date()),
+                isNull(refreshTokens.revokedAt),
             ),
         })
 
@@ -201,7 +211,10 @@ export class AuthService {
         return resolved
     }
 
-    private async issueTokens(userId: number): Promise<TokenPair> {
+    private async issueTokens(
+        userId: number,
+        tokenFamily: string = randomUUID(),
+    ): Promise<TokenPair> {
         const accessToken = this.jwtService.sign(
             { sub: userId, type: TOKEN_TYPE.ACCESS },
             {
@@ -210,7 +223,6 @@ export class AuthService {
             },
         )
 
-        const refreshExpiresAt = parseExpiresIn(this.refreshExpiresIn)
         const rawRefreshToken = this.jwtService.sign(
             { sub: userId, type: TOKEN_TYPE.REFRESH },
             {
@@ -221,8 +233,9 @@ export class AuthService {
 
         await this.db.insert(refreshTokens).values({
             userId,
-            token: rawRefreshToken,
-            expiresAt: refreshExpiresAt,
+            tokenHash: hashToken(rawRefreshToken),
+            tokenFamily,
+            expiresAt: parseExpiresIn(this.refreshExpiresIn),
         })
 
         return { accessToken, refreshToken: rawRefreshToken }
