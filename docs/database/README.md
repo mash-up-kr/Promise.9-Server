@@ -4,9 +4,10 @@ Promise.9 서버 DB 문서의 시작점입니다.
 
 ## 문서 목록
 
-| 문서 | 내용 |
-| --- | --- |
-| [Setup](./setup.md) | PostgreSQL, Drizzle ORM, 환경변수, 마이그레이션 흐름 |
+| 문서                          | 내용                                                     |
+| ----------------------------- | -------------------------------------------------------- |
+| [Setup](./setup.md)           | PostgreSQL, Drizzle ORM, 환경변수, 마이그레이션 흐름     |
+| [Operations](./operations.md) | DB 백업, 백업 검증, 상태 확인, Mermaid ERD 생성 스크립트 |
 
 ## 작성 기준
 
