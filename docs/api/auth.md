@@ -34,41 +34,11 @@
 
 ## DB 구조
 
-### USERS
-| 컬럼 | 타입 | 설명 |
-|---|---|---|
-| `id` | bigint PK | 유저 고유 ID |
-| `email` | varchar UK | 이메일 |
-| `created_at` | timestamptz | 생성 일시 |
-| `updated_at` | timestamptz | 수정 일시 |
-| `deleted_at` | timestamptz | 탈퇴 일시 (soft delete) |
+테이블 설계는 [docs/database/tables](../database/README.md#테이블-설계)를 참조한다.
 
-### SOCIAL_ACCOUNTS
-| 컬럼 | 타입 | 설명 |
-|---|---|---|
-| `id` | bigint PK | 소셜 계정 고유 ID |
-| `user_id` | bigint FK | USERS.id 참조 |
-| `provider` | varchar | 소셜 제공자 (`google` / `kakao`) |
-| `provider_user_id` | varchar | 소셜 측 유저 고유 ID |
-| `provider_email` | varchar | 소셜 측 이메일 |
-| `connected_at` | timestamptz | 소셜 연결 일시 |
-| `created_at` | timestamptz | 생성 일시 |
-| `updated_at` | timestamptz | 수정 일시 |
-
-> - `provider` + `provider_user_id` 복합 유니크 인덱스 필요
-> - 추후 멀티 소셜 계정 연결 확장 가능한 구조
-
-### REFRESH_TOKENS
-| 컬럼 | 타입 | 설명 |
-|---|---|---|
-| `id` | bigint PK | 토큰 고유 ID |
-| `user_id` | bigint FK | USERS.id 참조 |
-| `token` | varchar | refreshToken 값 |
-| `expires_at` | timestamptz | 만료 일시 |
-| `created_at` | timestamptz | 생성 일시 |
-
-> - 로그아웃 / 탈퇴 / Rotation 시 해당 토큰 삭제
-> - 멀티 디바이스 로그인 지원 가능한 구조 (유저당 복수 토큰)
+- [users](../database/tables/users.md)
+- [social_accounts](../database/tables/social_accounts.md)
+- [refresh_tokens](../database/tables/refresh_tokens.md)
 
 ---
 
