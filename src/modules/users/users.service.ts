@@ -16,10 +16,14 @@ export interface MeResponse {
 
 @Injectable()
 export class UsersService {
-    constructor(private readonly db: DatabaseService) {}
+    private get db() {
+        return this.databaseService.db
+    }
+
+    constructor(private readonly databaseService: DatabaseService) {}
 
     async getMe(userId: number): Promise<MeResponse> {
-        const user = await this.db.db.query.users.findFirst({
+        const user = await this.db.query.users.findFirst({
             where: and(eq(users.id, userId), isNull(users.deletedAt)),
         })
 
@@ -27,7 +31,7 @@ export class UsersService {
             throw new UserNotFoundException()
         }
 
-        const socialAccount = await this.db.db.query.socialAccounts.findFirst({
+        const socialAccount = await this.db.query.socialAccounts.findFirst({
             where: eq(socialAccounts.userId, userId),
         })
 

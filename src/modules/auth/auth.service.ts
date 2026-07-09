@@ -41,8 +41,12 @@ export class AuthService {
     private readonly accessExpiresIn: string
     private readonly refreshExpiresIn: string
 
+    private get db() {
+        return this.databaseService.db
+    }
+
     constructor(
-        private readonly db: DatabaseService,
+        private readonly databaseService: DatabaseService,
         private readonly jwtService: JwtService,
         private readonly googleProvider: GoogleProvider,
         config: ConfigService<ValidatedEnvironment, true>,
@@ -68,42 +72,40 @@ export class AuthService {
         const socialProvider = this.getProvider(provider)
         const { providerId, email } = await socialProvider.verify(idToken)
 
-        const { userId, isNewUser } = await this.db.db.transaction(
-            async (tx) => {
-                const [user] = await tx
-                    .insert(users)
-                    .values({ email })
-                    .onConflictDoUpdate({
-                        target: users.email,
-                        set: { updatedAt: new Date(), deletedAt: null },
-                    })
-                    .returning({ id: users.id })
-
-                const [inserted] = await tx
-                    .insert(socialAccounts)
-                    .values({
-                        userId: user.id,
-                        provider,
-                        providerUserId: providerId,
-                        providerEmail: email,
-                    })
-                    .onConflictDoNothing()
-                    .returning({ userId: socialAccounts.userId })
-
-                if (inserted) {
-                    return { userId: user.id, isNewUser: true }
-                }
-
-                const existing = await tx.query.socialAccounts.findFirst({
-                    where: and(
-                        eq(socialAccounts.provider, provider),
-                        eq(socialAccounts.providerUserId, providerId),
-                    ),
+        const { userId, isNewUser } = await this.db.transaction(async (tx) => {
+            const [user] = await tx
+                .insert(users)
+                .values({ email })
+                .onConflictDoUpdate({
+                    target: users.email,
+                    set: { updatedAt: new Date(), deletedAt: null },
                 })
+                .returning({ id: users.id })
 
-                return { userId: existing!.userId, isNewUser: false }
-            },
-        )
+            const [inserted] = await tx
+                .insert(socialAccounts)
+                .values({
+                    userId: user.id,
+                    provider,
+                    providerUserId: providerId,
+                    providerEmail: email,
+                })
+                .onConflictDoNothing()
+                .returning({ userId: socialAccounts.userId })
+
+            if (inserted) {
+                return { userId: user.id, isNewUser: true }
+            }
+
+            const existing = await tx.query.socialAccounts.findFirst({
+                where: and(
+                    eq(socialAccounts.provider, provider),
+                    eq(socialAccounts.providerUserId, providerId),
+                ),
+            })
+
+            return { userId: existing!.userId, isNewUser: false }
+        })
 
         const tokens = await this.issueTokens(userId)
         return { ...tokens, isNewUser }
@@ -112,7 +114,7 @@ export class AuthService {
     async refresh(rawRefreshToken: string): Promise<TokenPair> {
         const payload = this.verifyRefreshToken(rawRefreshToken)
 
-        const stored = await this.db.db.query.refreshTokens.findFirst({
+        const stored = await this.db.query.refreshTokens.findFirst({
             where: and(
                 eq(refreshTokens.token, rawRefreshToken),
                 eq(refreshTokens.userId, payload.sub),
@@ -124,7 +126,7 @@ export class AuthService {
             throw new InvalidTokenException()
         }
 
-        await this.db.db
+        await this.db
             .delete(refreshTokens)
             .where(eq(refreshTokens.id, stored.id))
 
@@ -134,7 +136,7 @@ export class AuthService {
     async logout(rawRefreshToken: string): Promise<void> {
         const payload = this.verifyRefreshToken(rawRefreshToken)
 
-        await this.db.db
+        await this.db
             .delete(refreshTokens)
             .where(
                 and(
@@ -148,7 +150,7 @@ export class AuthService {
     async withdraw(rawRefreshToken: string): Promise<void> {
         const payload = this.verifyRefreshToken(rawRefreshToken)
 
-        const stored = await this.db.db.query.refreshTokens.findFirst({
+        const stored = await this.db.query.refreshTokens.findFirst({
             where: and(
                 eq(refreshTokens.token, rawRefreshToken),
                 eq(refreshTokens.userId, payload.sub),
@@ -162,7 +164,7 @@ export class AuthService {
 
         const userId = payload.sub
 
-        await this.db.db.transaction(async (tx) => {
+        await this.db.transaction(async (tx) => {
             await tx
                 .delete(refreshTokens)
                 .where(eq(refreshTokens.userId, userId))
@@ -210,7 +212,7 @@ export class AuthService {
             },
         )
 
-        await this.db.db.insert(refreshTokens).values({
+        await this.db.insert(refreshTokens).values({
             userId,
             token: rawRefreshToken,
             expiresAt: refreshExpiresAt,
