@@ -10,6 +10,7 @@ Promise.9 서버 레포에서 쓰는 문서의 시작점입니다.
 | --- | --- |
 | [Convention](./convention/README.md) | 이슈, 브랜치, PR, 머지, 커밋 규칙 |
 | [Database](./database/README.md) | DB 설정, 마이그레이션, 테이블 설계 |
+| [Deploy](./deploy/README.md) | 서버 배포와 운영 설정 |
 
 ## 문서 추가 규칙
 

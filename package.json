@@ -7,7 +7,8 @@
     "license": "UNLICENSED",
     "packageManager": "bun@1.3.14",
     "scripts": {
-        "build": "nest build",
+        "build": "tsc -p tsconfig.build.json",
+        "build:nest": "nest build",
         "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"drizzle.config.ts\"",
         "start": "nest start",
         "start:dev": "nest start --watch",
