@@ -15,6 +15,13 @@
       "when": 1783835595296,
       "tag": "0001_black_ezekiel_stane",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784200200072,
+      "tag": "0002_create_ai_metrics",
+      "breakpoints": true
     }
   ]
 }
