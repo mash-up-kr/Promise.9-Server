@@ -6,14 +6,6 @@ import {
     LlmError,
 } from '../../infrastructure/llm/llm.exception'
 import { LlmService } from '../../infrastructure/llm/llm.service'
-import {
-    LlmGenerateObjectResult,
-    LlmGenerateTextResult,
-    LlmObjectSchema,
-    LlmResolvedTarget,
-    LlmTargetOptions,
-    LlmUsage,
-} from '../../infrastructure/llm/llm.type'
 
 import { AiMetricService } from './metrics/ai-metric.service'
 import { AiMetricGeneratedResult } from './metrics/ai-metric.type'
@@ -21,54 +13,18 @@ import {
     AI_FAILURE_ERROR_CODE,
     AI_METRIC_STATUS,
     AI_TASK_RESPONSE_SCHEMA_NAME,
-    AiTaskType,
 } from './ai.constants'
 import { AiGenerationError, AiUseCaseNotImplementedError } from './ai.exception'
-
-type AiGenerateBaseInput = {
-    userLinkId: number
-    taskType: AiTaskType
-    promptKey?: string
-    llm?: LlmTargetOptions
-    system?: string
-    prompt: string
-}
-
-type AiGenerateTextInput = AiGenerateBaseInput
-
-type AiGenerateObjectInput<T extends AiMetricGeneratedResult> =
-    AiGenerateBaseInput & {
-        schema: LlmObjectSchema<T>
-    }
-
-type AiGenerateTextResult = LlmGenerateTextResult & {
-    status: typeof AI_METRIC_STATUS.SUCCESS
-}
-
-type AiGenerateObjectResult<T extends AiMetricGeneratedResult> =
-    LlmGenerateObjectResult<T> & {
-        status: typeof AI_METRIC_STATUS.SUCCESS
-    }
-
-type GenerationFailure = {
-    errorCode: string
-    errorMessage: string
-}
-
-type RecordMetricInput = {
-    userLinkId: number
-    taskType: AiTaskType
-    target: LlmResolvedTarget
-    promptKey?: string
-    usage?: LlmUsage
-    ttlbMs: number
-} & ({ generatedResult: AiMetricGeneratedResult } | GenerationFailure)
-
-type CreateGenerationErrorInput = {
-    error: unknown
-    taskType: AiTaskType
-    failure?: GenerationFailure
-}
+import {
+    AiCreateGenerationErrorInput,
+    AiGenerateObjectInput,
+    AiGenerateObjectResult,
+    AiGenerateTextInput,
+    AiGenerateTextResult,
+    AiGenerationFailure,
+    AiRecordMetricInput,
+    AiResolveTargetInput,
+} from './ai.type'
 
 @Injectable()
 export class AiService {
@@ -205,10 +161,7 @@ export class AiService {
         }
     }
 
-    private resolveTarget(input: {
-        llm?: LlmTargetOptions
-        taskType: AiTaskType
-    }) {
+    private resolveTarget(input: AiResolveTargetInput) {
         try {
             return this.llmService.resolveTarget({ target: input.llm })
         } catch (error) {
@@ -219,7 +172,7 @@ export class AiService {
         }
     }
 
-    private createGenerationError(input: CreateGenerationErrorInput) {
+    private createGenerationError(input: AiCreateGenerationErrorInput) {
         const failure = input.failure ?? this.toFailure(input.error)
 
         return new AiGenerationError({
@@ -230,7 +183,7 @@ export class AiService {
         })
     }
 
-    private toFailure(error: unknown): GenerationFailure {
+    private toFailure(error: unknown): AiGenerationFailure {
         if (error instanceof LlmError) {
             return {
                 errorCode: error.code,
@@ -259,7 +212,7 @@ export class AiService {
         }
     }
 
-    private async recordMetric(input: RecordMetricInput) {
+    private async recordMetric(input: AiRecordMetricInput) {
         try {
             const baseMetric = {
                 userLinkId: input.userLinkId,
