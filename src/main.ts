@@ -13,6 +13,14 @@ async function bootstrap() {
 
     swaggerConfig(app)
 
-    await app.listen(process.env.PORT ?? 3000)
+    const port = process.env.PORT ?? 3000
+    const serverHost = process.env.SERVER_HOST
+
+    if (serverHost) {
+        await app.listen(port, serverHost)
+        return
+    }
+
+    await app.listen(port)
 }
 void bootstrap()
