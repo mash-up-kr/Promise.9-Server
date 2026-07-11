@@ -55,7 +55,7 @@ erDiagram
 - `TAG_GENERATE`
 
 task type은 metrics 분류만 담당한다.
-task별 prompt, 결과 schema, parsing, 품질 판정은 `AiService`의 public 유스케이스가 정의한다.
+task별 prompt, 결과 schema, parsing, 품질 판정은 `AiService`의 도메인별 public AI 유스케이스가 정의한다.
 생성 결과의 도메인 반영과 저장은 해당 데이터를 소유한 모듈이 담당한다.
 metrics 계층과 LLM infrastructure는 해당 비즈니스 정책을 결정하지 않는다.
 
