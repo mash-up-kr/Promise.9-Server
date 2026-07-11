@@ -9,35 +9,10 @@ import {
     AI_METRIC_ATTEMPT_INSERT_MAX_RETRIES,
     AI_METRIC_ATTEMPT_UNIQUE_INDEX,
     AI_METRIC_STATUS,
-    AiTaskType,
 } from '../ai.constants'
 
 import { aiMetrics } from './ai-metric.schema'
-import { AiMetricGeneratedResult } from './ai-metric.type'
-
-type BaseMetricInput = {
-    userLinkId: number
-    taskType: AiTaskType
-    modelProvider: string
-    modelName: string
-    promptKey?: string
-    inputTokens?: number
-    outputTokens?: number
-    ttlbMs: number
-}
-
-type SuccessMetricInput = BaseMetricInput & {
-    status: typeof AI_METRIC_STATUS.SUCCESS
-    generatedResult: AiMetricGeneratedResult
-}
-
-type FailedMetricInput = BaseMetricInput & {
-    status: typeof AI_METRIC_STATUS.FAILED
-    errorCode: string
-    errorMessage: string
-}
-
-type RecordMetricInput = SuccessMetricInput | FailedMetricInput
+import { AiMetricRecordInput } from './ai-metric.type'
 
 @Injectable()
 export class AiMetricService {
@@ -47,7 +22,7 @@ export class AiMetricService {
         return this.databaseService.db
     }
 
-    async record(input: RecordMetricInput) {
+    async record(input: AiMetricRecordInput) {
         for (
             let trial = 1;
             trial <= AI_METRIC_ATTEMPT_INSERT_MAX_RETRIES;
@@ -69,7 +44,7 @@ export class AiMetricService {
         throw new Error('AI 메트릭 기록에 실패했습니다.')
     }
 
-    private async insertRecord(input: RecordMetricInput) {
+    private async insertRecord(input: AiMetricRecordInput) {
         const [attempt] = await this.db
             .select({
                 nextAttemptNumber: sql<number>`coalesce(max(${aiMetrics.attemptNumber}), 0) + 1`,
