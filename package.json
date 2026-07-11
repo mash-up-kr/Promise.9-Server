@@ -29,6 +29,7 @@
         "prepare": "husky"
     },
     "dependencies": {
+        "@google/genai": "^2.10.0",
         "@nestjs/common": "^11.0.1",
         "@nestjs/config": "^4.0.4",
         "@nestjs/core": "^11.0.1",
@@ -37,6 +38,7 @@
         "dotenv": "^17.4.2",
         "drizzle-orm": "^0.45.2",
         "node-vibrant": "^4.0.4",
+        "openai": "^6.45.0",
         "postgres": "^3.4.9",
         "reflect-metadata": "^0.2.2",
         "rxjs": "^7.8.1",

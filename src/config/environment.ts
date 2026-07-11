@@ -1,6 +1,10 @@
 import { z } from 'zod'
 
+import { LLM_MODEL } from '../common/constants/llm'
+
 export type RuntimeEnvironment = 'development' | 'production'
+
+const DEFAULT_LLM_REQUEST_TIMEOUT_MS = 30_000
 
 const envSchema = z
     .object({
@@ -8,6 +12,14 @@ const envSchema = z
         DATABASE_URL_DEVELOPMENT: z.url().optional(),
         DATABASE_URL_PRODUCTION: z.url().optional(),
         DB_POOL_SIZE: z.coerce.number().int().positive().default(5),
+        LLM_DEFAULT_MODEL: z.enum(LLM_MODEL).default(LLM_MODEL.GPT_5_4_MINI),
+        LLM_REQUEST_TIMEOUT_MS: z.coerce
+            .number()
+            .int()
+            .positive()
+            .default(DEFAULT_LLM_REQUEST_TIMEOUT_MS),
+        OPENAI_API_KEY: z.string().min(1).optional(),
+        GEMINI_API_KEY: z.string().min(1).optional(),
     })
     .superRefine((env, ctx) => {
         // APP_ENV에 따라 DATABASE_URL_DEVELOPMENT 또는 DATABASE_URL_PRODUCTION을 요구한다.
