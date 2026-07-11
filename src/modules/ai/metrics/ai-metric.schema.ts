@@ -48,4 +48,8 @@ export const aiMetrics = pgTable(
     ],
 )
 
-export type AiMetricRow = typeof aiMetrics.$inferSelect
+/** ai_metrics에서 조회한 row 타입. */
+export type AiMetric = typeof aiMetrics.$inferSelect
+
+/** ai_metrics에 insert할 수 있는 입력 타입. */
+export type NewAiMetric = typeof aiMetrics.$inferInsert
