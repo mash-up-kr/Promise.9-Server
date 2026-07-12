@@ -1,5 +1,6 @@
 import {
     bigint,
+    foreignKey,
     index,
     integer,
     pgTable,
@@ -22,9 +23,7 @@ export const tags = pgTable(
         userId: bigint({ mode: 'number' })
             .notNull()
             .references(() => users.id),
-        linkId: bigint({ mode: 'number' })
-            .notNull()
-            .references(() => links.id, { onDelete: 'cascade' }),
+        linkId: bigint({ mode: 'number' }).notNull(),
         name: varchar({ length: 20 }).notNull(),
         normalizedName: varchar({ length: 20 }).notNull(),
         sourceType: varchar({ length: 10 }).notNull(), // user | rule | ai
@@ -33,6 +32,12 @@ export const tags = pgTable(
         updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     },
     (table) => [
+        // (link_id, user_id) 복합 FK — 태그 소유자와 링크 소유자가 항상 같도록 DB에서 강제
+        foreignKey({
+            columns: [table.linkId, table.userId],
+            foreignColumns: [links.id, links.userId],
+            name: 'tags_link_id_user_id_fk',
+        }).onDelete('cascade'),
         // 한 저장 링크 안에서 같은 태그 중복 추가 방지
         uniqueIndex('tags_link_id_normalized_name_idx').on(
             table.linkId,

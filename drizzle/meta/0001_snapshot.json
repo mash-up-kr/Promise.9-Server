@@ -1,5 +1,5 @@
 {
-  "id": "51b12894-1d16-4fbe-a636-380cc249b6b5",
+  "id": "a933cb46-956a-4a95-b8b4-25ff7c22e587",
   "prevId": "93612678-1917-48a5-80ae-e6bfe4343c86",
   "version": "7",
   "dialect": "postgresql",
@@ -523,7 +523,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "links_id_user_id_unique": {
+          "name": "links_id_user_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "user_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -658,15 +667,17 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "tags_link_id_links_id_fk": {
-          "name": "tags_link_id_links_id_fk",
+        "tags_link_id_user_id_fk": {
+          "name": "tags_link_id_user_id_fk",
           "tableFrom": "tags",
           "tableTo": "links",
           "columnsFrom": [
-            "link_id"
+            "link_id",
+            "user_id"
           ],
           "columnsTo": [
-            "id"
+            "id",
+            "user_id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"

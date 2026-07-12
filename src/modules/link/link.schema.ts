@@ -6,6 +6,7 @@ import {
     pgTable,
     text,
     timestamp,
+    unique,
     uniqueIndex,
     varchar,
 } from 'drizzle-orm/pg-core'
@@ -57,6 +58,8 @@ export const links = pgTable(
         updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     },
     (table) => [
+        // tags의 (link_id, user_id) 복합 FK 타겟 — 태그·링크 소유자 정합성 보장용
+        unique('links_id_user_id_unique').on(table.id, table.userId),
         // 활성 링크는 (user_id, normalized_url) 유니크 — 사용자별 중복 저장 방지
         uniqueIndex('links_user_id_normalized_url_active_idx')
             .on(table.userId, table.normalizedUrl)
