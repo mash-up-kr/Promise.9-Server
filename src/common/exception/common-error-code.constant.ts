@@ -1,3 +1,3 @@
 export const COMMON_ERROR_CODE = {
-    VALIDATION: 101001,
+    VALIDATION: 910001,
 } as const
