@@ -9,5 +9,6 @@ import { LinkService } from './link.service'
     imports: [DatabaseModule],
     controllers: [LinkController],
     providers: [LinkService],
+    exports: [LinkService],
 })
 export class LinkModule {}
