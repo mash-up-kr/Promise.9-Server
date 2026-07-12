@@ -93,7 +93,7 @@ export class FolderService {
                 .limit(1)
 
             if (!folder) {
-                throw new BaseException(...FOLDER_ERROR.NOT_FOUND)
+                throw new BaseException(FOLDER_ERROR.NOT_FOUND)
             }
 
             // 폴더에 속한 링크는 "최근 삭제된 항목"으로 이동 (soft delete + 미분류 처리)
@@ -158,7 +158,7 @@ export class FolderService {
             .limit(1)
 
         if (row) {
-            throw new BaseException(...FOLDER_ERROR.NAME_DUPLICATE)
+            throw new BaseException(FOLDER_ERROR.NAME_DUPLICATE)
         }
     }
 
@@ -174,7 +174,7 @@ export class FolderService {
             .limit(1)
 
         if (!row) {
-            throw new BaseException(...FOLDER_ERROR.NOT_FOUND)
+            throw new BaseException(FOLDER_ERROR.NOT_FOUND)
         }
 
         return row
@@ -190,7 +190,7 @@ export class FolderService {
                 'code' in error &&
                 error.code === '23505'
             ) {
-                throw new BaseException(...FOLDER_ERROR.NAME_DUPLICATE)
+                throw new BaseException(FOLDER_ERROR.NAME_DUPLICATE)
             }
             throw error
         }

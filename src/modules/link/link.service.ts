@@ -136,7 +136,7 @@ export class LinkService {
 
         // 활성 링크에 복구를 호출하면 폴더가 미분류로 날아가므로 거부한다.
         if (!link.deletedAt) {
-            throw new BaseException(...LINK_ERROR.NOT_DELETED)
+            throw new BaseException(LINK_ERROR.NOT_DELETED)
         }
 
         // 복구된 링크는 "미분류"로 복원
@@ -293,7 +293,7 @@ export class LinkService {
             .limit(1)
 
         if (!row) {
-            throw new BaseException(...LINK_ERROR.NOT_FOUND)
+            throw new BaseException(LINK_ERROR.NOT_FOUND)
         }
 
         return row
@@ -314,7 +314,7 @@ export class LinkService {
             .limit(1)
 
         if (row) {
-            throw new BaseException(...LINK_ERROR.ALREADY_EXISTS)
+            throw new BaseException(LINK_ERROR.ALREADY_EXISTS)
         }
     }
 
@@ -326,7 +326,7 @@ export class LinkService {
             .limit(1)
 
         if (!row) {
-            throw new BaseException(...FOLDER_ERROR.NOT_FOUND)
+            throw new BaseException(FOLDER_ERROR.NOT_FOUND)
         }
     }
 }

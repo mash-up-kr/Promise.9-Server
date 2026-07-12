@@ -1,7 +1,4 @@
-import {
-    ImageTooLargeException,
-    UnsupportedImageContentTypeException,
-} from './image-fetcher.exception'
+import { IMAGE_FETCHER_ERROR } from './image-fetcher-error.constant'
 import { ImageResponseReader } from './image-response.reader'
 
 describe('ImageResponseReader', () => {
@@ -36,9 +33,14 @@ describe('ImageResponseReader', () => {
             .spyOn(response.body!, 'cancel')
             .mockResolvedValue(undefined)
 
-        await expect(reader.read(response, 10, signal)).rejects.toBeInstanceOf(
-            UnsupportedImageContentTypeException,
-        )
+        await expect(reader.read(response, 10, signal)).rejects.toMatchObject({
+            response: {
+                error: {
+                    errorCode:
+                        IMAGE_FETCHER_ERROR.UNSUPPORTED_CONTENT_TYPE.errorCode,
+                },
+            },
+        })
         expect(cancelSpy).toHaveBeenCalledTimes(1)
     })
 
@@ -53,9 +55,13 @@ describe('ImageResponseReader', () => {
             .spyOn(response.body!, 'cancel')
             .mockResolvedValue(undefined)
 
-        await expect(reader.read(response, 2, signal)).rejects.toBeInstanceOf(
-            ImageTooLargeException,
-        )
+        await expect(reader.read(response, 2, signal)).rejects.toMatchObject({
+            response: {
+                error: {
+                    errorCode: IMAGE_FETCHER_ERROR.TOO_LARGE.errorCode,
+                },
+            },
+        })
         expect(cancelSpy).toHaveBeenCalledTimes(1)
     })
 
@@ -66,8 +72,12 @@ describe('ImageResponseReader', () => {
             },
         })
 
-        await expect(reader.read(response, 2, signal)).rejects.toBeInstanceOf(
-            ImageTooLargeException,
-        )
+        await expect(reader.read(response, 2, signal)).rejects.toMatchObject({
+            response: {
+                error: {
+                    errorCode: IMAGE_FETCHER_ERROR.TOO_LARGE.errorCode,
+                },
+            },
+        })
     })
 })

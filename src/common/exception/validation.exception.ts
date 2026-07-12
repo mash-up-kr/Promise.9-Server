@@ -5,6 +5,10 @@ import { COMMON_ERROR_CODE } from './common-error-code.constant'
 
 export class ValidationException extends BaseException {
     constructor(message: string) {
-        super(HttpStatus.BAD_REQUEST, COMMON_ERROR_CODE.VALIDATION, message)
+        super({
+            code: HttpStatus.BAD_REQUEST,
+            errorCode: COMMON_ERROR_CODE.VALIDATION,
+            message,
+        })
     }
 }

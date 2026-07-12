@@ -12,8 +12,8 @@ import {
     NodeVibrantPaletteColors,
 } from './types/node-vibrant-image-color.type'
 import { IMAGE_COLOR_SELECTION_SOURCE } from './image-color.constants'
-import { ImageColorAnalysisFailedException } from './image-color.exception'
 import { ImageColorService } from './image-color.service'
+import { IMAGE_COLOR_ERROR } from './image-color-error.constant'
 
 describe('ImageColorService', () => {
     let service: ImageColorService
@@ -86,7 +86,7 @@ describe('ImageColorService', () => {
 
     it('node-vibrant 분석 실패 시 sharp 대표색으로 보정한다', async () => {
         nodeVibrantAnalyzer.analyze.mockRejectedValueOnce(
-            new ImageColorAnalysisFailedException('palette failed'),
+            new BaseException(IMAGE_COLOR_ERROR.PALETTE_ANALYSIS_FAILED),
         )
 
         const result = await service.extractFromUrl(image.sourceUrl)
@@ -165,3 +165,4 @@ function createNodeVibrantResult(
         },
     }
 }
+import { BaseException } from '../../common/exception/base.exception'

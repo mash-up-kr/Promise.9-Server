@@ -13,7 +13,15 @@ export interface ErrorData {
 }
 
 export class BaseException extends HttpException {
-    constructor(code: HttpStatus, errorCode: number, message: string) {
+    constructor({
+        code,
+        errorCode,
+        message,
+    }: {
+        code: HttpStatus
+        errorCode: number
+        message: string
+    }) {
         super(
             {
                 success: false,
