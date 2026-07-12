@@ -87,13 +87,14 @@ CREATE UNIQUE INDEX tags_link_id_normalized_name_idx
 CREATE INDEX tags_user_id_normalized_name_idx
   ON tags (user_id, normalized_name);
 
+-- 아래 trgm 인덱스는 아직 미적용. pg_trgm 확장이 필요해 검색/추천 구현 시점에 추가한다.
 CREATE INDEX tags_normalized_name_trgm_idx
   ON tags USING gin (normalized_name gin_trgm_ops);
 ```
 
 - `link_id + normalized_name`: 한 저장 링크 안에서 같은 태그 중복 추가 방지.
 - `user_id + normalized_name`: 사용자 내부에서 같은 태그를 가진 링크를 찾는 exact match 추천/검색용.
-- `normalized_name gin_trgm_ops`: 유사 태그 추천용. PostgreSQL `pg_trgm` 확장이 필요하다.
+- `normalized_name gin_trgm_ops`: 유사 태그 추천용. PostgreSQL `pg_trgm` 확장이 필요하며, 검색/추천 구현 시점에 추가한다. (현재 스키마 미적용)
 - 추천 쿼리는 `tags.user_id = :userId`로 사용자 범위를 먼저 제한하고, `links.deleted_at IS NULL`인 링크만 대상으로 한다.
 - `user_id`는 `links`에서 파생 가능한 값이지만, 사용자 내부 검색/추천 쿼리에서 매번 조인으로 범위를 좁히지 않기 위해 중복 저장한다.
 - `user_id` 중복 저장의 정합성은 `(link_id, user_id)` → `links(id, user_id)` 복합 FK로 DB가 보장하므로, 애플리케이션에서 별도 검증이 필요 없다.
