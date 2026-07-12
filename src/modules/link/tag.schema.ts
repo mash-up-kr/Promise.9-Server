@@ -9,20 +9,18 @@ import {
     varchar,
 } from 'drizzle-orm/pg-core'
 
-import { users } from '../user/user.schema'
-
 import { links } from './link.schema'
 
 // 사용자 저장 링크에 붙는 태그. 전역 태그 사전을 두지 않고 링크별로 저장한다.
 // user_id는 links에서 파생 가능하지만 사용자 내부 검색/추천 쿼리를 위해 중복 저장한다.
+// 소유자 정합성은 (link_id, user_id) 복합 FK로 보장하므로 user_id 단독 FK는 두지 않는다.
+// (users FK는 links.user_id 방침과 동일하게 인증 도입 시 links를 통해 전이적으로 커버)
 // 상세 설계는 docs/database/tables/tags.md 참조.
 export const tags = pgTable(
     'tags',
     {
         id: bigint({ mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
-        userId: bigint({ mode: 'number' })
-            .notNull()
-            .references(() => users.id),
+        userId: bigint({ mode: 'number' }).notNull(),
         linkId: bigint({ mode: 'number' }).notNull(),
         name: varchar({ length: 20 }).notNull(),
         normalizedName: varchar({ length: 20 }).notNull(),
