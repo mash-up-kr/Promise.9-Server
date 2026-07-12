@@ -3,9 +3,8 @@ import { and, eq, isNull } from 'drizzle-orm'
 
 import { DatabaseService } from '../../config/database/database.service'
 import { UserNotFoundException } from '../auth/auth.exception'
-import { socialAccounts } from '../auth/auth.schema'
-
-import { users } from './users.schema'
+import { socialAccounts } from '../user/social-account.schema'
+import { users } from '../user/user.schema'
 
 export interface MeResponse {
     userId: number

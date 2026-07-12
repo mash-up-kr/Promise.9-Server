@@ -7,7 +7,9 @@ import type { StringValue } from 'ms'
 
 import { DatabaseService } from '../../config/database/database.service'
 import { ValidatedEnvironment } from '../../config/environment'
-import { users } from '../users/users.schema'
+import { refreshTokens } from '../user/refresh-token.schema'
+import { socialAccounts } from '../user/social-account.schema'
+import { users } from '../user/user.schema'
 
 import { SupportedProvider } from './dto/auth.dto'
 import { GoogleProvider } from './providers/google.provider'
@@ -18,7 +20,6 @@ import {
     InvalidTokenException,
     UnsupportedProviderException,
 } from './auth.exception'
-import { refreshTokens, socialAccounts } from './auth.schema'
 import { hashToken } from './crypto.utils'
 import { parseExpiresIn } from './time.utils'
 

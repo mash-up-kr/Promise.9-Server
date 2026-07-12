@@ -39,24 +39,34 @@ export class CreateLinkDto {
     url!: string
 
     @ApiPropertyOptional({
+        example: 3,
         nullable: true,
         type: Number,
         description: '저장할 폴더 ID (없으면 미분류)',
     })
     folderId?: number | null
 
-    @ApiPropertyOptional({ nullable: true, description: '메모' })
+    @ApiPropertyOptional({
+        example: '나중에 꼭 읽기',
+        nullable: true,
+        description: `메모 (최대 ${LINK_MEMO_MAX_LENGTH}자)`,
+    })
     memo?: string | null
 }
 
 export class UpdateLinkDto {
     @ApiPropertyOptional({
+        example: 5,
         nullable: true,
         type: Number,
         description: '이동할 폴더 ID (null이면 미분류)',
     })
     folderId?: number | null
 
-    @ApiPropertyOptional({ nullable: true, description: '메모' })
+    @ApiPropertyOptional({
+        example: '리팩토링 참고 자료',
+        nullable: true,
+        description: `메모 (최대 ${LINK_MEMO_MAX_LENGTH}자)`,
+    })
     memo?: string | null
 }

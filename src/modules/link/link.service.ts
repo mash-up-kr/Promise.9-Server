@@ -1,5 +1,15 @@
 import { Injectable } from '@nestjs/common'
-import { and, desc, eq, ilike, isNull, or } from 'drizzle-orm'
+import {
+    and,
+    count,
+    desc,
+    eq,
+    ilike,
+    isNotNull,
+    isNull,
+    or,
+    SQL,
+} from 'drizzle-orm'
 
 import { DatabaseService } from '../../config/database/database.service'
 import { FolderNotFoundException } from '../folder/folder.exception'
@@ -16,6 +26,7 @@ import {
     LinkNotFoundException,
 } from './link.exception'
 import { LinkRow, links } from './link.schema'
+import { extractDomain, normalizeUrl, pickThumbnailUrl } from './link.util'
 
 @Injectable()
 export class LinkService {
@@ -30,22 +41,27 @@ export class LinkService {
             await this.assertOwnedFolder(userId, input.folderId)
         }
 
-        await this.assertNotDuplicated(userId, input.url)
+        const normalizedUrl = normalizeUrl(input.url)
+        await this.assertNotDuplicated(userId, normalizedUrl)
 
         const [row] = await this.db
             .insert(links)
             .values({
                 userId,
-                url: input.url,
                 folderId: input.folderId ?? null,
+                originalUrl: input.url,
+                normalizedUrl,
+                domain: extractDomain(input.url),
+                // 메타데이터/요약 수집은 후속 작업 — 저장 시점엔 대기 상태로 둔다.
+                aiSummaryStatus: 'PENDING',
                 memo: input.memo ?? null,
             })
             .returning()
 
         return {
             linkId: row.id,
-            url: row.url,
-            savedAt: row.savedAt,
+            url: row.originalUrl,
+            savedAt: row.createdAt,
         }
     }
 
@@ -55,15 +71,16 @@ export class LinkService {
 
         return {
             linkId: link.id,
-            url: link.url,
+            url: link.originalUrl,
             folder,
-            thumbnailUrl: link.thumbnailUrl,
+            thumbnailUrl: pickThumbnailUrl(link.metadata),
             title: link.title,
-            source: link.source,
-            publishedAt: link.publishedAt,
-            savedAt: link.savedAt,
-            // AI 요약/상태 관리 및 태그·연관 링크는 이번 CRUD 범위 밖 — 자리만 채워 둔다.
-            status: 'done',
+            source: link.domain,
+            // 발행 시각은 별도 컬럼 없이 메타데이터에서 다룰 예정 — 현재는 null
+            publishedAt: null,
+            savedAt: link.createdAt,
+            status: link.aiSummaryStatus,
+            // 태그·연관 링크는 이번 범위 밖 — 자리만 채워 둔다.
             tags: [],
             aiSummary: link.aiSummary,
             memo: link.memo,
@@ -141,14 +158,17 @@ export class LinkService {
 
     async search(userId: number, input: SearchLinkInput) {
         const keyword = `%${input.q}%`
-        // title/source는 메타데이터 추출(후속 작업) 전까지 비어 있을 수 있어 url도 함께 검색한다.
+        // 검색 대상: title, domain, original_url, final_url, ai_summary, memo
         const conditions = [
             eq(links.userId, userId),
             isNull(links.deletedAt),
             or(
                 ilike(links.title, keyword),
-                ilike(links.source, keyword),
-                ilike(links.url, keyword),
+                ilike(links.domain, keyword),
+                ilike(links.originalUrl, keyword),
+                ilike(links.finalUrl, keyword),
+                ilike(links.aiSummary, keyword),
+                ilike(links.memo, keyword),
             ),
         ]
 
@@ -160,18 +180,86 @@ export class LinkService {
             .select()
             .from(links)
             .where(and(...conditions))
-            .orderBy(desc(links.savedAt))
+            .orderBy(desc(links.createdAt))
 
         return {
             results: rows.map((row) => ({
                 linkId: row.id,
                 title: row.title,
-                source: row.source,
-                thumbnailUrl: row.thumbnailUrl,
-                savedAt: row.savedAt,
+                source: row.domain,
+                thumbnailUrl: pickThumbnailUrl(row.metadata),
+                savedAt: row.createdAt,
             })),
             totalCount: rows.length,
         }
+    }
+
+    // 시스템 폴더(전체/미분류/최근삭제)의 링크 수를 한 번에 계산한다.
+    async getSystemFolderCounts(userId: number) {
+        const owned = eq(links.userId, userId)
+
+        const [all, uncategorized, recentlyDeleted] = await Promise.all([
+            this.countLinks(owned, isNull(links.deletedAt)),
+            this.countLinks(
+                owned,
+                isNull(links.folderId),
+                isNull(links.deletedAt),
+            ),
+            this.countLinks(owned, isNotNull(links.deletedAt)),
+        ])
+
+        return {
+            all: { linkCount: all },
+            uncategorized: { linkCount: uncategorized },
+            recentlyDeleted: { linkCount: recentlyDeleted },
+        }
+    }
+
+    // 사용자의 폴더별 활성 링크 수를 folderId → count 맵으로 반환한다. (미분류는 제외)
+    async countActiveByFolder(userId: number): Promise<Map<number, number>> {
+        const rows = await this.db
+            .select({ folderId: links.folderId, linkCount: count(links.id) })
+            .from(links)
+            .where(and(eq(links.userId, userId), isNull(links.deletedAt)))
+            .groupBy(links.folderId)
+
+        return new Map(
+            rows
+                .filter((row) => row.folderId !== null)
+                .map((row) => [row.folderId as number, row.linkCount]),
+        )
+    }
+
+    // 특정 폴더에 속한 활성 링크 목록을 최신순으로 조회한다.
+    async listByFolder(userId: number, folderId: number) {
+        const rows = await this.db
+            .select()
+            .from(links)
+            .where(
+                and(
+                    eq(links.folderId, folderId),
+                    eq(links.userId, userId),
+                    isNull(links.deletedAt),
+                ),
+            )
+            .orderBy(desc(links.createdAt))
+
+        return rows.map((row) => ({
+            linkId: row.id,
+            title: row.title,
+            thumbnailUrl: pickThumbnailUrl(row.metadata),
+            savedAt: row.createdAt,
+        }))
+    }
+
+    // 조건에 맞는 링크 수를 센다. (시스템 폴더 카운트용)
+    private async countLinks(...conditions: SQL[]): Promise<number> {
+        const [row] = await this.db
+            .select({ value: count() })
+            .from(links)
+            .where(and(...conditions))
+
+        return row.value
     }
 
     // 링크에 연결된 폴더 참조를 조회한다. 폴더가 없으면 null.
@@ -214,15 +302,15 @@ export class LinkService {
         return row
     }
 
-    // 같은 사용자가 이미 저장한(삭제되지 않은) 동일 URL이 있으면 중복 저장을 막는다.
-    private async assertNotDuplicated(userId: number, url: string) {
+    // 같은 사용자가 이미 저장한(삭제되지 않은) 동일 URL(정규화 기준)이 있으면 중복 저장을 막는다.
+    private async assertNotDuplicated(userId: number, normalizedUrl: string) {
         const [row] = await this.db
             .select({ id: links.id })
             .from(links)
             .where(
                 and(
                     eq(links.userId, userId),
-                    eq(links.url, url),
+                    eq(links.normalizedUrl, normalizedUrl),
                     isNull(links.deletedAt),
                 ),
             )
