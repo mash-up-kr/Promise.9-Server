@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "folders_user_id_name_active_idx" ON "folders" USING btree ("user_id","name") WHERE "folders"."deleted_at" is null;

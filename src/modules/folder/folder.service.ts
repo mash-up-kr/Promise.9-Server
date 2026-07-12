@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common'
-import { and, count, desc, eq, isNotNull, isNull, ne, SQL } from 'drizzle-orm'
+import { and, desc, eq, isNull, ne } from 'drizzle-orm'
 
 import { DatabaseService } from '../../config/database/database.service'
 import { links } from '../link/link.schema'
-import { pickThumbnailUrl } from '../link/link.util'
+import { LinkService } from '../link/link.service'
 
 import { CreateFolderInput, UpdateFolderInput } from './dto/folder.dto'
 import {
@@ -14,7 +14,10 @@ import { FolderRow, folders } from './folder.schema'
 
 @Injectable()
 export class FolderService {
-    constructor(private readonly databaseService: DatabaseService) {}
+    constructor(
+        private readonly databaseService: DatabaseService,
+        private readonly linkService: LinkService,
+    ) {}
 
     private get db() {
         return this.databaseService.db
@@ -23,10 +26,12 @@ export class FolderService {
     async create(userId: number, input: CreateFolderInput) {
         await this.assertActiveNameAvailable(userId, input.folderName)
 
-        const [row] = await this.db
-            .insert(folders)
-            .values({ userId, name: input.folderName })
-            .returning()
+        const [row] = await this.throwOnDuplicateName(() =>
+            this.db
+                .insert(folders)
+                .values({ userId, name: input.folderName })
+                .returning(),
+        )
 
         return {
             folderId: row.id,
@@ -36,56 +41,37 @@ export class FolderService {
     }
 
     async list(userId: number) {
-        const systemFolders = await this.getSystemFolders(userId)
+        const systemFolders =
+            await this.linkService.getSystemFolderCounts(userId)
+        const linkCounts = await this.linkService.countActiveByFolder(userId)
 
-        const folderList = await this.db
-            .select({
-                folderId: folders.id,
-                folderName: folders.name,
-                linkCount: count(links.id),
-            })
+        const folderRows = await this.db
+            .select({ folderId: folders.id, folderName: folders.name })
             .from(folders)
-            .leftJoin(
-                links,
-                and(eq(links.folderId, folders.id), isNull(links.deletedAt)),
-            )
             .where(eq(folders.userId, userId))
-            .groupBy(folders.id)
             .orderBy(desc(folders.updatedAt))
 
+        const folderList = folderRows.map((folder) => ({
+            ...folder,
+            linkCount: linkCounts.get(folder.folderId) ?? 0,
+        }))
+
         return { systemFolders, folders: folderList }
-    }
-
-    // 시스템 폴더(전체/미분류/최근삭제)의 링크 수를 한 번에 계산한다.
-    private async getSystemFolders(userId: number) {
-        const owned = eq(links.userId, userId)
-
-        const [all, uncategorized, recentlyDeleted] = await Promise.all([
-            this.countLinks(owned, isNull(links.deletedAt)),
-            this.countLinks(
-                owned,
-                isNull(links.folderId),
-                isNull(links.deletedAt),
-            ),
-            this.countLinks(owned, isNotNull(links.deletedAt)),
-        ])
-
-        return {
-            all: { linkCount: all },
-            uncategorized: { linkCount: uncategorized },
-            recentlyDeleted: { linkCount: recentlyDeleted },
-        }
     }
 
     async rename(userId: number, folderId: number, input: UpdateFolderInput) {
         await this.getOwnedFolder(userId, folderId)
         await this.assertActiveNameAvailable(userId, input.folderName, folderId)
 
-        const [row] = await this.db
-            .update(folders)
-            .set({ name: input.folderName, updatedAt: new Date() })
-            .where(and(eq(folders.id, folderId), eq(folders.userId, userId)))
-            .returning()
+        const [row] = await this.throwOnDuplicateName(() =>
+            this.db
+                .update(folders)
+                .set({ name: input.folderName, updatedAt: new Date() })
+                .where(
+                    and(eq(folders.id, folderId), eq(folders.userId, userId)),
+                )
+                .returning(),
+        )
 
         return {
             folderId: row.id,
@@ -138,43 +124,20 @@ export class FolderService {
 
     async getLinks(userId: number, folderId: number) {
         const folder = await this.getOwnedFolder(userId, folderId)
-
-        const rows = await this.db
-            .select()
-            .from(links)
-            .where(
-                and(
-                    eq(links.folderId, folderId),
-                    eq(links.userId, userId),
-                    isNull(links.deletedAt),
-                ),
-            )
-            .orderBy(desc(links.createdAt))
+        const folderLinks = await this.linkService.listByFolder(
+            userId,
+            folderId,
+        )
 
         return {
             folder: { folderId: folder.id, folderName: folder.name },
-            links: rows.map((row) => ({
-                linkId: row.id,
-                title: row.title,
-                thumbnailUrl: pickThumbnailUrl(row.metadata),
-                savedAt: row.createdAt,
-            })),
-            totalCount: rows.length,
+            links: folderLinks,
+            totalCount: folderLinks.length,
         }
     }
 
-    // 조건에 맞는 링크 수를 센다. (시스템 폴더 카운트용)
-    private async countLinks(...conditions: SQL[]): Promise<number> {
-        const [row] = await this.db
-            .select({ value: count() })
-            .from(links)
-            .where(and(...conditions))
-
-        return row.value
-    }
-
-    // 삭제되지 않은(deleted_at IS NULL) 폴더 기준으로 폴더명 유일성을 검증한다.
-    // DB 유니크 제약을 두지 않는 대신 애플리케이션에서 막는다. (rename 시 excludeFolderId로 자기 자신 제외)
+    // 활성 폴더(deleted_at IS NULL) 기준 폴더명 중복을 사전 검증한다. (rename 시 자기 자신 제외)
+    // 최종 보장은 partial unique index가 하고, 이 조회는 친절한 도메인 에러용 fast-path다.
     private async assertActiveNameAvailable(
         userId: number,
         name: string,
@@ -217,5 +180,21 @@ export class FolderService {
         }
 
         return row
+    }
+
+    // 동시 요청 경합으로 unique index를 위반할 때 나는 23505를 도메인 예외로 변환한다.
+    private async throwOnDuplicateName<T>(run: () => Promise<T>): Promise<T> {
+        try {
+            return await run()
+        } catch (error) {
+            if (
+                error instanceof Error &&
+                'code' in error &&
+                error.code === '23505'
+            ) {
+                throw new FolderNameDuplicateException()
+            }
+            throw error
+        }
     }
 }

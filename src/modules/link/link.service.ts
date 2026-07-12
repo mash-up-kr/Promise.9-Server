@@ -1,5 +1,15 @@
 import { Injectable } from '@nestjs/common'
-import { and, desc, eq, ilike, isNull, or } from 'drizzle-orm'
+import {
+    and,
+    count,
+    desc,
+    eq,
+    ilike,
+    isNotNull,
+    isNull,
+    or,
+    SQL,
+} from 'drizzle-orm'
 
 import { DatabaseService } from '../../config/database/database.service'
 import { FolderNotFoundException } from '../folder/folder.exception'
@@ -182,6 +192,74 @@ export class LinkService {
             })),
             totalCount: rows.length,
         }
+    }
+
+    // 시스템 폴더(전체/미분류/최근삭제)의 링크 수를 한 번에 계산한다.
+    async getSystemFolderCounts(userId: number) {
+        const owned = eq(links.userId, userId)
+
+        const [all, uncategorized, recentlyDeleted] = await Promise.all([
+            this.countLinks(owned, isNull(links.deletedAt)),
+            this.countLinks(
+                owned,
+                isNull(links.folderId),
+                isNull(links.deletedAt),
+            ),
+            this.countLinks(owned, isNotNull(links.deletedAt)),
+        ])
+
+        return {
+            all: { linkCount: all },
+            uncategorized: { linkCount: uncategorized },
+            recentlyDeleted: { linkCount: recentlyDeleted },
+        }
+    }
+
+    // 사용자의 폴더별 활성 링크 수를 folderId → count 맵으로 반환한다. (미분류는 제외)
+    async countActiveByFolder(userId: number): Promise<Map<number, number>> {
+        const rows = await this.db
+            .select({ folderId: links.folderId, linkCount: count(links.id) })
+            .from(links)
+            .where(and(eq(links.userId, userId), isNull(links.deletedAt)))
+            .groupBy(links.folderId)
+
+        return new Map(
+            rows
+                .filter((row) => row.folderId !== null)
+                .map((row) => [row.folderId as number, row.linkCount]),
+        )
+    }
+
+    // 특정 폴더에 속한 활성 링크 목록을 최신순으로 조회한다.
+    async listByFolder(userId: number, folderId: number) {
+        const rows = await this.db
+            .select()
+            .from(links)
+            .where(
+                and(
+                    eq(links.folderId, folderId),
+                    eq(links.userId, userId),
+                    isNull(links.deletedAt),
+                ),
+            )
+            .orderBy(desc(links.createdAt))
+
+        return rows.map((row) => ({
+            linkId: row.id,
+            title: row.title,
+            thumbnailUrl: pickThumbnailUrl(row.metadata),
+            savedAt: row.createdAt,
+        }))
+    }
+
+    // 조건에 맞는 링크 수를 센다. (시스템 폴더 카운트용)
+    private async countLinks(...conditions: SQL[]): Promise<number> {
+        const [row] = await this.db
+            .select({ value: count() })
+            .from(links)
+            .where(and(...conditions))
+
+        return row.value
     }
 
     // 링크에 연결된 폴더 참조를 조회한다. 폴더가 없으면 null.
