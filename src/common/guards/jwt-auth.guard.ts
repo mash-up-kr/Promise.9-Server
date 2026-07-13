@@ -5,6 +5,8 @@ import { Request } from 'express'
 import { Observable } from 'rxjs'
 
 import { ValidatedEnvironment } from '../../config/environment'
+import { AUTH_ERROR } from '../../modules/auth/auth-error.constant'
+import { BaseException } from '../exception/base.exception'
 
 export interface AuthUser {
     userId: number
@@ -40,5 +42,16 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         }
 
         return super.canActivate(context)
+    }
+
+    handleRequest<TUser = AuthUser>(
+        error: unknown,
+        user: TUser | false | null,
+    ): TUser {
+        if (error || !user) {
+            throw new BaseException(AUTH_ERROR.INVALID_TOKEN)
+        }
+
+        return user
     }
 }
