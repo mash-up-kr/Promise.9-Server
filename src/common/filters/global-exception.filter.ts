@@ -9,7 +9,7 @@ import {
 import { Response } from 'express'
 
 import { BaseException, ErrorResponse } from '../exception/base.exception'
-import { COMMON_ERROR_CODE } from '../exception/common-error-code.constant'
+import { COMMON_ERROR } from '../exception/common-error-code.constant'
 
 @Catch(HttpException)
 export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
@@ -64,7 +64,11 @@ export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
             return response.errorCode
         }
 
-        return COMMON_ERROR_CODE.INTERNAL_SERVER_ERROR
+        // 명시적 errorCode가 없는 400 응답은 요청 값 검증 실패로 분류하고,
+        // 그 외 Nest 기본 HttpException은 공통 서버 오류 코드로 처리한다.
+        return statusCode === HttpStatus.BAD_REQUEST
+            ? COMMON_ERROR.VALIDATION.errorCode
+            : COMMON_ERROR.INTERNAL_SERVER_ERROR.errorCode
     }
 
     // httpException용, Nest 기본 응답의 message가 문자열일 때만 사용하고 아니면 예외 메시지로 대체
