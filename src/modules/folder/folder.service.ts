@@ -1,16 +1,14 @@
 import { Injectable } from '@nestjs/common'
 import { and, desc, eq, isNull, ne } from 'drizzle-orm'
 
+import { BaseException } from '../../common/exception/base.exception'
 import { DatabaseService } from '../../config/database/database.service'
 import { links } from '../link/link.schema'
 import { LinkService } from '../link/link.service'
 
 import { CreateFolderInput, UpdateFolderInput } from './dto/folder.dto'
-import {
-    FolderNameDuplicateException,
-    FolderNotFoundException,
-} from './folder.exception'
 import { FolderRow, folders } from './folder.schema'
+import { FOLDER_ERROR } from './folder-error.constant'
 
 @Injectable()
 export class FolderService {
@@ -95,7 +93,7 @@ export class FolderService {
                 .limit(1)
 
             if (!folder) {
-                throw new FolderNotFoundException()
+                throw new BaseException(FOLDER_ERROR.NOT_FOUND)
             }
 
             // 폴더에 속한 링크는 "최근 삭제된 항목"으로 이동 (soft delete + 미분류 처리)
@@ -160,7 +158,7 @@ export class FolderService {
             .limit(1)
 
         if (row) {
-            throw new FolderNameDuplicateException()
+            throw new BaseException(FOLDER_ERROR.NAME_DUPLICATE)
         }
     }
 
@@ -176,7 +174,7 @@ export class FolderService {
             .limit(1)
 
         if (!row) {
-            throw new FolderNotFoundException()
+            throw new BaseException(FOLDER_ERROR.NOT_FOUND)
         }
 
         return row
@@ -192,7 +190,7 @@ export class FolderService {
                 'code' in error &&
                 error.code === '23505'
             ) {
-                throw new FolderNameDuplicateException()
+                throw new BaseException(FOLDER_ERROR.NAME_DUPLICATE)
             }
             throw error
         }

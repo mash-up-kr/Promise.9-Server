@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { StringValue } from 'ms'
 
+import { BaseException } from '../../common/exception/base.exception'
 import { DatabaseService } from '../../config/database/database.service'
 import { ValidatedEnvironment } from '../../config/environment'
 import { refreshTokens } from '../user/refresh-token.schema'
@@ -15,11 +16,7 @@ import { SupportedProvider } from './dto/auth.dto'
 import { GoogleProvider } from './providers/google.provider'
 import { SocialProvider } from './providers/social-provider.interface'
 import { TOKEN_TYPE, TokenType } from './auth.constants'
-import {
-    ExpiredTokenException,
-    InvalidTokenException,
-    UnsupportedProviderException,
-} from './auth.exception'
+import { AUTH_ERROR } from './auth-error.constant'
 import { hashToken } from './crypto.utils'
 import { parseExpiresIn } from './time.utils'
 
@@ -127,7 +124,7 @@ export class AuthService {
         })
 
         if (!stored) {
-            throw new InvalidTokenException()
+            throw new BaseException(AUTH_ERROR.INVALID_TOKEN)
         }
 
         // 이미 폐기된 토큰이 재사용됨 → 탈취로 간주, 해당 family 전체 폐기
@@ -135,7 +132,7 @@ export class AuthService {
             await this.db
                 .delete(refreshTokens)
                 .where(eq(refreshTokens.tokenFamily, stored.tokenFamily))
-            throw new InvalidTokenException()
+            throw new BaseException(AUTH_ERROR.INVALID_TOKEN)
         }
 
         // Refresh Token Rotation: 기존 토큰을 soft revoke하고 새 토큰 쌍을 발급한다.
@@ -175,7 +172,7 @@ export class AuthService {
         })
 
         if (!stored) {
-            throw new InvalidTokenException()
+            throw new BaseException(AUTH_ERROR.INVALID_TOKEN)
         }
 
         const userId = payload.sub
@@ -206,7 +203,7 @@ export class AuthService {
 
         const resolved = providerMap[provider]
         if (!resolved) {
-            throw new UnsupportedProviderException()
+            throw new BaseException(AUTH_ERROR.UNSUPPORTED_PROVIDER)
         }
 
         return resolved
@@ -249,25 +246,22 @@ export class AuthService {
             })
 
             if (payload.type !== TOKEN_TYPE.REFRESH) {
-                throw new InvalidTokenException()
+                throw new BaseException(AUTH_ERROR.INVALID_TOKEN)
             }
 
             return payload
         } catch (error) {
             // jsonwebtoken의 TokenExpiredError를 도메인 예외로 변환한다.
-            if (
-                error instanceof InvalidTokenException ||
-                error instanceof ExpiredTokenException
-            ) {
+            if (error instanceof BaseException) {
                 throw error
             }
 
             const name = (error as Error)?.name
             if (name === 'TokenExpiredError') {
-                throw new ExpiredTokenException()
+                throw new BaseException(AUTH_ERROR.EXPIRED_TOKEN)
             }
 
-            throw new InvalidTokenException()
+            throw new BaseException(AUTH_ERROR.INVALID_TOKEN)
         }
     }
 }

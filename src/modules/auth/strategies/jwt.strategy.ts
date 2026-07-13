@@ -3,10 +3,11 @@ import { ConfigService } from '@nestjs/config'
 import { PassportStrategy } from '@nestjs/passport'
 import { ExtractJwt, Strategy } from 'passport-jwt'
 
+import { BaseException } from '../../../common/exception/base.exception'
 import { AuthUser } from '../../../common/guards/jwt-auth.guard'
 import { ValidatedEnvironment } from '../../../config/environment'
 import { TOKEN_TYPE, TokenType } from '../auth.constants'
-import { InvalidTokenException } from '../auth.exception'
+import { AUTH_ERROR } from '../auth-error.constant'
 
 interface JwtPayload {
     sub: number
@@ -27,7 +28,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     validate(payload: JwtPayload): AuthUser {
         if (payload.type !== TOKEN_TYPE.ACCESS) {
-            throw new InvalidTokenException()
+            throw new BaseException(AUTH_ERROR.INVALID_TOKEN)
         }
         return { userId: payload.sub }
     }

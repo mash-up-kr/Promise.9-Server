@@ -2,8 +2,9 @@ import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { OAuth2Client } from 'google-auth-library'
 
+import { BaseException } from '../../../common/exception/base.exception'
 import { ValidatedEnvironment } from '../../../config/environment'
-import { InvalidSocialTokenException } from '../auth.exception'
+import { AUTH_ERROR } from '../auth-error.constant'
 
 import { SocialPayload, SocialProvider } from './social-provider.interface'
 
@@ -25,13 +26,13 @@ export class GoogleProvider implements SocialProvider {
             const payload = ticket.getPayload()
 
             if (!payload?.sub || !payload?.email) {
-                throw new InvalidSocialTokenException()
+                throw new BaseException(AUTH_ERROR.INVALID_SOCIAL_TOKEN)
             }
 
             return { providerId: payload.sub, email: payload.email }
         } catch (error) {
-            if (error instanceof InvalidSocialTokenException) throw error
-            throw new InvalidSocialTokenException()
+            if (error instanceof BaseException) throw error
+            throw new BaseException(AUTH_ERROR.INVALID_SOCIAL_TOKEN)
         }
     }
 }

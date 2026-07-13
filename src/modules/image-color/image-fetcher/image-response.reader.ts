@@ -1,11 +1,9 @@
 import { Injectable } from '@nestjs/common'
 
-import {
-    ImageFetchFailedException,
-    ImageTooLargeException,
-    UnsupportedImageContentTypeException,
-} from './image-fetcher.exception'
+import { BaseException } from '../../../common/exception/base.exception'
+
 import { ReadImageResponseResult } from './image-fetcher.type'
+import { IMAGE_FETCHER_ERROR } from './image-fetcher-error.constant'
 
 @Injectable()
 export class ImageResponseReader {
@@ -30,9 +28,7 @@ export class ImageResponseReader {
             )
 
             if (buffer.byteLength === 0) {
-                throw new ImageFetchFailedException(
-                    '이미지 응답이 비어 있습니다.',
-                )
+                throw new BaseException(IMAGE_FETCHER_ERROR.EMPTY_RESPONSE)
             }
 
             return {
@@ -56,7 +52,9 @@ export class ImageResponseReader {
             !contentType.startsWith('image/') ||
             contentType === 'image/svg+xml'
         ) {
-            throw new UnsupportedImageContentTypeException()
+            throw new BaseException(
+                IMAGE_FETCHER_ERROR.UNSUPPORTED_CONTENT_TYPE,
+            )
         }
 
         return contentType
@@ -73,7 +71,7 @@ export class ImageResponseReader {
         const contentLength = Number(contentLengthHeader)
 
         if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-            throw new ImageTooLargeException(maxBytes)
+            throw new BaseException(IMAGE_FETCHER_ERROR.TOO_LARGE)
         }
     }
 
@@ -114,7 +112,7 @@ export class ImageResponseReader {
 
                 if (receivedBytes > maxBytes) {
                     await reader.cancel()
-                    throw new ImageTooLargeException(maxBytes)
+                    throw new BaseException(IMAGE_FETCHER_ERROR.TOO_LARGE)
                 }
 
                 chunks.push(value)

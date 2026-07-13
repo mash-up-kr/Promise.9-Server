@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common'
 import { and, eq, isNull } from 'drizzle-orm'
 
+import { BaseException } from '../../common/exception/base.exception'
 import { DatabaseService } from '../../config/database/database.service'
-import { UserNotFoundException } from '../auth/auth.exception'
 
 import { socialAccounts } from './social-account.schema'
 import { users } from './user.schema'
+import { USER_ERROR } from './user-error.constant'
 
 export interface MeResponse {
     userId: number
@@ -28,7 +29,7 @@ export class UserService {
         })
 
         if (!user) {
-            throw new UserNotFoundException()
+            throw new BaseException(USER_ERROR.NOT_FOUND)
         }
 
         const socialAccount = await this.db.query.socialAccounts.findFirst({

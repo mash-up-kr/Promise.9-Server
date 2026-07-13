@@ -11,22 +11,19 @@ import {
     SQL,
 } from 'drizzle-orm'
 
+import { BaseException } from '../../common/exception/base.exception'
 import { DatabaseService } from '../../config/database/database.service'
-import { FolderNotFoundException } from '../folder/folder.exception'
 import { folders } from '../folder/folder.schema'
+import { FOLDER_ERROR } from '../folder/folder-error.constant'
 
 import {
     CreateLinkInput,
     SearchLinkInput,
     UpdateLinkInput,
 } from './dto/link.dto'
-import {
-    LinkAlreadyExistsException,
-    LinkNotDeletedException,
-    LinkNotFoundException,
-} from './link.exception'
 import { LinkRow, links } from './link.schema'
 import { extractDomain, normalizeUrl, pickThumbnailUrl } from './link.util'
+import { LINK_ERROR } from './link-error.constant'
 
 @Injectable()
 export class LinkService {
@@ -139,7 +136,7 @@ export class LinkService {
 
         // 활성 링크에 복구를 호출하면 폴더가 미분류로 날아가므로 거부한다.
         if (!link.deletedAt) {
-            throw new LinkNotDeletedException()
+            throw new BaseException(LINK_ERROR.NOT_DELETED)
         }
 
         // 복구된 링크는 "미분류"로 복원
@@ -296,7 +293,7 @@ export class LinkService {
             .limit(1)
 
         if (!row) {
-            throw new LinkNotFoundException()
+            throw new BaseException(LINK_ERROR.NOT_FOUND)
         }
 
         return row
@@ -317,7 +314,7 @@ export class LinkService {
             .limit(1)
 
         if (row) {
-            throw new LinkAlreadyExistsException()
+            throw new BaseException(LINK_ERROR.ALREADY_EXISTS)
         }
     }
 
@@ -329,7 +326,7 @@ export class LinkService {
             .limit(1)
 
         if (!row) {
-            throw new FolderNotFoundException()
+            throw new BaseException(FOLDER_ERROR.NOT_FOUND)
         }
     }
 }
