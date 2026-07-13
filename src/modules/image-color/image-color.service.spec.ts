@@ -1,3 +1,5 @@
+import { BaseException } from '../../common/exception/base.exception'
+
 import { NodeVibrantImageColorAnalyzer } from './analyzers/node-vibrant-image-color.analyzer'
 import { SharpImageColorAnalyzer } from './analyzers/sharp-image-color.analyzer'
 import { ImageFetcherService } from './image-fetcher/image-fetcher.service'
@@ -165,4 +167,3 @@ function createNodeVibrantResult(
         },
     }
 }
-import { BaseException } from '../../common/exception/base.exception'

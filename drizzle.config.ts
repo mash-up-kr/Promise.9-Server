@@ -1,10 +1,10 @@
 import { defineConfig } from 'drizzle-kit'
 
-import { validateEnvironment } from './src/config/environment'
+import { validateDbEnvironment } from './src/config/environment'
 
 import 'dotenv/config'
 
-const env = validateEnvironment(process.env)
+const env = validateDbEnvironment(process.env)
 
 export default defineConfig({
     schema: './src/config/database/schema.ts',

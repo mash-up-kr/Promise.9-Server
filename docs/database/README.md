@@ -10,6 +10,14 @@ Promise.9 서버 DB 문서의 시작점입니다.
 | [ERD](./erd.md) | 전체 테이블 통합 ERD (커밋된 설계 문서 기준) |
 | [Tables](./tables) | 테이블별 상세 설계 (필드·제약·인덱스) |
 
+## 테이블 설계
+
+| 테이블 | 설명 |
+| --- | --- |
+| [users](./tables/users.md) | 회원 계정 기준 테이블 |
+| [social_accounts](./tables/social_accounts.md) | 소셜 로그인 계정 연결 테이블 |
+| [refresh_tokens](./tables/refresh_tokens.md) | Refresh Token 관리 테이블 |
+
 ## 작성 기준
 
 - DB 문서는 `docs/database` 하위에 둡니다.

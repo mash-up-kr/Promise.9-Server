@@ -9,6 +9,7 @@ import {
 import { Response } from 'express'
 
 import { BaseException, ErrorResponse } from '../exception/base.exception'
+import { COMMON_ERROR_CODE } from '../exception/common-error-code.constant'
 
 @Catch(HttpException)
 export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
@@ -49,7 +50,7 @@ export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
         }
     }
 
-    // 명시된 errorCode가 있으면 사용하고 없으면 HTTP status를 에러 코드로 사용
+    // 명시된 errorCode가 있으면 사용하고 없으면 공통 내부 서버 에러 코드를 사용
     private getErrorCode(
         statusCode: HttpStatus,
         response?: string | object,
@@ -63,7 +64,7 @@ export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
             return response.errorCode
         }
 
-        return statusCode
+        return COMMON_ERROR_CODE.INTERNAL_SERVER_ERROR
     }
 
     // httpException용, Nest 기본 응답의 message가 문자열일 때만 사용하고 아니면 예외 메시지로 대체

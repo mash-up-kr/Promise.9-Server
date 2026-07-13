@@ -1,3 +1,4 @@
 export const COMMON_ERROR_CODE = {
     VALIDATION: 910001,
+    INTERNAL_SERVER_ERROR: 910002,
 } as const
