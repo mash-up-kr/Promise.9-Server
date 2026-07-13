@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import {
     bigint,
+    boolean,
     index,
     jsonb,
     pgTable,
@@ -53,6 +54,9 @@ export const links = pgTable(
         // 저장 링크 단위 대표 상태: PENDING | SUCCESS | NEEDS_REVIEW | FAILED
         aiSummaryStatus: varchar({ length: 20 }).notNull().default('PENDING'),
         memo: text(),
+        isFavorite: boolean().notNull().default(false),
+        // 상세 화면이 실제 노출됐을 때 POST /links/:linkId/view로 갱신한다.
+        viewedAt: timestamp({ withTimezone: true }),
         deletedAt: timestamp({ withTimezone: true }),
         createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
