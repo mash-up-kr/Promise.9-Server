@@ -1,22 +1,34 @@
 # API 명세서 — 인증 (Auth)
 
+> [API 명세 인덱스](./api-spec.md) · [공통 응답](./common.md) · [사용자 API](./user.md)
+>
 > Base URL: `/api/v1`
+>
 > 인증이 필요 없는 엔드포인트 (소셜 로그인, 토큰 재발급)는 `Authorization` 헤더 불필요
+
+## Provider 구현 상태
+
+| Provider | 상태 | 설명                                                            |
+| -------- | :--: | --------------------------------------------------------------- |
+| Google   |  O   | ID token 검증과 로그인·가입 동작                                |
+| Kakao    | TODO | 요청 enum만 열려 있으며 provider 검증 구현 전에는 `950004` 반환 |
 
 ---
 
 ## 인증 플로우
 
 ```
-1. 프론트에서 구글 / 카카오 SDK로 idToken 발급
+1. 프론트에서 Google SDK로 idToken 발급
    - 앱 (iOS / Android): expo-auth-session
-   - 웹 (Expo Web): 각 플랫폼 SDK 사용
+   - 웹 (Expo Web): Google SDK 사용
+   - Kakao SDK 연동은 TODO
 
 2. idToken을 서버로 전달
    - POST /auth/social { provider, idToken }
 
 3. 서버에서 idToken 검증
-   - provider에 따라 Google / Kakao OIDC 검증
+   - 현재 Google OIDC 검증
+   - Kakao provider 검증은 TODO
    - SOCIAL_ACCOUNTS 테이블에서 provider + provider_user_id로 유저 조회
    - 신규 유저면 USERS + SOCIAL_ACCOUNTS 생성
 
@@ -44,12 +56,12 @@
 
 ## 토큰 정책
 
-| 항목 | 내용 |
-|---|---|
-| 발급 방식 | 자체 JWT |
-| accessToken 만료 시간 | 상수 관리 (추후 확정) |
-| refreshToken 만료 시간 | 상수 관리 (추후 확정) |
-| refreshToken 저장 | REFRESH_TOKENS 테이블 |
+| 항목                   | 내용                                |
+| ---------------------- | ----------------------------------- |
+| 발급 방식              | 자체 JWT                            |
+| accessToken 만료 시간  | 상수 관리 (추후 확정)               |
+| refreshToken 만료 시간 | 상수 관리 (추후 확정)               |
+| refreshToken 저장      | REFRESH_TOKENS 테이블               |
 | Refresh Token Rotation | 재발급 시 기존 토큰 폐기, 신규 발급 |
 
 ---
@@ -57,56 +69,64 @@
 ## 엔드포인트
 
 ### 소셜 로그인
+
 ```
 POST /auth/social
 ```
 
 **Request Body**
+
 ```json
 {
-  "provider": "google" | "kakao",
-  "idToken": "string"
+    "provider": "google",
+    "idToken": "string"
 }
 ```
 
 **Response `200`**
+
 ```json
 {
-  "success": true,
-  "data": {
-    "accessToken": "string",
-    "refreshToken": "string",
-    "isNewUser": true
-  }
+    "success": true,
+    "data": {
+        "accessToken": "string",
+        "refreshToken": "string",
+        "isNewUser": true
+    }
 }
 ```
 
 > - `provider`: 소셜 로그인 제공자
-> - `idToken`: 클라이언트에서 각 SDK로 발급받은 ID 토큰 (Google / Kakao OIDC)
+> - `provider=google`: 현재 사용 가능
+> - `provider=kakao`: 계약만 제공하는 TODO. 현재 요청하면 `400 Bad Request`, `errorCode=950004`
+> - `idToken`: 클라이언트 SDK에서 발급받은 ID 토큰
 > - `isNewUser`: 신규 가입 여부 (온보딩 처리용)
 
 ---
 
 ### 토큰 재발급
+
 ```
 POST /auth/refresh
 ```
 
 **Request Body**
+
 ```json
 {
-  "refreshToken": "string"
+    "refreshToken": "string"
 }
 ```
 
 **Response `200`**
+
 ```json
 {
-  "success": true,
-  "data": {
-    "accessToken": "string",
-    "refreshToken": "string"
-  }
+    "success": true,
+    "data": {
+        "accessToken": "string",
+        "refreshToken": "string"
+    }
 }
 ```
 
@@ -115,14 +135,16 @@ POST /auth/refresh
 ---
 
 ### 로그아웃
+
 ```
 POST /auth/logout
 ```
 
 **Request Body**
+
 ```json
 {
-  "refreshToken": "string"
+    "refreshToken": "string"
 }
 ```
 
@@ -132,35 +154,17 @@ POST /auth/logout
 
 ---
 
-### 내 정보 조회
-```
-GET /users/me
-```
-
-**Response `200`**
-```json
-{
-  "success": true,
-  "data": {
-    "userId": 1,
-    "email": "string",
-    "provider": "google" | "kakao",
-    "createdAt": "2026-02-26T00:00:00Z"
-  }
-}
-```
-
----
-
 ### 회원 탈퇴
+
 ```
 DELETE /auth/withdraw
 ```
 
 **Request Body**
+
 ```json
 {
-  "refreshToken": "string"
+    "refreshToken": "string"
 }
 ```
 
