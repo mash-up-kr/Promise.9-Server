@@ -112,7 +112,7 @@ erDiagram
 
 - URL/제목/이미지/색상 등 메타데이터는 별도 테이블(`link_resources`, `link_snapshots`) 없이 `links`에 통합하고, 확장 정보는 `metadata`(jsonb)에 담는다.
 - `ai_summary_metrics`는 실패 기록 보장을 위해 **물리 FK 없이** `link_id`로 논리 참조한다. (ERD의 `AI_SUMMARY_METRICS` 관계선은 논리 참조를 의미)
-- 기본 폴더(전체 / 미분류 / 최근 삭제된 항목)는 행으로 저장하지 않고 조회 조건으로 표현한다.
+- 화면에서 폴더처럼 표시되는 전체·미분류·즐겨찾기·최근 삭제는 `folders` 행으로 저장하지 않고 링크 조회 조건으로 표현한다. 최근 삭제는 삭제된 폴더가 아니라 soft delete된 링크 목록이다.
 - `tags`는 `(link_id, user_id)` 복합 FK로 `links(id, user_id)`를 참조해 태그·링크의 소유자 정합성을 DB에서 강제한다. 이를 위해 `links`에 `(id, user_id)` 유니크 제약을 둔다. `tags`는 `users`를 직접 참조하지 않고(단독 FK 제거), 소유자·사용자 존재는 `links`를 통해 커버한다.
 - `refresh_tokens`는 토큰 원문 대신 해시만 저장하고 RTR(rotation) 방식으로 재사용을 탐지한다. (인증 파이프라인은 후속 작업)
 - 세부 컬럼·제약·인덱스는 `docs/database/tables/`의 테이블별 문서를 참조한다.
