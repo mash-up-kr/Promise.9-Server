@@ -82,4 +82,5 @@
 - 새 코드는 해당 도메인의 마지막 순번 다음 값을 사용한다.
 - 같은 원인으로 발생하는 세부 상황은 동일한 `errorCode`를 사용할 수 있다.
 - 서로 다른 클라이언트 처리가 필요하면 별도의 순번을 부여한다.
-- 명시적인 `errorCode`가 없는 Nest 기본 `HttpException`은 `910002`를 사용한다.
+- 명시적인 `errorCode`가 없는 Nest 기본 `BadRequestException`은 요청 값 검증 실패로 분류해 `910001`을 사용한다.
+- 그 외 명시적인 `errorCode`가 없는 Nest 기본 `HttpException`은 `910002`를 사용한다.
