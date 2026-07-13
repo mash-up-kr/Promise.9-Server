@@ -3,8 +3,9 @@ import { and, eq, isNull } from 'drizzle-orm'
 
 import { DatabaseService } from '../../config/database/database.service'
 import { UserNotFoundException } from '../auth/auth.exception'
-import { socialAccounts } from '../user/social-account.schema'
-import { users } from '../user/user.schema'
+
+import { socialAccounts } from './social-account.schema'
+import { users } from './user.schema'
 
 export interface MeResponse {
     userId: number
@@ -14,7 +15,7 @@ export interface MeResponse {
 }
 
 @Injectable()
-export class UsersService {
+export class UserService {
     private get db() {
         return this.databaseService.db
     }

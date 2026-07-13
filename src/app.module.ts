@@ -6,7 +6,7 @@ import { validateEnvironment } from './config/environment'
 import { AuthModule } from './modules/auth/auth.module'
 import { FolderModule } from './modules/folder/folder.module'
 import { LinkModule } from './modules/link/link.module'
-import { UsersModule } from './modules/users/users.module'
+import { UserModule } from './modules/user/user.module'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
 
@@ -20,7 +20,7 @@ import { AppService } from './app.service'
         FolderModule,
         LinkModule,
         AuthModule,
-        UsersModule,
+        UserModule,
     ],
     controllers: [AppController],
     providers: [AppService],
