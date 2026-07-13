@@ -60,10 +60,6 @@
 | 사용자 태그 삭제       | `DELETE /links/{linkId}/tags/{tagId}` |  △   | Endpoint·계약만 존재, 현재 501·DB 삭제 TODO           |
 | 폴더 선택 목록         | `GET /folders`                        |  O   | 전체 사용자 폴더 반환                                 |
 
-폴더를 선택하지 않은 기본 상태는 다음과 같이 표시합니다.
-
-<img src="./screens/folder-selection-default.png" alt="폴더 미선택 기본 상태" width="360" />
-
 ## 카테고리 둘러보기
 
 <img src="./screens/category-browse.png" alt="카테고리 둘러보기 화면" width="240" />
