@@ -10,7 +10,7 @@ import {
 
 import { FOLDER_NAME_MAX_LENGTH } from './folder.constants'
 
-// 사용자가 생성하는 일반 폴더. 시스템 폴더(전체/미분류/최근삭제)는 row가 아니라 계산값으로 처리한다.
+// 사용자가 생성하는 실제 폴더. 화면의 전체/미분류/즐겨찾기/최근삭제는 row가 아니라 링크 조회 조건으로 처리한다.
 // 폴더명 유일성은 "삭제되지 않은(deleted_at IS NULL) 폴더" 기준 partial unique index로 DB에서 보장한다.
 // (soft delete 도입 시 삭제된 폴더가 이름을 점유하지 않도록. 동시 생성/rename 경쟁도 DB에서 차단)
 export const folders = pgTable(

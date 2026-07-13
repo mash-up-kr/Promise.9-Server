@@ -299,29 +299,7 @@ export class LinkService {
         )
     }
 
-    // 특정 폴더에 속한 활성 링크 목록을 최신순으로 조회한다.
-    async listByFolder(userId: number, folderId: number) {
-        const rows = await this.db
-            .select()
-            .from(links)
-            .where(
-                and(
-                    eq(links.folderId, folderId),
-                    eq(links.userId, userId),
-                    isNull(links.deletedAt),
-                ),
-            )
-            .orderBy(desc(links.createdAt))
-
-        return rows.map((row) => ({
-            linkId: row.id,
-            title: row.title,
-            thumbnailUrl: pickThumbnailUrl(row.metadata),
-            savedAt: row.createdAt,
-        }))
-    }
-
-    // 조건에 맞는 링크 수를 센다. (시스템 폴더 카운트용)
+    // 조건에 맞는 링크 수를 센다. (화면의 링크 상태별 카운트용)
     private async countLinks(...conditions: SQL[]): Promise<number> {
         const [row] = await this.db
             .select({ value: count() })
