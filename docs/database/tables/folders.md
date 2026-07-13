@@ -1,6 +1,6 @@
 # folders
 
-사용자가 생성한 커스텀 폴더 테이블이다. 기본 폴더인 `전체`, `미분류`, `최근 삭제된 항목`은 실제 행으로 저장하지 않고 조회 조건으로 표현한다.
+사용자가 생성한 커스텀 폴더 테이블이다. 화면에서 폴더처럼 표시되는 `전체`, `미분류`, `즐겨찾기`, `최근 삭제`는 이 테이블의 행이 아니며 링크 조회 조건으로 표현한다. `최근 삭제`는 삭제된 폴더가 아니라 soft delete된 링크 목록이다.
 
 ## ERD
 
@@ -31,15 +31,15 @@ erDiagram
 
 ## 필드
 
-| 필드 | 타입 | 필수 | 설명 |
-| --- | --- | --- | --- |
-| id | bigint | Y | 폴더 식별자 |
-| user_id | bigint | Y | 폴더를 생성한 회원 ID |
-| name | varchar | Y | 폴더명. 최대 255자 (`varchar(255)`) |
-| sort_order | integer | N | 사용자별 폴더 노출 순서 |
-| created_at | timestamptz | Y | 폴더 생성 일시 |
-| updated_at | timestamptz | Y | 폴더 수정 일시 |
-| deleted_at | timestamptz | N | 폴더 삭제 일시 |
+| 필드       | 타입        | 필수 | 설명                                |
+| ---------- | ----------- | ---- | ----------------------------------- |
+| id         | bigint      | Y    | 폴더 식별자                         |
+| user_id    | bigint      | Y    | 폴더를 생성한 회원 ID               |
+| name       | varchar     | Y    | 폴더명. 최대 255자 (`varchar(255)`) |
+| sort_order | integer     | N    | 사용자별 폴더 노출 순서             |
+| created_at | timestamptz | Y    | 폴더 생성 일시                      |
+| updated_at | timestamptz | Y    | 폴더 수정 일시                      |
+| deleted_at | timestamptz | N    | 폴더 삭제 일시                      |
 
 ## 제약
 
