@@ -13,6 +13,8 @@ export class MeResponseDto {
     provider!: string
 
     @ApiProperty({
+        type: String,
+        format: 'date-time',
         example: TIMESTAMP_EXAMPLE,
         description: '가입 일시 (ISO 8601)',
     })

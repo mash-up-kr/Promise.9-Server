@@ -7,7 +7,7 @@ import { AuthUser, JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { UserService } from './user.service'
 import { ApiGetMe } from './user.swagger'
 
-@ApiTags('users')
+@ApiTags('User')
 @Controller('users')
 export class UserController {
     constructor(private readonly userService: UserService) {}
