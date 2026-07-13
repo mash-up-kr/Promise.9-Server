@@ -13,7 +13,7 @@
           "type": "bigint",
           "primaryKey": true,
           "notNull": true,
-          "identity": {
+          "identity": {s
             "type": "always",
             "name": "folders_id_seq",
             "schema": "public",

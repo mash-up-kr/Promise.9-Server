@@ -9,10 +9,12 @@ import {
     Patch,
     Post,
     Query,
+    UseGuards,
 } from '@nestjs/common'
-import { ApiTags } from '@nestjs/swagger'
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 
-import { DEV_USER_ID } from '../../common/constants/dev-user'
+import { CurrentUser } from '../../common/decorators/current-user.decorator'
+import { AuthUser, JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ZodValidationPipe } from '../../common/pipe/zod-validation.pipe'
 
 import {
@@ -34,6 +36,8 @@ import {
 } from './link.swagger'
 
 @ApiTags('Link')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('links')
 export class LinkController {
     constructor(private readonly linkService: LinkService) {}
@@ -42,45 +46,57 @@ export class LinkController {
     @HttpCode(201)
     @ApiCreateLink()
     create(
+        @CurrentUser() user: AuthUser,
         @Body(new ZodValidationPipe(createLinkSchema)) body: CreateLinkInput,
     ) {
-        return this.linkService.create(DEV_USER_ID, body)
+        return this.linkService.create(user.userId, body)
     }
 
     // 정적 경로(:linkId 보다 먼저 선언) — /links/search
     @Get('search')
     @ApiSearchLinks()
     search(
+        @CurrentUser() user: AuthUser,
         @Query(new ZodValidationPipe(searchLinkSchema)) query: SearchLinkInput,
     ) {
-        return this.linkService.search(DEV_USER_ID, query)
+        return this.linkService.search(user.userId, query)
     }
 
     @Get(':linkId')
     @ApiLinkDetail()
-    detail(@Param('linkId', ParseIntPipe) linkId: number) {
-        return this.linkService.detail(DEV_USER_ID, linkId)
+    detail(
+        @CurrentUser() user: AuthUser,
+        @Param('linkId', ParseIntPipe) linkId: number,
+    ) {
+        return this.linkService.detail(user.userId, linkId)
     }
 
     @Patch(':linkId')
     @ApiUpdateLink()
     update(
+        @CurrentUser() user: AuthUser,
         @Param('linkId', ParseIntPipe) linkId: number,
         @Body(new ZodValidationPipe(updateLinkSchema)) body: UpdateLinkInput,
     ) {
-        return this.linkService.update(DEV_USER_ID, linkId, body)
+        return this.linkService.update(user.userId, linkId, body)
     }
 
     @Delete(':linkId')
     @HttpCode(204)
     @ApiRemoveLink()
-    remove(@Param('linkId', ParseIntPipe) linkId: number) {
-        return this.linkService.remove(DEV_USER_ID, linkId)
+    remove(
+        @CurrentUser() user: AuthUser,
+        @Param('linkId', ParseIntPipe) linkId: number,
+    ) {
+        return this.linkService.remove(user.userId, linkId)
     }
 
     @Post(':linkId/restore')
     @ApiRestoreLink()
-    restore(@Param('linkId', ParseIntPipe) linkId: number) {
-        return this.linkService.restore(DEV_USER_ID, linkId)
+    restore(
+        @CurrentUser() user: AuthUser,
+        @Param('linkId', ParseIntPipe) linkId: number,
+    ) {
+        return this.linkService.restore(user.userId, linkId)
     }
 }

@@ -1,3 +1,4 @@
+import { ValidationPipe } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
@@ -10,6 +11,7 @@ async function bootstrap() {
 
     app.useGlobalFilters(new GlobalExceptionFilter())
     app.useGlobalInterceptors(new CommonResponseInterceptor())
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true }))
 
     swaggerConfig(app)
 
