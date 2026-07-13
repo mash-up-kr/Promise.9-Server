@@ -67,8 +67,6 @@ jobs:
           tags: |
             ${{ steps.image.outputs.name }}:${{ github.sha }}
             ${{ steps.image.outputs.name }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=min,ignore-error=true
 
       - name: Create production env file
         env:
