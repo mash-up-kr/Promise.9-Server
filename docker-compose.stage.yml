@@ -1,0 +1,21 @@
+services:
+    api:
+        image: ${APP_IMAGE:?APP_IMAGE is required}
+        container_name: promise9-stage-api
+        restart: unless-stopped
+        env_file:
+            - /opt/promise9-stage/.env
+        ports:
+            - '127.0.0.1:3001:3000'
+        mem_limit: 512m
+        healthcheck:
+            test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:3000/']
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 20s
+        logging:
+            driver: json-file
+            options:
+                max-size: '10m'
+                max-file: '3'
