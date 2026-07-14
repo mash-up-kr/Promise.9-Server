@@ -31,11 +31,12 @@ PR 본문 또는 코멘트에 배포 키워드 추가
 
 ## 배포 요청
 
-PR 본문 또는 일반 코멘트에 독립된 단어로 `@stage`를 추가한다.
+PR 생성 시 본문에 독립된 단어로 `@stage`를 추가하거나, 생성된 PR에 새 일반 코멘트로 `@stage`를 작성한다.
 
-- PR 본문은 `opened`, `edited`, `synchronize`, `reopened` 이벤트에서 확인한다.
+- PR 본문은 `opened`, `synchronize`, `reopened` 이벤트에서 확인한다.
 - 본문에 키워드가 남아 있으면 새 commit을 push할 때 다시 배포한다.
-- PR 코멘트는 `created`, `edited` 이벤트에서 확인한다.
+- PR을 생성한 뒤 본문을 수정해 키워드를 추가하는 것만으로는 배포되지 않으므로, 이때는 새 코멘트로 요청한다.
+- PR 코멘트는 `created` 이벤트에서만 확인한다. 기존 코멘트 수정은 배포를 요청하지 않는다.
 - 저장소에 `write`, `maintain`, `admin` 권한이 있는 사용자만 요청할 수 있다.
 - Fork에서 생성한 PR과 닫힌 PR은 배포하지 않는다.
 
