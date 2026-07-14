@@ -1,0 +1,266 @@
+name: Deploy PR To Stage
+
+on:
+    pull_request:
+        types:
+            - opened
+            - edited
+            - synchronize
+            - reopened
+    issue_comment:
+        types:
+            - created
+            - edited
+
+permissions:
+    contents: read
+    issues: write
+    pull-requests: read
+
+jobs:
+    resolve:
+        runs-on: ubuntu-latest
+        outputs:
+            should_deploy: ${{ steps.resolve.outputs.should_deploy }}
+            pr_number: ${{ steps.resolve.outputs.pr_number }}
+            head_sha: ${{ steps.resolve.outputs.head_sha }}
+        steps:
+            - name: Resolve stage deployment request
+              id: resolve
+              uses: actions/github-script@v7
+              with:
+                  script: |
+                      core.setOutput('should_deploy', 'false')
+
+                      const markerPattern = /(^|\s)@stage(?=$|\s|[.,!?])/i
+                      const isCommentEvent = context.eventName === 'issue_comment'
+
+                      if (isCommentEvent && !context.payload.issue?.pull_request) {
+                        core.info('PR이 아닌 issue의 코멘트이므로 건너뜁니다.')
+                        return
+                      }
+
+                      const triggerBody = isCommentEvent
+                        ? context.payload.comment?.body ?? ''
+                        : context.payload.pull_request?.body ?? ''
+
+                      if (!markerPattern.test(triggerBody)) {
+                        core.info('배포 키워드가 없어 건너뜁니다.')
+                        return
+                      }
+
+                      const { owner, repo } = context.repo
+                      const prNumber = isCommentEvent
+                        ? context.payload.issue.number
+                        : context.payload.pull_request.number
+
+                      const { data: permissionData } =
+                        await github.rest.repos.getCollaboratorPermissionLevel({
+                          owner,
+                          repo,
+                          username: context.actor,
+                        })
+
+                      const allowedPermissions = new Set(['admin', 'maintain', 'write'])
+                      if (!allowedPermissions.has(permissionData.permission)) {
+                        core.warning(
+                          `${context.actor} 사용자는 stage 배포 권한이 없습니다.`,
+                        )
+                        return
+                      }
+
+                      const { data: pullRequest } = await github.rest.pulls.get({
+                        owner,
+                        repo,
+                        pull_number: prNumber,
+                      })
+
+                      if (pullRequest.state !== 'open') {
+                        core.info('열려 있는 PR만 stage에 배포할 수 있습니다.')
+                        return
+                      }
+
+                      if (pullRequest.head.repo?.full_name !== `${owner}/${repo}`) {
+                        core.warning('Fork에서 생성한 PR은 stage에 배포하지 않습니다.')
+                        return
+                      }
+
+                      core.setOutput('should_deploy', 'true')
+                      core.setOutput('pr_number', String(prNumber))
+                      core.setOutput('head_sha', pullRequest.head.sha)
+
+    deploy:
+        needs: resolve
+        if: needs.resolve.outputs.should_deploy == 'true'
+        runs-on: ubuntu-latest
+        concurrency:
+            group: deploy-stage
+            cancel-in-progress: false
+        environment:
+            name: stage
+            url: https://stage-api.link-ding-dong.com/api-docs
+
+        steps:
+            - name: Checkout PR head
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ needs.resolve.outputs.head_sha }}
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: 1.3.14
+
+            - name: Install dependencies
+              run: bun install --frozen-lockfile
+
+            - name: Lint
+              run: bun run lint
+
+            - name: Test
+              run: bun run test -- --runInBand
+
+            - name: Build
+              run: bun run build
+
+            - name: Set image tag
+              id: image
+              env:
+                  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+                  DOCKERHUB_REPOSITORY: ${{ secrets.DOCKERHUB_REPOSITORY }}
+                  PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
+                  HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
+              run: |
+                  : "${DOCKERHUB_USERNAME:?DOCKERHUB_USERNAME is required}"
+                  : "${DOCKERHUB_REPOSITORY:?DOCKERHUB_REPOSITORY is required}"
+                  IMAGE_NAME="$(printf '%s/%s' "$DOCKERHUB_USERNAME" "$DOCKERHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+                  echo "tag=$IMAGE_NAME:stage-pr-$PR_NUMBER-$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Login to Docker Hub
+              uses: docker/login-action@v3
+              with:
+                  username: ${{ secrets.DOCKERHUB_USERNAME }}
+                  password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+            - name: Build and push stage image
+              uses: docker/build-push-action@v6
+              with:
+                  context: .
+                  push: true
+                  tags: ${{ steps.image.outputs.tag }}
+                  labels: com.promise9.environment=stage
+
+            - name: Create stage env file
+              env:
+                  DATABASE_URL_DEVELOPMENT: ${{ secrets.DATABASE_URL_DEVELOPMENT }}
+                  JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
+                  JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+                  JWT_ACCESS_EXPIRES_IN: ${{ secrets.JWT_ACCESS_EXPIRES_IN }}
+                  JWT_REFRESH_EXPIRES_IN: ${{ secrets.JWT_REFRESH_EXPIRES_IN }}
+                  GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+                  MASTER_ACCESS_TOKEN: ${{ secrets.MASTER_ACCESS_TOKEN }}
+                  MASTER_USER_ID: ${{ secrets.MASTER_USER_ID }}
+                  DB_POOL_SIZE: ${{ secrets.DB_POOL_SIZE }}
+              run: |
+                  : "${DATABASE_URL_DEVELOPMENT:?DATABASE_URL_DEVELOPMENT is required}"
+                  : "${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}"
+                  : "${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}"
+                  : "${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID is required}"
+
+                  {
+                    printf 'APP_ENV=development\n'
+                    printf 'DATABASE_URL_DEVELOPMENT=%s\n' "$DATABASE_URL_DEVELOPMENT"
+                    printf 'JWT_ACCESS_SECRET=%s\n' "$JWT_ACCESS_SECRET"
+                    printf 'JWT_REFRESH_SECRET=%s\n' "$JWT_REFRESH_SECRET"
+                    printf 'GOOGLE_CLIENT_ID=%s\n' "$GOOGLE_CLIENT_ID"
+
+                    if [ -n "$JWT_ACCESS_EXPIRES_IN" ]; then
+                      printf 'JWT_ACCESS_EXPIRES_IN=%s\n' "$JWT_ACCESS_EXPIRES_IN"
+                    fi
+                    if [ -n "$JWT_REFRESH_EXPIRES_IN" ]; then
+                      printf 'JWT_REFRESH_EXPIRES_IN=%s\n' "$JWT_REFRESH_EXPIRES_IN"
+                    fi
+                    if [ -n "$MASTER_ACCESS_TOKEN" ]; then
+                      printf 'MASTER_ACCESS_TOKEN=%s\n' "$MASTER_ACCESS_TOKEN"
+                    fi
+                    if [ -n "$MASTER_USER_ID" ]; then
+                      printf 'MASTER_USER_ID=%s\n' "$MASTER_USER_ID"
+                    fi
+                    if [ -n "$DB_POOL_SIZE" ]; then
+                      printf 'DB_POOL_SIZE=%s\n' "$DB_POOL_SIZE"
+                    fi
+                  } > .env.stage
+
+            - name: Ensure stage deploy directory
+              uses: appleboy/ssh-action@v1.2.0
+              with:
+                  host: ${{ secrets.LIGHTSAIL_HOST }}
+                  username: ${{ secrets.LIGHTSAIL_USERNAME }}
+                  key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+                  port: ${{ secrets.LIGHTSAIL_PORT || '22' }}
+                  script_stop: true
+                  script: |
+                      sudo mkdir -p /opt/promise9-stage
+                      sudo chown "$USER:$USER" /opt/promise9-stage
+
+            - name: Upload stage runtime files
+              uses: appleboy/scp-action@v0.1.7
+              with:
+                  host: ${{ secrets.LIGHTSAIL_HOST }}
+                  username: ${{ secrets.LIGHTSAIL_USERNAME }}
+                  key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+                  port: ${{ secrets.LIGHTSAIL_PORT || '22' }}
+                  source: docker-compose.stage.yml,.env.stage
+                  target: /opt/promise9-stage
+                  overwrite: true
+
+            - name: Deploy stage container
+              uses: appleboy/ssh-action@v1.2.0
+              env:
+                  NEW_IMAGE: ${{ steps.image.outputs.tag }}
+              with:
+                  host: ${{ secrets.LIGHTSAIL_HOST }}
+                  username: ${{ secrets.LIGHTSAIL_USERNAME }}
+                  key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+                  port: ${{ secrets.LIGHTSAIL_PORT || '22' }}
+                  envs: NEW_IMAGE
+                  script_stop: true
+                  script: |
+                      cd /opt/promise9-stage
+                      mv .env.stage .env
+                      chmod 600 .env
+
+                      APP_IMAGE="$NEW_IMAGE" docker compose -f docker-compose.stage.yml pull api
+                      APP_IMAGE="$NEW_IMAGE" docker compose -f docker-compose.stage.yml up -d --wait --wait-timeout 120 api
+
+                      docker image prune -af --filter "label=com.promise9.environment=stage"
+
+            - name: Comment stage deployment URL
+              uses: actions/github-script@v7
+              env:
+                  PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
+                  HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
+              with:
+                  script: |
+                      const prNumber = Number(process.env.PR_NUMBER)
+                      const sha = process.env.HEAD_SHA
+                      const shortSha = sha.slice(0, 7)
+                      const repositoryUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}`
+                      const runUrl = `${repositoryUrl}/actions/runs/${context.runId}`
+
+                      await github.rest.issues.createComment({
+                        ...context.repo,
+                        issue_number: prNumber,
+                        body: [
+                          '## ✅ Stage 배포 완료',
+                          '',
+                          '- Swagger: https://stage-api.link-ding-dong.com/api-docs',
+                          `- Commit: [\`${shortSha}\`](${repositoryUrl}/commit/${sha})`,
+                          `- Workflow: [실행 결과 확인](${runUrl})`,
+                          '',
+                          '> Stage는 하나의 공유 환경입니다. 다른 PR이 배포되면 이 주소의 애플리케이션이 교체될 수 있습니다.',
+                        ].join('\n'),
+                      })
