@@ -1,5 +1,5 @@
 {
-  "id": "ef06b5c6-0e92-488d-aeda-82a287785186",
+  "id": "7f5c3956-6928-4558-80f8-5d2f87b268e6",
   "prevId": "a4618794-47bf-4d2d-ba77-6e444ee59688",
   "version": "7",
   "dialect": "postgresql",
@@ -23,12 +23,6 @@
         "task_type": {
           "name": "task_type",
           "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "attempt_number": {
-          "name": "attempt_number",
-          "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
@@ -101,33 +95,6 @@
         }
       },
       "indexes": {
-        "ai_metrics_user_link_task_attempt_idx": {
-          "name": "ai_metrics_user_link_task_attempt_idx",
-          "columns": [
-            {
-              "expression": "user_link_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "task_type",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "attempt_number",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "ai_metrics_user_link_task_status_idx": {
           "name": "ai_metrics_user_link_task_status_idx",
           "columns": [

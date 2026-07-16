@@ -1,17 +1,9 @@
-import { DrizzleQueryError } from 'drizzle-orm'
-
-import { POSTGRES_ERROR_CODE } from '../../../common/constants/postgres'
 import { DatabaseService } from '../../../config/database/database.service'
-import {
-    AI_METRIC_ATTEMPT_UNIQUE_INDEX,
-    AI_METRIC_STATUS,
-    AI_TASK_TYPE,
-} from '../ai.constants'
+import { AI_METRIC_STATUS, AI_TASK_TYPE } from '../ai.constants'
 
 import { AiMetricService } from './ai-metric.service'
 
 type DbMock = {
-    select: jest.Mock
     insert: jest.Mock
 }
 
@@ -19,7 +11,6 @@ type MetricInsertPayload = {
     id: string
     userLinkId: number
     taskType: string
-    attemptNumber: number
     status: string
     modelProvider: string
     modelName: string
@@ -38,7 +29,6 @@ describe('AiMetricService', () => {
 
     beforeEach(() => {
         db = {
-            select: jest.fn(),
             insert: jest.fn(),
         }
         service = new AiMetricService({
@@ -46,11 +36,9 @@ describe('AiMetricService', () => {
         } as unknown as DatabaseService)
     })
 
-    it('성공 메트릭을 다음 attemptNumber로 기록한다', async () => {
-        const { where: selectWhere } = mockNextAttemptNumbers(db, [2])
+    it('성공 메트릭을 기록한다', async () => {
         const row = {
             id: '019886ad-0000-7000-8000-000000000001',
-            attemptNumber: 2,
         }
         const { values: insertValues } = mockInsertReturning(db, [row])
 
@@ -67,14 +55,12 @@ describe('AiMetricService', () => {
         })
 
         expect(result).toBe(row)
-        expect(selectWhere).toHaveBeenCalledTimes(1)
         const metric = getFirstCallArg<MetricInsertPayload>(insertValues)
 
         expect(typeof metric.id).toBe('string')
         expect(metric).toMatchObject({
             userLinkId: 1,
             taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
-            attemptNumber: 2,
             status: AI_METRIC_STATUS.SUCCESS,
             modelProvider: 'openai',
             modelName: 'gpt-test',
@@ -88,11 +74,9 @@ describe('AiMetricService', () => {
         })
     })
 
-    it('실패 메트릭을 다음 attemptNumber로 기록한다', async () => {
-        mockNextAttemptNumbers(db, [1])
+    it('실패 메트릭을 기록한다', async () => {
         const row = {
             id: '019886ad-0000-7000-8000-000000000002',
-            attemptNumber: 1,
         }
         const { values: insertValues } = mockInsertReturning(db, [row])
 
@@ -114,7 +98,6 @@ describe('AiMetricService', () => {
         expect(metric).toMatchObject({
             userLinkId: 1,
             taskType: AI_TASK_TYPE.TAG_GENERATE,
-            attemptNumber: 1,
             status: AI_METRIC_STATUS.FAILED,
             modelProvider: 'gemini',
             modelName: 'gemini-test',
@@ -128,65 +111,12 @@ describe('AiMetricService', () => {
         })
     })
 
-    it('attemptNumber unique 충돌은 다시 계산해 재시도한다', async () => {
-        mockNextAttemptNumbers(db, [1, 2])
-        const row = {
-            id: '019886ad-0000-7000-8000-000000000003',
-            attemptNumber: 2,
-        }
-        const insertReturning = jest
-            .fn()
-            .mockRejectedValueOnce(createAttemptConflictError())
-            .mockResolvedValueOnce([row])
-        const insertValues = jest.fn().mockReturnValue({
-            returning: insertReturning,
-        })
+    it('insert 오류를 그대로 전파한다', async () => {
+        const insertError = new Error('insert failed')
+        const returning = jest.fn().mockRejectedValue(insertError)
+        const values = jest.fn().mockReturnValue({ returning })
 
-        db.insert.mockReturnValue({
-            values: insertValues,
-        })
-
-        const result = await service.record({
-            userLinkId: 1,
-            taskType: AI_TASK_TYPE.TAG_GENERATE,
-            status: AI_METRIC_STATUS.SUCCESS,
-            modelProvider: 'gemini',
-            modelName: 'gemini-test',
-            promptKey: 'link_tag_default_v1',
-            generatedResult: {
-                tags: [],
-            },
-            ttlbMs: 200,
-        })
-
-        expect(result).toBe(row)
-        expect(insertReturning).toHaveBeenCalledTimes(2)
-        expect(insertValues).toHaveBeenNthCalledWith(
-            1,
-            expect.objectContaining({
-                attemptNumber: 1,
-            }),
-        )
-        expect(insertValues).toHaveBeenNthCalledWith(
-            2,
-            expect.objectContaining({
-                attemptNumber: 2,
-                promptKey: 'link_tag_default_v1',
-            }),
-        )
-    })
-
-    it('attemptNumber 충돌이 아닌 insert 오류는 재시도하지 않는다', async () => {
-        mockNextAttemptNumbers(db, [1])
-        const insertError = createUniqueConflictError('other_unique_index')
-        const insertReturning = jest.fn().mockRejectedValueOnce(insertError)
-        const insertValues = jest.fn().mockReturnValue({
-            returning: insertReturning,
-        })
-
-        db.insert.mockReturnValue({
-            values: insertValues,
-        })
+        db.insert.mockReturnValue({ values })
 
         await expect(
             service.record({
@@ -200,34 +130,9 @@ describe('AiMetricService', () => {
                 ttlbMs: 300,
             }),
         ).rejects.toBe(insertError)
-        expect(insertReturning).toHaveBeenCalledTimes(1)
+        expect(returning).toHaveBeenCalledTimes(1)
     })
 })
-
-function mockNextAttemptNumbers(db: DbMock, attemptNumbers: number[]) {
-    const where = jest.fn()
-
-    attemptNumbers.forEach((nextAttemptNumber) => {
-        where.mockResolvedValueOnce([
-            {
-                nextAttemptNumber,
-            },
-        ])
-    })
-
-    const from = jest.fn().mockReturnValue({
-        where,
-    })
-
-    db.select.mockReturnValue({
-        from,
-    })
-
-    return {
-        from,
-        where,
-    }
-}
 
 function mockInsertReturning(db: DbMock, rows: unknown[]) {
     const returning = jest.fn().mockResolvedValue(rows)
@@ -243,19 +148,6 @@ function mockInsertReturning(db: DbMock, rows: unknown[]) {
         values,
         returning,
     }
-}
-
-function createAttemptConflictError() {
-    return createUniqueConflictError(AI_METRIC_ATTEMPT_UNIQUE_INDEX)
-}
-
-function createUniqueConflictError(constraint: string) {
-    const postgresError = Object.assign(new Error('unique violation'), {
-        code: POSTGRES_ERROR_CODE.UNIQUE_VIOLATION,
-        constraint,
-    })
-
-    return new DrizzleQueryError('insert into ai_metrics', [], postgresError)
 }
 
 function getFirstCallArg<T>(mock: jest.Mock): T {
