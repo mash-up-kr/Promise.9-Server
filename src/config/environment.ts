@@ -6,12 +6,44 @@ export type RuntimeEnvironment = 'development' | 'production'
 
 const DEFAULT_LLM_REQUEST_TIMEOUT_MS = 30_000
 
-const envSchema = z
+// drizzle.config.ts에서 사용 — DB 접속 정보만 검증
+const dbEnvSchema = z
     .object({
         APP_ENV: z.enum(['development', 'production']).default('development'),
         DATABASE_URL_DEVELOPMENT: z.url().optional(),
         DATABASE_URL_PRODUCTION: z.url().optional(),
         DB_POOL_SIZE: z.coerce.number().int().positive().default(5),
+    })
+    .superRefine((env, ctx) => {
+        const key = getDatabaseUrlKey(env.APP_ENV)
+
+        if (!env[key]) {
+            ctx.addIssue({
+                code: 'custom',
+                path: [key],
+                message: `${key} 환경변수가 필요합니다.`,
+            })
+        }
+    })
+    .transform((env) => ({
+        ...env,
+        DATABASE_URL: env[getDatabaseUrlKey(env.APP_ENV)] as string,
+    }))
+
+// NestJS 앱에서 사용 — 전체 환경변수 검증
+const appEnvSchema = z
+    .object({
+        APP_ENV: z.enum(['development', 'production']).default('development'),
+        DATABASE_URL_DEVELOPMENT: z.url().optional(),
+        DATABASE_URL_PRODUCTION: z.url().optional(),
+        DB_POOL_SIZE: z.coerce.number().int().positive().default(5),
+        JWT_ACCESS_SECRET: z.string().min(1),
+        JWT_REFRESH_SECRET: z.string().min(1),
+        JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
+        JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
+        GOOGLE_CLIENT_ID: z.string().min(1),
+        MASTER_ACCESS_TOKEN: z.string().optional(),
+        MASTER_USER_ID: z.coerce.number().int().positive().optional(),
         LLM_DEFAULT_MODEL: z.enum(LLM_MODEL).default(LLM_MODEL.GPT_5_4_MINI),
         LLM_REQUEST_TIMEOUT_MS: z.coerce
             .number()
@@ -22,32 +54,38 @@ const envSchema = z
         GEMINI_API_KEY: z.string().min(1).optional(),
     })
     .superRefine((env, ctx) => {
-        // APP_ENV에 따라 DATABASE_URL_DEVELOPMENT 또는 DATABASE_URL_PRODUCTION을 요구한다.
-        const databaseUrlKey = getDatabaseUrlKey(env.APP_ENV)
+        const key = getDatabaseUrlKey(env.APP_ENV)
 
-        if (!env[databaseUrlKey]) {
+        if (!env[key]) {
             ctx.addIssue({
                 code: 'custom',
-                path: [databaseUrlKey],
-                message: `${databaseUrlKey} 환경변수가 필요합니다.`,
+                path: [key],
+                message: `${key} 환경변수가 필요합니다.`,
             })
         }
     })
-    .transform((env) => {
-        const databaseUrlKey = getDatabaseUrlKey(env.APP_ENV)
+    .transform((env) => ({
+        ...env,
+        DATABASE_URL: env[getDatabaseUrlKey(env.APP_ENV)] as string,
+    }))
 
-        return {
-            ...env,
-            DATABASE_URL: env[databaseUrlKey] as string,
-        }
-    })
-
-export type ValidatedEnvironment = z.output<typeof envSchema>
+export type ValidatedEnvironment = z.output<typeof appEnvSchema>
+export type ValidatedDbEnvironment = z.output<typeof dbEnvSchema>
 
 export function validateEnvironment(
     config: Record<string, unknown>,
 ): ValidatedEnvironment {
-    const result = envSchema.safeParse(config)
+    return parse(appEnvSchema, config)
+}
+
+export function validateDbEnvironment(
+    config: Record<string, unknown>,
+): ValidatedDbEnvironment {
+    return parse(dbEnvSchema, config)
+}
+
+function parse<T>(schema: z.ZodType<T>, config: Record<string, unknown>): T {
+    const result = schema.safeParse(config)
 
     if (!result.success) {
         const messages = result.error.issues

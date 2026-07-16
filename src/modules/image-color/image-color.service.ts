@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common'
 
+import { BaseException } from '../../common/exception/base.exception'
+
 import { NodeVibrantImageColorAnalyzer } from './analyzers/node-vibrant-image-color.analyzer'
 import { SharpImageColorAnalyzer } from './analyzers/sharp-image-color.analyzer'
 import { ImageFetcherService } from './image-fetcher/image-fetcher.service'
@@ -25,7 +27,6 @@ import {
     ImageColorSelectionSource,
     NODE_VIBRANT_COLOR_KEY_BY_SOURCE,
 } from './image-color.constants'
-import { ImageColorAnalysisFailedException } from './image-color.exception'
 import { toImageColorValue } from './image-color.util'
 
 @Injectable()
@@ -94,7 +95,7 @@ export class ImageColorService {
         try {
             return await this.nodeVibrantAnalyzer.analyze(image)
         } catch (error) {
-            if (error instanceof ImageColorAnalysisFailedException) {
+            if (error instanceof BaseException) {
                 return EMPTY_NODE_VIBRANT_RESULT
             }
 

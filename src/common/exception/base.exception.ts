@@ -7,13 +7,21 @@ export interface ErrorResponse {
 
 export interface ErrorData {
     code: number
-    errorCode: string
+    errorCode: number
     message: string
     timestamp: string
 }
 
 export class BaseException extends HttpException {
-    constructor(code: HttpStatus, errorCode: string, message: string) {
+    constructor({
+        code,
+        errorCode,
+        message,
+    }: {
+        code: HttpStatus
+        errorCode: number
+        message: string
+    }) {
         super(
             {
                 success: false,

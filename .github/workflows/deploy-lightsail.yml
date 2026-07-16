@@ -67,16 +67,24 @@ jobs:
           tags: |
             ${{ steps.image.outputs.name }}:${{ github.sha }}
             ${{ steps.image.outputs.name }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Create production env file
         env:
           DATABASE_URL_PRODUCTION: ${{ secrets.DATABASE_URL_PRODUCTION }}
+          JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          MASTER_ACCESS_TOKEN: ${{ secrets.MASTER_ACCESS_TOKEN }}
+          MASTER_USER_ID: ${{ secrets.MASTER_USER_ID }}
         run: |
           {
             printf 'APP_ENV=production\n'
             printf 'DATABASE_URL_PRODUCTION=%s\n' "$DATABASE_URL_PRODUCTION"
+            printf 'JWT_ACCESS_SECRET=%s\n' "$JWT_ACCESS_SECRET"
+            printf 'JWT_REFRESH_SECRET=%s\n' "$JWT_REFRESH_SECRET"
+            printf 'GOOGLE_CLIENT_ID=%s\n' "$GOOGLE_CLIENT_ID"
+            printf 'MASTER_ACCESS_TOKEN=%s\n' "$MASTER_ACCESS_TOKEN"
+            printf 'MASTER_USER_ID=%s\n' "$MASTER_USER_ID"
           } > .env.production
 
       - name: Ensure deploy directory
