@@ -40,6 +40,29 @@ type CliOptions = {
     help: boolean
 }
 
+type ValueOption = {
+    names: string[]
+    key: keyof CliOptions
+    parse?: (value: string) => unknown
+}
+
+const VALUE_OPTIONS: ValueOption[] = [
+    { names: ['--env', '-e'], key: 'env', parse: parseRuntimeEnvironment },
+    { names: ['--file', '-f'], key: 'file' },
+    { names: ['--confirm'], key: 'confirm' },
+    { names: ['--sslmode'], key: 'sslMode', parse: parseSslMode },
+    { names: ['--sslrootcert'], key: 'sslRootCert' },
+    { names: ['--pre-restore-backup-dir'], key: 'preRestoreBackupDir' },
+    { names: ['--pg-dump-path'], key: 'pgDumpPath' },
+    { names: ['--pg-restore-path'], key: 'pgRestorePath' },
+]
+
+const FLAG_OPTIONS: { names: string[]; key: keyof CliOptions }[] = [
+    { names: ['--help', '-h'], key: 'help' },
+    { names: ['--clean'], key: 'clean' },
+    { names: ['--allow-production'], key: 'allowProduction' },
+]
+
 const DEFAULT_PRE_RESTORE_BACKUP_DIR = 'backups/database/pre-restore'
 const RESTORE_EXECUTION_CONFIRM = 'Y'
 const TEAM_NAME_CONFIRM = '프로미스 나인'
@@ -175,120 +198,36 @@ function parseCliOptions(args: string[]): CliOptions {
     for (let index = 0; index < args.length; index += 1) {
         const arg = args[index]
 
-        if (arg === '--help' || arg === '-h') {
-            options.help = true
+        const flag = FLAG_OPTIONS.find(({ names }) => names.includes(arg))
+        if (flag) {
+            options[flag.key] = true as never
             continue
         }
 
-        if (arg === '--env' || arg === '-e') {
-            const { value, nextIndex } = readOptionValue(args, index, arg)
-            options.env = parseRuntimeEnvironment(value)
-            index = nextIndex
-            continue
+        const option = VALUE_OPTIONS.find(({ names }) =>
+            names.some((name) => arg === name || arg.startsWith(`${name}=`)),
+        )
+
+        if (!option) {
+            throw new Error(`알 수 없는 옵션입니다: ${arg}`)
         }
 
-        if (arg.startsWith('--env=')) {
-            options.env = parseRuntimeEnvironment(arg.slice('--env='.length))
-            continue
+        const equalName = option.names.find((name) =>
+            arg.startsWith(`${name}=`),
+        )
+        let value: string
+
+        if (equalName) {
+            value = arg.slice(equalName.length + 1)
+        } else {
+            const read = readOptionValue(args, index, arg)
+            value = read.value
+            index = read.nextIndex
         }
 
-        if (arg === '--file' || arg === '-f') {
-            const { value, nextIndex } = readOptionValue(args, index, arg)
-            options.file = value
-            index = nextIndex
-            continue
-        }
-
-        if (arg.startsWith('--file=')) {
-            options.file = arg.slice('--file='.length)
-            continue
-        }
-
-        if (arg === '--clean') {
-            options.clean = true
-            continue
-        }
-
-        if (arg === '--allow-production') {
-            options.allowProduction = true
-            continue
-        }
-
-        if (arg === '--confirm') {
-            const { value, nextIndex } = readOptionValue(args, index, arg)
-            options.confirm = value
-            index = nextIndex
-            continue
-        }
-
-        if (arg.startsWith('--confirm=')) {
-            options.confirm = arg.slice('--confirm='.length)
-            continue
-        }
-
-        if (arg === '--sslmode') {
-            const { value, nextIndex } = readOptionValue(args, index, arg)
-            options.sslMode = parseSslMode(value)
-            index = nextIndex
-            continue
-        }
-
-        if (arg.startsWith('--sslmode=')) {
-            options.sslMode = parseSslMode(arg.slice('--sslmode='.length))
-            continue
-        }
-
-        if (arg === '--sslrootcert') {
-            const { value, nextIndex } = readOptionValue(args, index, arg)
-            options.sslRootCert = value
-            index = nextIndex
-            continue
-        }
-
-        if (arg.startsWith('--sslrootcert=')) {
-            options.sslRootCert = arg.slice('--sslrootcert='.length)
-            continue
-        }
-
-        if (arg === '--pre-restore-backup-dir') {
-            const { value, nextIndex } = readOptionValue(args, index, arg)
-            options.preRestoreBackupDir = value
-            index = nextIndex
-            continue
-        }
-
-        if (arg.startsWith('--pre-restore-backup-dir=')) {
-            options.preRestoreBackupDir = arg.slice(
-                '--pre-restore-backup-dir='.length,
-            )
-            continue
-        }
-
-        if (arg === '--pg-dump-path') {
-            const { value, nextIndex } = readOptionValue(args, index, arg)
-            options.pgDumpPath = value
-            index = nextIndex
-            continue
-        }
-
-        if (arg.startsWith('--pg-dump-path=')) {
-            options.pgDumpPath = arg.slice('--pg-dump-path='.length)
-            continue
-        }
-
-        if (arg === '--pg-restore-path') {
-            const { value, nextIndex } = readOptionValue(args, index, arg)
-            options.pgRestorePath = value
-            index = nextIndex
-            continue
-        }
-
-        if (arg.startsWith('--pg-restore-path=')) {
-            options.pgRestorePath = arg.slice('--pg-restore-path='.length)
-            continue
-        }
-
-        throw new Error(`알 수 없는 옵션입니다: ${arg}`)
+        options[option.key] = (
+            option.parse ? option.parse(value) : value
+        ) as never
     }
 
     return options
