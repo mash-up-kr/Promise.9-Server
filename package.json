@@ -21,6 +21,7 @@
         "db:studio": "drizzle-kit studio",
         "db:backup": "bun run script/backup-db.ts",
         "db:backup:verify": "bun run script/verify-db-backup.ts",
+        "db:restore": "bun run script/restore-db.ts",
         "db:health": "bun run script/db-health.ts",
         "db:visualize_mermaid": "bun run script/visualize-db-mermaid.ts",
         "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" \"drizzle.config.ts\"",
