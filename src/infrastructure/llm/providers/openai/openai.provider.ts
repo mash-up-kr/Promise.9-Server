@@ -171,13 +171,13 @@ export class OpenAiProvider implements LlmProvider {
     private extractText(body: OpenAiResponse) {
         this.assertCompleted(body)
 
-        const refusal = body.output
+        const contents = body.output
             .filter((item) => item.type === 'message')
             .flatMap((item) => item.content)
-            .find(
-                (content) =>
-                    content.type === OPENAI_OUTPUT_CONTENT_TYPE.REFUSAL,
-            )
+
+        const refusal = contents.find(
+            (content) => content.type === OPENAI_OUTPUT_CONTENT_TYPE.REFUSAL,
+        )
 
         if (refusal) {
             throw new LlmProviderError(
@@ -191,9 +191,7 @@ export class OpenAiProvider implements LlmProvider {
             return body.output_text
         }
 
-        const text = body.output
-            .filter((item) => item.type === 'message')
-            .flatMap((item) => item.content)
+        const text = contents
             .filter(
                 (content) =>
                     content.type === OPENAI_OUTPUT_CONTENT_TYPE.OUTPUT_TEXT,
