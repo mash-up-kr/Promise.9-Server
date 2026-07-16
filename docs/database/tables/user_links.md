@@ -49,6 +49,7 @@ erDiagram
 
 - 동일 URL 중복 저장 방지는 사용자 단위로 처리한다.
 - 활성 링크는 `user_id + normalized_url` 기준으로 중복 저장을 막는다.
+- `id + user_id` 유니크 제약을 둔다. `tags`의 `(link_id, user_id)` 복합 FK가 참조하는 대상으로, 태그·링크의 소유자 정합성을 보장하기 위함이다.
 - `normalized_url`은 redirect 추적에 성공하면 `final_url`을 정규화하고, 실패하면 `original_url`을 정규화해 저장한다.
 - 같은 URL이 최근 삭제된 항목에 있을 때 새 저장을 막을지, 새 저장을 허용할지, 복원으로 유도할지는 기획 논의가 필요하다.
 - 폴더 미선택 상태와 복원 후 미분류 상태는 `folder_id IS NULL`로 표현한다.
@@ -94,6 +95,9 @@ erDiagram
 ## 인덱스 설계
 
 ```sql
+ALTER TABLE user_links
+  ADD CONSTRAINT user_links_id_user_id_unique UNIQUE (id, user_id);
+
 CREATE UNIQUE INDEX user_links_user_id_normalized_url_active_idx
   ON user_links (user_id, normalized_url)
   WHERE deleted_at IS NULL;
@@ -113,6 +117,7 @@ CREATE INDEX user_links_deleted_at_idx
   WHERE deleted_at IS NOT NULL;
 ```
 
+- `id + user_id` (유니크 제약): `tags`의 `(link_id, user_id)` 복합 FK 참조 대상. 태그·링크 소유자 정합성 보장용.
 - `user_id + normalized_url`: 사용자별 활성 링크 중복 저장 방지.
 - `user_id + created_at`: 내 링크 목록 최신순 조회용.
 - `user_id + folder_id + created_at`: 폴더별 링크 목록 조회용.

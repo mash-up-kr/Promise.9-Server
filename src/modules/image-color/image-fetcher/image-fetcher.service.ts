@@ -5,6 +5,7 @@ import { Readable } from 'node:stream'
 
 import { BadRequestException, HttpException, Injectable } from '@nestjs/common'
 
+import { BaseException } from '../../../common/exception/base.exception'
 import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
 
 import {
@@ -13,14 +14,11 @@ import {
     MAX_IMAGE_FETCH_OPTIONS,
 } from './image-fetcher.constants'
 import {
-    ImageFetchFailedException,
-    ImageFetchTimeoutException,
-} from './image-fetcher.exception'
-import {
     FetchedImage,
     ImageFetchOptions,
     ResolvedImageFetchOptions,
 } from './image-fetcher.type'
+import { IMAGE_FETCHER_ERROR } from './image-fetcher-error.constant'
 import { ImageResponseReader } from './image-response.reader'
 
 type ImageFetchTimeout = {
@@ -43,7 +41,9 @@ export class ImageFetcherService {
     ): Promise<FetchedImage> {
         const resolvedOptions = this.resolveOptions(options)
         const abortController = new AbortController()
-        const timeoutError = new ImageFetchTimeoutException()
+        const timeoutError = new BaseException(
+            IMAGE_FETCHER_ERROR.FETCH_TIMEOUT,
+        )
         const timeoutTask = this.createTimeout(
             resolvedOptions.timeoutMs,
             abortController,
@@ -68,7 +68,7 @@ export class ImageFetcherService {
                 throw timeoutError
             }
 
-            throw new ImageFetchFailedException()
+            throw new BaseException(IMAGE_FETCHER_ERROR.FETCH_FAILED)
         } finally {
             clearTimeout(timeoutTask.timeout)
         }
@@ -88,9 +88,7 @@ export class ImageFetcherService {
 
         if (!response.ok) {
             this.cancelResponseBody(response)
-            throw new ImageFetchFailedException(
-                `이미지 요청에 실패했습니다. status=${response.status}`,
-            )
+            throw new BaseException(IMAGE_FETCHER_ERROR.INVALID_RESPONSE_STATUS)
         }
 
         const { contentType, buffer } = await this.responseReader.read(
@@ -135,8 +133,8 @@ export class ImageFetcherService {
 
             try {
                 if (redirectCount === options.maxRedirects) {
-                    throw new ImageFetchFailedException(
-                        '이미지 URL 리다이렉트 횟수가 너무 많습니다.',
+                    throw new BaseException(
+                        IMAGE_FETCHER_ERROR.TOO_MANY_REDIRECTS,
                     )
                 }
 
@@ -146,9 +144,7 @@ export class ImageFetcherService {
             }
         }
 
-        throw new ImageFetchFailedException(
-            '이미지 URL 리다이렉트 처리에 실패했습니다.',
-        )
+        throw new BaseException(IMAGE_FETCHER_ERROR.REDIRECT_FAILED)
     }
 
     private request(
@@ -256,8 +252,8 @@ export class ImageFetcherService {
         const location = response.headers.get('location')
 
         if (!location) {
-            throw new ImageFetchFailedException(
-                '이미지 URL 리다이렉트 위치가 없습니다.',
+            throw new BaseException(
+                IMAGE_FETCHER_ERROR.REDIRECT_LOCATION_MISSING,
             )
         }
 
@@ -331,9 +327,9 @@ export class ImageFetcherService {
     private createTimeout(
         timeoutMs: number,
         controller: AbortController,
-        timeoutError: ImageFetchTimeoutException,
+        timeoutError: BaseException,
     ): ImageFetchTimeout {
-        let rejectTimeout!: (error: ImageFetchTimeoutException) => void
+        let rejectTimeout!: (error: BaseException) => void
         const promise = new Promise<never>((_, reject) => {
             rejectTimeout = reject
         })

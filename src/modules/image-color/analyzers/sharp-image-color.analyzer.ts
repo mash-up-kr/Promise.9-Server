@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common'
 import sharp, { type Stats } from 'sharp'
 
-import { ImageColorAnalysisFailedException } from '../image-color.exception'
+import { BaseException } from '../../../common/exception/base.exception'
 import { toImageColorValue } from '../image-color.util'
+import { IMAGE_COLOR_ERROR } from '../image-color-error.constant'
 import { FetchedImage } from '../image-fetcher/image-fetcher.type'
 import { SharpImageColorResult } from '../types/image-color.type'
 
@@ -22,9 +23,7 @@ export class SharpImageColorAnalyzer {
                 ]),
             }
         } catch (_error) {
-            throw new ImageColorAnalysisFailedException(
-                'sharp로 이미지 색상을 추출할 수 없습니다.',
-            )
+            throw new BaseException(IMAGE_COLOR_ERROR.SHARP_ANALYSIS_FAILED)
         }
     }
 
