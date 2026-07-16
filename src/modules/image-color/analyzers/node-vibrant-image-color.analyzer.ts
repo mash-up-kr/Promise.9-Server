@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common'
 import { Vibrant } from 'node-vibrant/node'
 
-import { ImageColorAnalysisFailedException } from '../image-color.exception'
+import { BaseException } from '../../../common/exception/base.exception'
+import { IMAGE_COLOR_ERROR } from '../image-color-error.constant'
 import { FetchedImage } from '../image-fetcher/image-fetcher.type'
 import {
     NodeVibrantImageColorResult,
@@ -32,9 +33,7 @@ export class NodeVibrantImageColorAnalyzer {
                 },
             }
         } catch (_error) {
-            throw new ImageColorAnalysisFailedException(
-                '이미지 색상 팔레트를 추출할 수 없습니다.',
-            )
+            throw new BaseException(IMAGE_COLOR_ERROR.PALETTE_ANALYSIS_FAILED)
         }
     }
 

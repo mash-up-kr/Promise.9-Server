@@ -13,8 +13,8 @@ import {
 } from '../../../common/security/url-security/url-security.service'
 
 import { MAX_IMAGE_FETCH_OPTIONS } from './image-fetcher.constants'
-import { ImageFetchFailedException } from './image-fetcher.exception'
 import { ImageFetcherService } from './image-fetcher.service'
+import { IMAGE_FETCHER_ERROR } from './image-fetcher-error.constant'
 import { ImageResponseReader } from './image-response.reader'
 
 describe('ImageFetcherService', () => {
@@ -121,9 +121,13 @@ describe('ImageFetcherService', () => {
             createResolvedPublicUrl('93.184.216.34'),
         )
 
-        await expect(service.fetch(imageUrl)).rejects.toBeInstanceOf(
-            ImageFetchFailedException,
-        )
+        await expect(service.fetch(imageUrl)).rejects.toMatchObject({
+            response: {
+                error: {
+                    errorCode: IMAGE_FETCHER_ERROR.FETCH_FAILED.errorCode,
+                },
+            },
+        })
         expect(requestMock).toHaveBeenCalledTimes(1)
         expect(cancelSpy).toHaveBeenCalledTimes(1)
     })

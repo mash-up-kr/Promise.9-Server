@@ -18,7 +18,7 @@ erDiagram
 
   AI_SUMMARY_METRICS {
     uuid id PK
-    bigint user_link_id
+    bigint link_id
     integer attempt_number
     varchar status
     varchar model_provider
@@ -43,7 +43,7 @@ erDiagram
 | 필드 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | id | uuid | Y | AI 요약 메트릭 식별자. 비동기 작업 추적을 위해 애플리케이션에서 선발급 가능 |
-| user_link_id | bigint | Y | 요약 대상 사용자 저장 링크 ID. 물리 FK 없이 논리 참조로 저장 |
+| link_id | bigint | Y | 요약 대상 사용자 저장 링크 ID. 물리 FK 없이 논리 참조로 저장 |
 | attempt_number | integer | Y | 같은 사용자 저장 링크 내 요약 시도 순번. 최초 시도는 `1` |
 | status | varchar | Y | 요약 시도 상태. 예: `PENDING`, `SUCCESS`, `NEEDS_REVIEW`, `FAILED` |
 | model_provider | varchar | Y | 모델 제공자. 예: `openai` |
@@ -64,7 +64,7 @@ erDiagram
 ## 제약
 
 - `ai_summary_metrics`는 실패 기록 보장을 우선하므로 DB 물리 FK를 두지 않는다.
-- 같은 사용자 저장 링크 안에서는 `user_link_id + attempt_number`가 유니크해야 한다.
+- 같은 사용자 저장 링크 안에서는 `link_id + attempt_number`가 유니크해야 한다.
 - 같은 사용자 저장 링크 안에서 가장 큰 `attempt_number`를 가진 `SUCCESS` 메트릭의 `generated_summary`를 `user_links.ai_summary`의 기본 채택 대상으로 본다.
 - `status = NEEDS_REVIEW`는 요약은 생성됐지만 품질 확인이 필요한 시도를 의미한다. 예: 300자 미만, 처리 시간 임계값 초과, 원문 부족.
 - `status = FAILED`는 해당 요약 시도가 실패해 `error_code`, `error_message`가 기록된 상태를 의미한다.
@@ -79,18 +79,18 @@ erDiagram
 ## 인덱스 설계
 
 ```sql
-CREATE UNIQUE INDEX ai_summary_metrics_user_link_attempt_idx
-  ON ai_summary_metrics (user_link_id, attempt_number);
+CREATE UNIQUE INDEX ai_summary_metrics_link_attempt_idx
+  ON ai_summary_metrics (link_id, attempt_number);
 
-CREATE INDEX ai_summary_metrics_user_link_status_idx
-  ON ai_summary_metrics (user_link_id, status);
+CREATE INDEX ai_summary_metrics_link_status_idx
+  ON ai_summary_metrics (link_id, status);
 
 CREATE INDEX ai_summary_metrics_model_created_at_idx
   ON ai_summary_metrics (model_provider, model_name, created_at);
 ```
 
-- `user_link_id + attempt_number`: 같은 사용자 저장 링크의 재시도 순번 중복 방지.
-- `user_link_id + status`: 특정 사용자 저장 링크의 성공/실패 요약 시도 조회용.
+- `link_id + attempt_number`: 같은 사용자 저장 링크의 재시도 순번 중복 방지.
+- `link_id + status`: 특정 사용자 저장 링크의 성공/실패 요약 시도 조회용.
 - `model_provider + model_name + created_at`: 모델별 비용/성능 집계용.
 
 ## 재시도 정책

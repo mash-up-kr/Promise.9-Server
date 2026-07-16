@@ -8,10 +8,12 @@ import {
     ParseIntPipe,
     Patch,
     Post,
+    UseGuards,
 } from '@nestjs/common'
-import { ApiTags } from '@nestjs/swagger'
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 
-import { DEV_USER_ID } from '../../common/constants/dev-user'
+import { CurrentUser } from '../../common/decorators/current-user.decorator'
+import { AuthUser, JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ZodValidationPipe } from '../../common/pipe/zod-validation.pipe'
 
 import {
@@ -30,46 +32,56 @@ import {
 } from './folder.swagger'
 
 @ApiTags('Folder')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('folders')
 export class FolderController {
     constructor(private readonly folderService: FolderService) {}
 
     @Get()
     @ApiListFolders()
-    list() {
-        return this.folderService.list(DEV_USER_ID)
+    list(@CurrentUser() user: AuthUser) {
+        return this.folderService.list(user.userId)
     }
 
     @Post()
     @HttpCode(201)
     @ApiCreateFolder()
     create(
+        @CurrentUser() user: AuthUser,
         @Body(new ZodValidationPipe(createFolderSchema))
         body: CreateFolderInput,
     ) {
-        return this.folderService.create(DEV_USER_ID, body)
+        return this.folderService.create(user.userId, body)
     }
 
     @Patch(':folderId')
     @ApiRenameFolder()
     rename(
+        @CurrentUser() user: AuthUser,
         @Param('folderId', ParseIntPipe) folderId: number,
         @Body(new ZodValidationPipe(updateFolderSchema))
         body: UpdateFolderInput,
     ) {
-        return this.folderService.rename(DEV_USER_ID, folderId, body)
+        return this.folderService.rename(user.userId, folderId, body)
     }
 
     @Delete(':folderId')
     @HttpCode(204)
     @ApiRemoveFolder()
-    remove(@Param('folderId', ParseIntPipe) folderId: number) {
-        return this.folderService.remove(DEV_USER_ID, folderId)
+    remove(
+        @CurrentUser() user: AuthUser,
+        @Param('folderId', ParseIntPipe) folderId: number,
+    ) {
+        return this.folderService.remove(user.userId, folderId)
     }
 
     @Get(':folderId/links')
     @ApiGetFolderLinks()
-    getLinks(@Param('folderId', ParseIntPipe) folderId: number) {
-        return this.folderService.getLinks(DEV_USER_ID, folderId)
+    getLinks(
+        @CurrentUser() user: AuthUser,
+        @Param('folderId', ParseIntPipe) folderId: number,
+    ) {
+        return this.folderService.getLinks(user.userId, folderId)
     }
 }

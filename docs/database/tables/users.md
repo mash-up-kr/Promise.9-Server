@@ -9,7 +9,7 @@ erDiagram
   USERS ||--o{ SOCIAL_ACCOUNTS : owns
   USERS ||--o{ FOLDERS : creates
   USERS ||--o{ USER_LINKS : saves
-  USERS ||--o{ USER_LINK_REMINDERS : schedules
+  USERS ||--o{ REFRESH_TOKENS : issues
 
   USERS {
     bigint id PK
@@ -34,7 +34,7 @@ erDiagram
     bigint user_id FK
   }
 
-  USER_LINK_REMINDERS {
+  REFRESH_TOKENS {
     bigint id PK
     bigint user_id FK
   }
