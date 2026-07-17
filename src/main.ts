@@ -9,6 +9,11 @@ import { AppModule } from './app.module'
 async function bootstrap() {
     const app = await NestFactory.create(AppModule)
 
+    app.enableCors({
+        origin: ['http://localhost:8090', 'https://link-ding-dong.com'],
+        credentials: true,
+    })
+
     app.useGlobalFilters(new GlobalExceptionFilter())
     app.useGlobalInterceptors(new CommonResponseInterceptor())
     app.useGlobalPipes(new ValidationPipe({ whitelist: true }))
