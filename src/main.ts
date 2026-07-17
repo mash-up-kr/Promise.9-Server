@@ -12,6 +12,7 @@ async function bootstrap() {
     app.useGlobalFilters(new GlobalExceptionFilter())
     app.useGlobalInterceptors(new CommonResponseInterceptor())
     app.useGlobalPipes(new ValidationPipe({ whitelist: true }))
+    app.setGlobalPrefix('api/v1')
 
     swaggerConfig(app)
 
