@@ -1,0 +1,11 @@
+export const GEMINI_RESPONSE_MIME_TYPE = {
+    JSON: 'application/json',
+} as const
+
+export const GEMINI_MAX_ATTEMPTS = 2
+
+export const GEMINI_ERROR_CODE = {
+    REQUEST_FAILED: 'GEMINI_REQUEST_FAILED',
+    PROMPT_BLOCKED: 'GEMINI_PROMPT_BLOCKED',
+    EMPTY_RESPONSE: 'GEMINI_EMPTY_RESPONSE',
+} as const
