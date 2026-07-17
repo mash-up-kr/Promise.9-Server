@@ -1,6 +1,10 @@
 import { z } from 'zod'
 
+import { LLM_MODEL } from '../common/constants/llm'
+
 export type RuntimeEnvironment = 'development' | 'production'
+
+const DEFAULT_LLM_REQUEST_TIMEOUT_MS = 30_000
 
 // drizzle.config.ts에서 사용 — DB 접속 정보만 검증
 const dbEnvSchema = z
@@ -40,6 +44,14 @@ const appEnvSchema = z
         GOOGLE_CLIENT_ID: z.string().min(1),
         MASTER_ACCESS_TOKEN: z.string().optional(),
         MASTER_USER_ID: z.coerce.number().int().positive().optional(),
+        LLM_DEFAULT_MODEL: z.enum(LLM_MODEL).default(LLM_MODEL.GPT_5_4_MINI),
+        LLM_REQUEST_TIMEOUT_MS: z.coerce
+            .number()
+            .int()
+            .positive()
+            .default(DEFAULT_LLM_REQUEST_TIMEOUT_MS),
+        OPENAI_API_KEY: z.string().min(1).optional(),
+        GEMINI_API_KEY: z.string().min(1).optional(),
     })
     .superRefine((env, ctx) => {
         const key = getDatabaseUrlKey(env.APP_ENV)
