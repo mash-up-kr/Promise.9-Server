@@ -13,6 +13,12 @@ const booleanQuerySchema = z.preprocess((value) => {
     return value
 }, z.boolean())
 
+// 링크 저장 전 OG 미리보기 조회용 쿼리 (url 하나)
+export const linkPreviewQuerySchema = z.object({
+    url: z.url(),
+})
+export type LinkPreviewQueryInput = z.infer<typeof linkPreviewQuerySchema>
+
 export const createLinkSchema = z.object({
     url: z.url(),
     folderId: z.number().int().positive().nullish(),

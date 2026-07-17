@@ -83,10 +83,10 @@ GET /links?folderId=3&favorite=true&q=피그마&limit=9
 ## 링크 미리보기
 
 ```http
-GET /links/preview?url={encodedUrl}
+GET /links/preview?url=https%3A%2F%2Ftoss.tech%2Farticle%2F50893
 ```
 
-저장 전에 원문의 OG 메타데이터를 조회한다.
+저장 전에 원문의 OG 메타데이터를 조회한다. 아무것도 저장하지 않는다.
 
 | Query | 타입        | 필수 | 설명                |
 | ----- | ----------- | ---- | ------------------- |
@@ -98,12 +98,22 @@ GET /links/preview?url={encodedUrl}
 {
     "success": true,
     "data": {
-        "title": "문서 제목",
+        "title": "누군가는 토스를 테스트하는 동안, 우리는 테스트하는 법을 만듭니다.",
         "source": "toss.tech",
-        "thumbnailUrl": null
+        "thumbnailUrl": "https://static.toss.im/assets/tech-blog/og-image/techblog-og.png"
     }
 }
 ```
+
+- `title`: `og:title` → `<title>` 순으로 찾고, 없으면 `null`
+- `thumbnailUrl`: `og:image` → `twitter:image` 순으로 찾아 절대 URL로 반환하며, 없으면 `null`
+- `source`: 리다이렉트를 모두 따라간 최종 URL의 호스트에서 선행 `www.`를 제거한 값
+- 내부망·비 http(s)·잘못된 형식의 URL은 `400`(`910001`)으로 응답한다.
+- 원문 요청 실패는 원인별로 구분해 응답한다.
+    - `930004` (`502`): 네트워크·연결 오류로 요청 자체가 실패
+    - `930005` (`504`): 제한 시간 안에 응답을 받지 못함
+    - `930006` (`502`): 원문 서버가 2xx가 아닌 상태로 응답 (message에 실제 상태 코드 포함, 예: `... 404 상태로 응답했습니다.`)
+    - `930007` (`502`): 리다이렉트가 너무 많거나 Location 헤더가 없어 최종 페이지에 도달 실패
 
 ## 링크 저장
 

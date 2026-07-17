@@ -20,17 +20,21 @@ import { ZodValidationPipe } from '../../common/pipe/zod-validation.pipe'
 import {
     CreateLinkInput,
     createLinkSchema,
+    LinkPreviewQueryInput,
+    linkPreviewQuerySchema,
     ListLinksQueryInput,
     listLinksQuerySchema,
     UpdateLinkInput,
     updateLinkSchema,
 } from './dto/link.dto'
 import { CreateLinkTagInput, createLinkTagSchema } from './dto/tag.dto'
+import { OgService } from './og/og.service'
 import { LinkService } from './link.service'
 import {
     ApiCreateLink,
     ApiCreateLinkTag,
     ApiLinkDetail,
+    ApiLinkPreview,
     ApiListLinks,
     ApiMarkLinkViewed,
     ApiRemoveLink,
@@ -44,7 +48,10 @@ import {
 @UseGuards(JwtAuthGuard)
 @Controller('links')
 export class LinkController {
-    constructor(private readonly linkService: LinkService) {}
+    constructor(
+        private readonly linkService: LinkService,
+        private readonly ogService: OgService,
+    ) {}
 
     @Post()
     @HttpCode(201)
@@ -64,6 +71,16 @@ export class LinkController {
         query: ListLinksQueryInput,
     ) {
         return this.linkService.list(user.userId, query)
+    }
+
+    // ':linkId' 라우트보다 먼저 선언해 'preview'가 ID로 잡히지 않게 한다.
+    @Get('preview')
+    @ApiLinkPreview()
+    preview(
+        @Query(new ZodValidationPipe(linkPreviewQuerySchema))
+        query: LinkPreviewQueryInput,
+    ) {
+        return this.ogService.preview(query.url)
     }
 
     @Get(':linkId')

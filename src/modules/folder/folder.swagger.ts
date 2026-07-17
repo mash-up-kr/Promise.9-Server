@@ -18,6 +18,8 @@ import { AUTH_ERROR } from '../auth/auth-error.constant'
 import { CreateFolderDto, UpdateFolderDto } from './dto/folder.dto'
 import {
     CreateFolderResponseDto,
+    FolderColorsResponseDto,
+    GetFolderResponseDto,
     ListFoldersResponseDto,
     UpdateFolderResponseDto,
 } from './dto/folder.response.dto'
@@ -60,7 +62,7 @@ ${LINK_LIST_ITEMS_DESCRIPTION}
 `
 
 const UPDATE_FOLDER_DESCRIPTION = `
-사용자가 생성한 실제 폴더 row의 정보를 수정합니다. 현재 변경 가능한 속성은 \`folderName\`입니다.
+사용자가 생성한 실제 폴더 row의 정보를 수정합니다. 변경 가능한 속성은 \`folderName\`과 \`color\`이며, 넘어온 값만 반영합니다(최소 하나 필요).
 
 ${LINK_LIST_ITEMS_DESCRIPTION}
 `
@@ -84,12 +86,14 @@ const LIST_FOLDERS_RESPONSE_EXAMPLE = {
         {
             folderId: 3,
             folderName: '디자인',
+            color: '#61a8ef',
             linkCount: 12,
             lastSavedAt: TIMESTAMP_EXAMPLE,
         },
         {
             folderId: 4,
             folderName: 'AI',
+            color: '#b282cc',
             linkCount: 8,
             lastSavedAt: '2026-07-12T03:20:00.000Z',
         },
@@ -99,12 +103,14 @@ const LIST_FOLDERS_RESPONSE_EXAMPLE = {
 const CREATE_FOLDER_RESPONSE_EXAMPLE = {
     folderId: 3,
     folderName: '디자인',
+    color: '#000000',
     createdAt: TIMESTAMP_EXAMPLE,
 }
 
 const UPDATE_FOLDER_RESPONSE_EXAMPLE = {
     folderId: 3,
     folderName: '프로덕트 디자인',
+    color: '#61a8ef',
     updatedAt: TIMESTAMP_EXAMPLE,
 }
 
@@ -156,6 +162,20 @@ export const ApiListFolders = () =>
         ),
     )
 
+export const ApiListFolderColors = () =>
+    applyDecorators(
+        ApiOperation({ summary: '선택 가능한 폴더 색상 목록 조회' }),
+        ApiCommonResponse(FolderColorsResponseDto, {
+            description: '조회 성공',
+        }),
+    )
+
+export const ApiGetFolder = () =>
+    applyDecorators(
+        ApiOperation({ summary: '폴더 상세 조회 (색상 포함)' }),
+        ApiCommonResponse(GetFolderResponseDto, { description: '조회 성공' }),
+    )
+
 export const ApiCreateFolder = () =>
     applyDecorators(
         ApiOperation({
@@ -164,7 +184,8 @@ export const ApiCreateFolder = () =>
         }),
         ApiBody({
             type: CreateFolderDto,
-            description: '- `folderName` (필수): 생성할 폴더 이름',
+            description:
+                '- `folderName` (필수): 생성할 폴더 이름\n- `color` (선택): 폴더 색상 hex. 미지정 시 기본색(검정) (GET /folders/colors 목록 중 하나)',
         }),
         ApiCommonResponse(CreateFolderResponseDto, {
             status: 201,
@@ -181,7 +202,7 @@ export const ApiCreateFolder = () =>
 export const ApiUpdateFolder = () =>
     applyDecorators(
         ApiOperation({
-            summary: '폴더 수정',
+            summary: '폴더 수정 (이름/색상)',
             description: UPDATE_FOLDER_DESCRIPTION,
         }),
         ApiParam({
@@ -194,7 +215,7 @@ export const ApiUpdateFolder = () =>
         ApiBody({
             type: UpdateFolderDto,
             description:
-                '- `folderName` (필수): 변경할 폴더 이름. 현재 수정 가능한 유일한 필드',
+                '- `folderName` (선택): 변경할 폴더 이름\n- `color` (선택): 변경할 폴더 색상 hex (GET /folders/colors 목록 중 하나)\n- 최소 하나는 넘겨야 합니다.',
         }),
         ApiCommonResponse(UpdateFolderResponseDto, {
             description: '변경 성공',

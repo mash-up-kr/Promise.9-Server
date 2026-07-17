@@ -28,6 +28,8 @@ import {
 import { FolderService } from './folder.service'
 import {
     ApiCreateFolder,
+    ApiGetFolder,
+    ApiListFolderColors,
     ApiListFolders,
     ApiRemoveFolder,
     ApiUpdateFolder,
@@ -48,6 +50,22 @@ export class FolderController {
         query: ListFoldersQueryInput,
     ) {
         return this.folderService.list(user.userId, query)
+    }
+
+    // ':folderId' 파라미터 라우트보다 먼저 선언해 'colors'가 ID로 잡히지 않게 한다.
+    @Get('colors')
+    @ApiListFolderColors()
+    listColors() {
+        return this.folderService.listColors()
+    }
+
+    @Get(':folderId')
+    @ApiGetFolder()
+    get(
+        @CurrentUser() user: AuthUser,
+        @Param('folderId', ParseIntPipe) folderId: number,
+    ) {
+        return this.folderService.get(user.userId, folderId)
     }
 
     @Post()

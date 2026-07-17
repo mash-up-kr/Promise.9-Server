@@ -11,6 +11,7 @@ import {
     ListFoldersQueryInput,
     UpdateFolderInput,
 } from './dto/folder.dto'
+import { FOLDER_COLORS } from './folder.constants'
 import { FolderRow, folders } from './folder.schema'
 import { FOLDER_ERROR } from './folder-error.constant'
 
@@ -25,21 +26,26 @@ export class FolderService {
         return this.databaseService.db
     }
 
+    // 프론트가 폴더 색상 선택 UI를 그릴 수 있도록 백엔드 팔레트를 그대로 내려준다.
+    listColors() {
+        return { colors: [...FOLDER_COLORS] }
+    }
+
     async create(userId: number, input: CreateFolderInput) {
         await this.assertActiveNameAvailable(userId, input.folderName)
 
         const [row] = await this.throwOnDuplicateName(() =>
             this.db
                 .insert(folders)
-                .values({ userId, name: input.folderName })
+                .values({
+                    userId,
+                    name: input.folderName,
+                    color: input.color,
+                })
                 .returning(),
         )
 
-        return {
-            folderId: row.id,
-            folderName: row.name,
-            createdAt: row.createdAt,
-        }
+        return { ...this.toFolderSummary(row), createdAt: row.createdAt }
     }
 
     async list(userId: number, input: ListFoldersQueryInput) {
@@ -53,14 +59,18 @@ export class FolderService {
         const linkCounts = await this.linkService.countActiveByFolder(userId)
 
         const folderRows = await this.db
-            .select({ folderId: folders.id, folderName: folders.name })
+            .select({
+                id: folders.id,
+                name: folders.name,
+                color: folders.color,
+            })
             .from(folders)
             .where(eq(folders.userId, userId))
             .orderBy(desc(folders.updatedAt))
 
         const folderList = folderRows.map((folder) => ({
-            ...folder,
-            linkCount: linkCounts.get(folder.folderId) ?? 0,
+            ...this.toFolderSummary(folder),
+            linkCount: linkCounts.get(folder.id) ?? 0,
             // TODO: 폴더별 MAX(links.createdAt) 집계 결과를 연결한다.
             lastSavedAt: null,
         }))
@@ -79,25 +89,43 @@ export class FolderService {
         }
     }
 
+    // 폴더 상세 조회 (색상 포함). 소유권 확인은 getOwnedFolder가 담당.
+    async get(userId: number, folderId: number) {
+        const folder = await this.getOwnedFolder(userId, folderId)
+
+        return this.toFolderSummary(folder)
+    }
+
+    // 이름·색상 중 넘어온 값만 부분 수정. (이름을 바꿀 때만 중복 검사)
     async update(userId: number, folderId: number, input: UpdateFolderInput) {
         await this.getOwnedFolder(userId, folderId)
-        await this.assertActiveNameAvailable(userId, input.folderName, folderId)
+
+        if (input.folderName !== undefined) {
+            await this.assertActiveNameAvailable(
+                userId,
+                input.folderName,
+                folderId,
+            )
+        }
+
+        // 넘어온 필드만 반영 (undefined는 무시해 기존 값 유지)
+        const changes = {
+            ...(input.folderName !== undefined && { name: input.folderName }),
+            ...(input.color !== undefined && { color: input.color }),
+            updatedAt: new Date(),
+        }
 
         const [row] = await this.throwOnDuplicateName(() =>
             this.db
                 .update(folders)
-                .set({ name: input.folderName, updatedAt: new Date() })
+                .set(changes)
                 .where(
                     and(eq(folders.id, folderId), eq(folders.userId, userId)),
                 )
                 .returning(),
         )
 
-        return {
-            folderId: row.id,
-            folderName: row.name,
-            updatedAt: row.updatedAt,
-        }
+        return { ...this.toFolderSummary(row), updatedAt: row.updatedAt }
     }
 
     async remove(userId: number, folderId: number) {
@@ -168,6 +196,11 @@ export class FolderService {
         if (row) {
             throw new BaseException(FOLDER_ERROR.NAME_DUPLICATE)
         }
+    }
+
+    // folders row를 API 응답용 폴더 요약(색상 포함)으로 변환한다. (응답 필드명 계약의 단일 출처)
+    private toFolderSummary(row: Pick<FolderRow, 'id' | 'name' | 'color'>) {
+        return { folderId: row.id, folderName: row.name, color: row.color }
     }
 
     // 폴더 소유권을 확인하고, 없거나 타 사용자 소유면 404로 처리한다.
