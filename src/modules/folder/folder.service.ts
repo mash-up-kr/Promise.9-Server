@@ -6,7 +6,11 @@ import { DatabaseService } from '../../config/database/database.service'
 import { links } from '../link/link.schema'
 import { LinkService } from '../link/link.service'
 
-import { CreateFolderInput, UpdateFolderInput } from './dto/folder.dto'
+import {
+    CreateFolderInput,
+    ListFoldersQueryInput,
+    UpdateFolderInput,
+} from './dto/folder.dto'
 import { FolderRow, folders } from './folder.schema'
 import { FOLDER_ERROR } from './folder-error.constant'
 
@@ -38,9 +42,14 @@ export class FolderService {
         }
     }
 
-    async list(userId: number) {
-        const systemFolders =
+    async list(userId: number, input: ListFoldersQueryInput) {
+        const systemFolderCounts =
             await this.linkService.getSystemFolderCounts(userId)
+        // TODO: isFavorite=true인 활성 링크의 실제 카운트를 조회한다.
+        const systemFolders = {
+            ...systemFolderCounts,
+            favorite: { linkCount: 0 },
+        }
         const linkCounts = await this.linkService.countActiveByFolder(userId)
 
         const folderRows = await this.db
@@ -52,12 +61,25 @@ export class FolderService {
         const folderList = folderRows.map((folder) => ({
             ...folder,
             linkCount: linkCounts.get(folder.folderId) ?? 0,
+            // TODO: 폴더별 MAX(links.createdAt) 집계 결과를 연결한다.
+            lastSavedAt: null,
         }))
 
-        return { systemFolders, folders: folderList }
+        // TODO: sortBy/order 정렬을 실제 조회 쿼리에 적용한다.
+        // limit은 페이지네이션이 아니라 홈 화면 등에서 결과 개수만 제한할 때 사용한다.
+        void input.sortBy
+        void input.order
+
+        return {
+            systemFolders,
+            folders:
+                input.limit === undefined
+                    ? folderList
+                    : folderList.slice(0, input.limit),
+        }
     }
 
-    async rename(userId: number, folderId: number, input: UpdateFolderInput) {
+    async update(userId: number, folderId: number, input: UpdateFolderInput) {
         await this.getOwnedFolder(userId, folderId)
         await this.assertActiveNameAvailable(userId, input.folderName, folderId)
 
@@ -118,20 +140,6 @@ export class FolderService {
                     and(eq(folders.id, folderId), eq(folders.userId, userId)),
                 )
         })
-    }
-
-    async getLinks(userId: number, folderId: number) {
-        const folder = await this.getOwnedFolder(userId, folderId)
-        const folderLinks = await this.linkService.listByFolder(
-            userId,
-            folderId,
-        )
-
-        return {
-            folder: { folderId: folder.id, folderName: folder.name },
-            links: folderLinks,
-            totalCount: folderLinks.length,
-        }
     }
 
     // 활성 폴더(deleted_at IS NULL) 기준 폴더명 중복을 사전 검증한다. (rename 시 자기 자신 제외)

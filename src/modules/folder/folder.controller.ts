@@ -8,6 +8,7 @@ import {
     ParseIntPipe,
     Patch,
     Post,
+    Query,
     UseGuards,
 } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
@@ -19,16 +20,17 @@ import { ZodValidationPipe } from '../../common/pipe/zod-validation.pipe'
 import {
     CreateFolderInput,
     createFolderSchema,
+    ListFoldersQueryInput,
+    listFoldersQuerySchema,
     UpdateFolderInput,
     updateFolderSchema,
 } from './dto/folder.dto'
 import { FolderService } from './folder.service'
 import {
     ApiCreateFolder,
-    ApiGetFolderLinks,
     ApiListFolders,
     ApiRemoveFolder,
-    ApiRenameFolder,
+    ApiUpdateFolder,
 } from './folder.swagger'
 
 @ApiTags('Folder')
@@ -40,8 +42,12 @@ export class FolderController {
 
     @Get()
     @ApiListFolders()
-    list(@CurrentUser() user: AuthUser) {
-        return this.folderService.list(user.userId)
+    list(
+        @CurrentUser() user: AuthUser,
+        @Query(new ZodValidationPipe(listFoldersQuerySchema))
+        query: ListFoldersQueryInput,
+    ) {
+        return this.folderService.list(user.userId, query)
     }
 
     @Post()
@@ -56,14 +62,14 @@ export class FolderController {
     }
 
     @Patch(':folderId')
-    @ApiRenameFolder()
-    rename(
+    @ApiUpdateFolder()
+    update(
         @CurrentUser() user: AuthUser,
         @Param('folderId', ParseIntPipe) folderId: number,
         @Body(new ZodValidationPipe(updateFolderSchema))
         body: UpdateFolderInput,
     ) {
-        return this.folderService.rename(user.userId, folderId, body)
+        return this.folderService.update(user.userId, folderId, body)
     }
 
     @Delete(':folderId')
@@ -74,14 +80,5 @@ export class FolderController {
         @Param('folderId', ParseIntPipe) folderId: number,
     ) {
         return this.folderService.remove(user.userId, folderId)
-    }
-
-    @Get(':folderId/links')
-    @ApiGetFolderLinks()
-    getLinks(
-        @CurrentUser() user: AuthUser,
-        @Param('folderId', ParseIntPipe) folderId: number,
-    ) {
-        return this.folderService.getLinks(user.userId, folderId)
     }
 }
