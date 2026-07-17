@@ -50,6 +50,8 @@ Internet
 
 Nginx 설정 파일은 [deploy/nginx/promise9-api.conf](../../deploy/nginx/promise9-api.conf)에 둔다.
 
+PR 단위 공유 Stage 배포는 [PR Stage Deployment](./stage-pr-deployment.md)에서 별도로 설명한다.
+
 ## 네트워크
 
 Lightsail firewall은 다음 포트만 연다.
