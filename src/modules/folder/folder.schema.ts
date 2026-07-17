@@ -8,7 +8,11 @@ import {
     varchar,
 } from 'drizzle-orm/pg-core'
 
-import { FOLDER_NAME_MAX_LENGTH } from './folder.constants'
+import {
+    DEFAULT_FOLDER_COLOR,
+    FOLDER_COLOR_LENGTH,
+    FOLDER_NAME_MAX_LENGTH,
+} from './folder.constants'
 
 // 사용자가 생성하는 실제 폴더. 화면의 전체/미분류/즐겨찾기/최근삭제는 row가 아니라 링크 조회 조건으로 처리한다.
 // 폴더명 유일성은 "삭제되지 않은(deleted_at IS NULL) 폴더" 기준 partial unique index로 DB에서 보장한다.
@@ -19,6 +23,10 @@ export const folders = pgTable(
         id: bigint({ mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
         userId: bigint({ mode: 'number' }).notNull(),
         name: varchar({ length: FOLDER_NAME_MAX_LENGTH }).notNull(),
+        // 폴더 색상 hex (#RRGGBB). 백엔드 팔레트 안의 값만 저장되며 기본은 검정.
+        color: varchar({ length: FOLDER_COLOR_LENGTH })
+            .notNull()
+            .default(DEFAULT_FOLDER_COLOR),
         sortOrder: integer(),
         createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

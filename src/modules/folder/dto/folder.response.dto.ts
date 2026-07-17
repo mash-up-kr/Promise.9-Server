@@ -1,9 +1,21 @@
 import { ApiProperty } from '@nestjs/swagger'
 
+import { DEFAULT_FOLDER_COLOR, FOLDER_COLORS } from '../folder.constants'
+
 // Swagger 응답 문서용 DTO. 실제 응답은 FolderService가 반환하는 객체를
 // CommonResponseInterceptor가 `{ success, data }`로 감싼 형태다.
 
 const TIMESTAMP_EXAMPLE = '2026-07-06T12:34:56.000Z'
+const COLOR_EXAMPLE = DEFAULT_FOLDER_COLOR
+
+export class FolderColorsResponseDto {
+    @ApiProperty({
+        type: [String],
+        example: FOLDER_COLORS,
+        description: '선택 가능한 폴더 색상 hex 목록',
+    })
+    colors!: string[]
+}
 
 export class CreateFolderResponseDto {
     @ApiProperty({ example: 3, description: '생성된 폴더 ID' })
@@ -11,6 +23,9 @@ export class CreateFolderResponseDto {
 
     @ApiProperty({ example: '개발 블로그', description: '폴더 이름' })
     folderName!: string
+
+    @ApiProperty({ example: COLOR_EXAMPLE, description: '폴더 색상 hex' })
+    color!: string
 
     @ApiProperty({
         type: String,
@@ -27,6 +42,9 @@ export class UpdateFolderResponseDto {
 
     @ApiProperty({ example: '읽을거리', description: '수정된 폴더 이름' })
     folderName!: string
+
+    @ApiProperty({ example: COLOR_EXAMPLE, description: '폴더 색상 hex' })
+    color!: string
 
     @ApiProperty({
         type: String,
@@ -77,6 +95,9 @@ export class FolderListItemDto {
 
     @ApiProperty({ example: '개발 블로그', description: '폴더 이름' })
     folderName!: string
+
+    @ApiProperty({ example: COLOR_EXAMPLE, description: '폴더 색상 hex' })
+    color!: string
 
     @ApiProperty({ example: 5, description: '폴더 내 링크 수' })
     linkCount!: number
