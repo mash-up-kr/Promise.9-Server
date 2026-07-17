@@ -27,24 +27,41 @@ export type WithdrawInput = z.infer<typeof withdrawSchema>
 
 // Swagger 문서용
 export class SocialLoginDto {
-    @ApiProperty({ enum: SUPPORTED_PROVIDERS, example: 'google' })
+    @ApiProperty({
+        enum: SUPPORTED_PROVIDERS,
+        example: 'google',
+        description:
+            '[필수] 소셜 로그인 제공자. 현재 google만 동작하며 kakao는 계약만 제공하는 TODO',
+    })
     provider!: SupportedProvider
 
-    @ApiProperty({ example: 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...' })
+    @ApiProperty({
+        example: 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...',
+        description: '[필수] 소셜 로그인 제공자가 발급한 ID 토큰',
+    })
     idToken!: string
 }
 
 export class RefreshDto {
-    @ApiProperty()
+    @ApiProperty({
+        example: 'eyJhbGciOiJIUzI1NiJ9.refresh-token-signature',
+        description: '[필수] 재발급에 사용할 리프레시 토큰',
+    })
     refreshToken!: string
 }
 
 export class LogoutDto {
-    @ApiProperty()
+    @ApiProperty({
+        example: 'eyJhbGciOiJIUzI1NiJ9.refresh-token-signature',
+        description: '[필수] 폐기할 리프레시 토큰',
+    })
     refreshToken!: string
 }
 
 export class WithdrawDto {
-    @ApiProperty()
+    @ApiProperty({
+        example: 'eyJhbGciOiJIUzI1NiJ9.refresh-token-signature',
+        description: '[필수] 본인 확인 및 폐기에 사용할 리프레시 토큰',
+    })
     refreshToken!: string
 }
