@@ -1,9 +1,135 @@
 {
-  "id": "1bfbfedd-cc00-44cb-853a-56046aee451e",
+  "id": "7f5c3956-6928-4558-80f8-5d2f87b268e6",
   "prevId": "a4618794-47bf-4d2d-ba77-6e444ee59688",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.ai_metrics": {
+      "name": "ai_metrics",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_link_id": {
+          "name": "user_link_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "task_type": {
+          "name": "task_type",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(30)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model_provider": {
+          "name": "model_provider",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model_name": {
+          "name": "model_name",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prompt_key": {
+          "name": "prompt_key",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "input_tokens": {
+          "name": "input_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "output_tokens": {
+          "name": "output_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "generated_result": {
+          "name": "generated_result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ttlb_ms": {
+          "name": "ttlb_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ai_metrics_user_link_task_status_idx": {
+          "name": "ai_metrics_user_link_task_status_idx",
+          "columns": [
+            {
+              "expression": "user_link_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "task_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.folders": {
       "name": "folders",
       "schema": "",
@@ -376,19 +502,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "is_favorite": {
-          "name": "is_favorite",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "viewed_at": {
-          "name": "viewed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "deleted_at": {
           "name": "deleted_at",
           "type": "timestamp with time zone",
@@ -525,8 +638,12 @@
           "name": "links_folder_id_folders_id_fk",
           "tableFrom": "links",
           "tableTo": "folders",
-          "columnsFrom": ["folder_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "folder_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -536,7 +653,10 @@
         "links_id_user_id_unique": {
           "name": "links_id_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["id", "user_id"]
+          "columns": [
+            "id",
+            "user_id"
+          ]
         }
       },
       "policies": {},
@@ -664,8 +784,14 @@
           "name": "tags_link_id_user_id_fk",
           "tableFrom": "tags",
           "tableTo": "links",
-          "columnsFrom": ["link_id", "user_id"],
-          "columnsTo": ["id", "user_id"],
+          "columnsFrom": [
+            "link_id",
+            "user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "user_id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -787,8 +913,12 @@
           "name": "refresh_tokens_user_id_users_id_fk",
           "tableFrom": "refresh_tokens",
           "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -865,8 +995,12 @@
           "name": "social_accounts_user_id_users_id_fk",
           "tableFrom": "social_accounts",
           "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -876,12 +1010,18 @@
         "social_accounts_provider_provider_user_id_unique": {
           "name": "social_accounts_provider_provider_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["provider", "provider_user_id"]
+          "columns": [
+            "provider",
+            "provider_user_id"
+          ]
         },
         "social_accounts_user_id_provider_unique": {
           "name": "social_accounts_user_id_provider_unique",
           "nullsNotDistinct": false,
-          "columns": ["user_id", "provider"]
+          "columns": [
+            "user_id",
+            "provider"
+          ]
         }
       },
       "policies": {},
@@ -943,7 +1083,9 @@
         "users_email_unique": {
           "name": "users_email_unique",
           "nullsNotDistinct": false,
-          "columns": ["email"]
+          "columns": [
+            "email"
+          ]
         }
       },
       "policies": {},
