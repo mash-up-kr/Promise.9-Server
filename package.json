@@ -24,6 +24,7 @@
         "db:restore": "bun run script/restore-db.ts",
         "db:health": "bun run script/db-health.ts",
         "db:visualize_mermaid": "bun run script/visualize-db-mermaid.ts",
+        "ui": "bun run script/ui/index.ts",
         "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" \"drizzle.config.ts\"",
         "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" \"drizzle.config.ts\" --fix",
         "test": "jest",
