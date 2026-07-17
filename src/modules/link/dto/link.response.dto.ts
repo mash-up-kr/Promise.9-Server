@@ -12,6 +12,31 @@ const URL_EXAMPLE = 'https://toss.tech/article/slug'
 const TITLE_EXAMPLE = '실무에서 바로 쓰는 프론트엔드 성능 최적화'
 const THUMBNAIL_EXAMPLE = 'https://static.toss.tech/thumbnail.png'
 
+export class LinkPreviewResponseDto {
+    @ApiProperty({
+        type: String,
+        nullable: true,
+        example: TITLE_EXAMPLE,
+        description: 'OG 제목 (og:title → <title> 순, 없으면 null)',
+    })
+    title!: string | null
+
+    @ApiProperty({
+        type: String,
+        nullable: true,
+        example: THUMBNAIL_EXAMPLE,
+        description:
+            'OG 대표 이미지 절대 URL (og:image → twitter:image 순, 없으면 null)',
+    })
+    thumbnailUrl!: string | null
+
+    @ApiProperty({
+        example: 'toss.tech',
+        description: '최종 URL의 표시용 도메인 (선행 www. 제거)',
+    })
+    source!: string
+}
+
 export class CreateLinkResponseDto {
     @ApiProperty({ example: 42, description: '저장된 링크 ID' })
     linkId!: number

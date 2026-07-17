@@ -23,6 +23,7 @@ import { CreateLinkDto, UpdateLinkDto } from './dto/link.dto'
 import {
     CreateLinkResponseDto,
     LinkDetailResponseDto,
+    LinkPreviewResponseDto,
     ListLinksResponseDto,
     RestoreLinkResponseDto,
     UpdateLinkResponseDto,
@@ -383,6 +384,39 @@ export const ApiLinkDetail = () =>
             COMMON_ERROR.VALIDATION,
             AUTH_ERROR.INVALID_TOKEN,
             LINK_ERROR.NOT_FOUND,
+        ),
+    )
+
+export const ApiLinkPreview = () =>
+    applyDecorators(
+        ApiOperation({
+            summary: '링크 OG 미리보기 조회',
+            description:
+                '입력한 URL의 Open Graph 메타데이터에서 `title`·`thumbnailUrl`·`source`를 추출해 반환합니다. 링크를 저장하기 전 미리보기 용도이며 아무것도 저장하지 않습니다.\n\n- `title`: `og:title` → `<title>` 순으로 찾고, 없으면 `null`\n- `thumbnailUrl`: `og:image` → `twitter:image` 순으로 찾아 절대 URL로 반환하고, 없으면 `null`\n- `source`: 리다이렉트까지 따라간 최종 URL의 호스트(선행 `www.` 제거)',
+        }),
+        ApiQuery({
+            name: 'url',
+            required: true,
+            type: String,
+            example: 'https://toss.tech/article/50893',
+            description: '[필수] 미리보기를 조회할 URL (http/https)',
+        }),
+        ApiCommonResponse(LinkPreviewResponseDto, {
+            description: '조회 성공',
+            dataExample: {
+                title: '누군가는 토스를 테스트하는 동안, 우리는 테스트하는 법을 만듭니다.',
+                thumbnailUrl:
+                    'https://static.toss.im/assets/tech-blog/og-image/techblog-og.png',
+                source: 'toss.tech',
+            },
+        }),
+        ApiCommonErrorResponses(
+            COMMON_ERROR.VALIDATION,
+            AUTH_ERROR.INVALID_TOKEN,
+            LINK_ERROR.PREVIEW_FETCH_FAILED,
+            LINK_ERROR.PREVIEW_TIMEOUT,
+            LINK_ERROR.PREVIEW_BAD_STATUS,
+            LINK_ERROR.PREVIEW_REDIRECT_FAILED,
         ),
     )
 
