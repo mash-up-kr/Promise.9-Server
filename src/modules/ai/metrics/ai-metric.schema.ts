@@ -1,0 +1,48 @@
+import {
+    bigint,
+    index,
+    integer,
+    jsonb,
+    pgTable,
+    text,
+    timestamp,
+    uuid,
+    varchar,
+} from 'drizzle-orm/pg-core'
+
+import { AiMetricStatus, AiTaskType } from '../ai.constants'
+
+import { AiMetricGeneratedResult } from './ai-metric.type'
+
+export const aiMetrics = pgTable(
+    'ai_metrics',
+    {
+        id: uuid().primaryKey(),
+        userLinkId: bigint({ mode: 'number' }).notNull(),
+        taskType: varchar({ length: 50 }).$type<AiTaskType>().notNull(),
+        status: varchar({ length: 30 }).$type<AiMetricStatus>().notNull(),
+        modelProvider: varchar({ length: 50 }).notNull(),
+        modelName: varchar({ length: 120 }).notNull(),
+        promptKey: varchar({ length: 120 }),
+        inputTokens: integer(),
+        outputTokens: integer(),
+        generatedResult: jsonb().$type<AiMetricGeneratedResult | null>(),
+        ttlbMs: integer().notNull(),
+        errorCode: text(),
+        errorMessage: text(),
+        createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    },
+    (table) => [
+        index('ai_metrics_user_link_task_status_idx').on(
+            table.userLinkId,
+            table.taskType,
+            table.status,
+        ),
+    ],
+)
+
+/** ai_metrics에서 조회한 row 타입. */
+export type AiMetric = typeof aiMetrics.$inferSelect
+
+/** ai_metrics에 insert할 수 있는 입력 타입. */
+export type NewAiMetric = typeof aiMetrics.$inferInsert
