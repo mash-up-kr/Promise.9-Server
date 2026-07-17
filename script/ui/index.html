@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="ko">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Promise.9 스크립트 UI</title>
+        <link rel="stylesheet" href="/styles.css" />
+    </head>
+    <body>
+        <main class="app">
+            <aside class="sidebar">
+                <div class="brand">
+                    <div class="brand-mark">
+                        <div class="brand-symbol" aria-hidden="true">P.9</div>
+                        <div>
+                            <p class="eyebrow">Local operations</p>
+                            <h1>Promise.9 작업 콘솔</h1>
+                            <p class="subtle">
+                                검증과 데이터베이스 작업을 한곳에서 실행합니다.
+                            </p>
+                        </div>
+                    </div>
+                    <div id="statusPill" class="status-pill">
+                        <span class="status-dot"></span>
+                        <span id="statusText">대기</span>
+                    </div>
+                </div>
+
+                <label class="search-label global-search" for="searchInput">
+                    <span class="search-icon" aria-hidden="true">⌕</span>
+                    <input
+                        id="searchInput"
+                        class="search-input"
+                        type="search"
+                        placeholder="전체 작업에서 검색"
+                        autocomplete="off"
+                        aria-label="전체 작업 검색"
+                    />
+                </label>
+
+                <div class="overview">
+                    <div class="metric">
+                        <strong id="visibleCount">0</strong>
+                        <span>선택된 작업</span>
+                    </div>
+                    <div
+                        class="environment-switch"
+                        role="group"
+                        aria-label="대상 환경"
+                    >
+                        <button
+                            class="environment-button active"
+                            type="button"
+                            data-environment="development"
+                            aria-pressed="true"
+                        >
+                            DEV
+                        </button>
+                        <button
+                            class="environment-button"
+                            type="button"
+                            data-environment="production"
+                            aria-pressed="false"
+                        >
+                            PROD
+                        </button>
+                    </div>
+                </div>
+
+                <nav class="group-tabs" aria-label="작업 종류">
+                    <button
+                        class="group-button active"
+                        type="button"
+                        data-group="검증"
+                        aria-pressed="true"
+                    >
+                        <span class="group-icon" aria-hidden="true">✓</span>
+                        <span class="group-label">검증</span>
+                        <span class="group-count" data-group-count="검증"
+                            >0</span
+                        >
+                    </button>
+                    <button
+                        class="group-button"
+                        type="button"
+                        data-group="데이터베이스 읽기"
+                        aria-pressed="false"
+                    >
+                        <span class="group-icon" aria-hidden="true">DB</span>
+                        <span class="group-label">데이터 읽기</span>
+                        <span
+                            class="group-count"
+                            data-group-count="데이터베이스 읽기"
+                            >0</span
+                        >
+                    </button>
+                    <button
+                        class="group-button"
+                        type="button"
+                        data-group="스키마 관리"
+                        aria-pressed="false"
+                    >
+                        <span class="group-icon" aria-hidden="true">⇄</span>
+                        <span class="group-label">스키마 관리</span>
+                        <span class="group-count" data-group-count="스키마 관리"
+                            >0</span
+                        >
+                    </button>
+                    <button
+                        class="group-button"
+                        type="button"
+                        data-group="개발 도구"
+                        aria-pressed="false"
+                    >
+                        <span class="group-icon" aria-hidden="true">DEV</span>
+                        <span class="group-label">개발 도구</span>
+                        <span class="group-count" data-group-count="개발 도구"
+                            >0</span
+                        >
+                    </button>
+                </nav>
+
+                <div class="control-panel">
+                    <div
+                        class="filter-tabs"
+                        role="tablist"
+                        aria-label="위험도 필터"
+                    >
+                        <button
+                            class="filter-button active"
+                            type="button"
+                            data-filter="all"
+                        >
+                            전체
+                        </button>
+                        <button
+                            class="filter-button"
+                            type="button"
+                            data-filter="safe"
+                        >
+                            안전
+                        </button>
+                        <button
+                            class="filter-button"
+                            type="button"
+                            data-filter="warning"
+                        >
+                            주의
+                        </button>
+                        <button
+                            class="filter-button"
+                            type="button"
+                            data-filter="danger"
+                        >
+                            위험
+                        </button>
+                    </div>
+                </div>
+
+                <div id="noResults" class="no-results" hidden>
+                    조건에 맞는 스크립트가 없습니다.
+                </div>
+                <div id="scriptList" class="script-list"></div>
+            </aside>
+
+            <section class="terminal-pane">
+                <div
+                    id="terminalTabs"
+                    class="terminal-tabs"
+                    role="tablist"
+                    aria-label="실행 터미널 탭"
+                ></div>
+                <header class="terminal-header">
+                    <div class="terminal-title">
+                        <strong id="terminalTitle">Terminal</strong>
+                        <span id="terminalSubtitle"
+                            >아직 실행된 스크립트가 없습니다.</span
+                        >
+                        <div class="terminal-meta">
+                            <span id="terminalStatus" class="terminal-chip"
+                                >idle</span
+                            >
+                            <span id="runTimer" class="terminal-chip"
+                                >00:00</span
+                            >
+                        </div>
+                    </div>
+                    <div class="toolbar">
+                        <a
+                            id="openRunLink"
+                            class="toolbar-button open"
+                            href="#"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="실행된 도구 열기"
+                            data-tooltip="준비된 Swagger 또는 Drizzle Studio 열기"
+                            hidden
+                            >↗</a
+                        >
+                        <button
+                            id="clearButton"
+                            class="toolbar-button clear"
+                            type="button"
+                            aria-label="현재 탭 로그 비우기"
+                            data-tooltip="현재 탭의 출력만 지웁니다. 실행 중인 작업은 멈추지 않습니다."
+                            disabled
+                        >
+                            <span aria-hidden="true">×</span>
+                            <span>로그 비우기</span>
+                        </button>
+                        <button
+                            id="stopButton"
+                            class="toolbar-button stop"
+                            type="button"
+                            aria-label="선택 작업 중지"
+                            data-tooltip="현재 선택한 작업만 중지"
+                            disabled
+                        >
+                            ■
+                        </button>
+                        <button
+                            id="stopAllButton"
+                            class="toolbar-button stop"
+                            type="button"
+                            aria-label="전체 작업 중지"
+                            data-tooltip="실행 중인 모든 작업 중지"
+                            disabled
+                        >
+                            ■■
+                        </button>
+                    </div>
+                </header>
+                <pre id="terminal" class="terminal empty">
+왼쪽에서 스크립트를 실행하면 출력이 여기에 표시됩니다.</pre
+                >
+            </section>
+
+            <footer class="app-footer">
+                <span>
+                    GitHub
+                    <a
+                        href="https://github.com/mash-up-kr/Promise.9-Server"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >mash-up-kr/Promise.9-Server</a
+                    >
+                </span>
+                <span>
+                    Swagger
+                    <a
+                        href="https://api.link-ding-dong.com/api-docs#/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >api.link-ding-dong.com/api-docs</a
+                    >
+                </span>
+            </footer>
+        </main>
+
+        <dialog id="confirmDialog">
+            <form method="dialog" class="dialog-content">
+                <div class="dialog-heading">
+                    <div class="dialog-symbol" aria-hidden="true">!</div>
+                    <div>
+                        <p class="eyebrow">Execution guard</p>
+                        <h2 id="dialogTitle">실행 확인</h2>
+                    </div>
+                </div>
+                <div class="dialog-body">
+                    <p id="dialogDescription" class="confirm-copy"></p>
+                    <div id="dialogWarning" class="warning-copy"></div>
+                    <code id="dialogCommand" class="command"></code>
+                    <p class="confirm-copy">
+                        아래 확인 문구를 그대로 입력하세요.
+                    </p>
+                    <code id="requiredPhrase" class="required-phrase"></code>
+                    <input
+                        id="confirmInput"
+                        class="confirm-input"
+                        autocomplete="off"
+                        aria-label="확인 문구"
+                    />
+                    <div class="dialog-actions">
+                        <button
+                            id="cancelDialogButton"
+                            class="toolbar-button"
+                            value="cancel"
+                            type="button"
+                            aria-label="실행 취소"
+                        >
+                            ×
+                        </button>
+                        <button
+                            id="confirmRunButton"
+                            class="dialog-button danger"
+                            value="default"
+                            type="submit"
+                            disabled
+                        >
+                            실행
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </dialog>
+
+        <dialog id="scopeDialog">
+            <form id="scopeForm" class="dialog-content">
+                <div class="dialog-heading">
+                    <div class="dialog-symbol scope" aria-hidden="true">⌕</div>
+                    <div>
+                        <p class="eyebrow">Scoped execution</p>
+                        <h2 id="scopeTitle">범위 실행</h2>
+                    </div>
+                </div>
+                <div class="dialog-body">
+                    <button
+                        id="changedScopeButton"
+                        class="changed-scope-button"
+                        type="button"
+                    >
+                        <span class="changed-scope-icon" aria-hidden="true"
+                            >Δ</span
+                        >
+                        <span>
+                            <strong>변경된 파일 실행</strong>
+                            <small id="changedScopeMeta">확인 중</small>
+                        </span>
+                        <span class="changed-scope-arrow" aria-hidden="true"
+                            >▶</span
+                        >
+                    </button>
+
+                    <div class="scope-browser">
+                        <nav
+                            id="scopeBreadcrumbs"
+                            class="scope-breadcrumbs"
+                            aria-label="범위 경로"
+                        ></nav>
+                        <div
+                            id="scopeBrowserList"
+                            class="scope-browser-list"
+                        ></div>
+                    </div>
+
+                    <div id="scopeSelection" class="scope-selection" hidden>
+                        <span id="scopeSelectionPath"></span>
+                        <strong id="scopeSelectionCount"></strong>
+                    </div>
+
+                    <details class="scope-command-details">
+                        <summary>실행 명령</summary>
+                        <code
+                            id="scopeCommandPreview"
+                            class="scope-preview"
+                        ></code>
+                    </details>
+                    <div class="dialog-actions">
+                        <button
+                            id="cancelScopeButton"
+                            class="toolbar-button"
+                            type="button"
+                            aria-label="범위 실행 취소"
+                        >
+                            ×
+                        </button>
+                        <button
+                            id="runScopeButton"
+                            class="dialog-button"
+                            type="submit"
+                            disabled
+                        >
+                            선택 범위 실행
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </dialog>
+
+        <script src="/app.js" defer></script>
+    </body>
+</html>

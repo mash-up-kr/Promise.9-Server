@@ -16,6 +16,7 @@ describe('AppController (e2e)', () => {
 
         app = moduleFixture.createNestApplication()
         app.useGlobalInterceptors(new CommonResponseInterceptor())
+        app.setGlobalPrefix('api/v1')
         await app.init()
     })
 
@@ -23,10 +24,10 @@ describe('AppController (e2e)', () => {
         await app?.close()
     })
 
-    it('/ (GET)', () => {
+    it('/api/v1 (GET)', () => {
         return request(app.getHttpServer())
-            .get('/')
+            .get('/api/v1')
             .expect(200)
-            .expect({ data: 'Hello World!' })
+            .expect({ success: true, data: 'Hello World!' })
     })
 })
