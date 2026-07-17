@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, NotImplementedException } from '@nestjs/common'
 import {
     and,
     count,
@@ -18,9 +18,10 @@ import { FOLDER_ERROR } from '../folder/folder-error.constant'
 
 import {
     CreateLinkInput,
-    SearchLinkInput,
+    ListLinksQueryInput,
     UpdateLinkInput,
 } from './dto/link.dto'
+import { CreateLinkTagInput } from './dto/tag.dto'
 import { LinkRow, links } from './link.schema'
 import { extractDomain, normalizeUrl, pickThumbnailUrl } from './link.util'
 import { LINK_ERROR } from './link-error.constant'
@@ -65,6 +66,7 @@ export class LinkService {
     async detail(userId: number, linkId: number) {
         const link = await this.getOwnedLink(userId, linkId)
         const folder = await this.findFolderRef(link.folderId)
+        const isProcessing = link.aiSummaryStatus === 'PENDING'
 
         return {
             linkId: link.id,
@@ -76,12 +78,15 @@ export class LinkService {
             // 발행 시각은 별도 컬럼 없이 메타데이터에서 다룰 예정 — 현재는 null
             publishedAt: null,
             savedAt: link.createdAt,
-            status: link.aiSummaryStatus,
-            // 태그·연관 링크는 이번 범위 밖 — 자리만 채워 둔다.
-            tags: [],
+            isFavorite: link.isFavorite,
+            viewedAt: link.viewedAt,
+            processingStatus: link.aiSummaryStatus,
             aiSummary: link.aiSummary,
+            // 처리 중 null과 처리 완료 후 빈 결과를 구분한다.
+            // TODO: 태그·연관 링크 조회 로직을 연결한다.
+            tags: isProcessing ? null : [],
             memo: link.memo,
-            relatedLinks: [],
+            relatedLinks: isProcessing ? null : [],
         }
     }
 
@@ -104,6 +109,10 @@ export class LinkService {
             patch.memo = input.memo
         }
 
+        if (input.isFavorite !== undefined) {
+            patch.isFavorite = input.isFavorite
+        }
+
         const [row] = await this.db
             .update(links)
             .set(patch)
@@ -114,6 +123,7 @@ export class LinkService {
             linkId: row.id,
             folderId: row.folderId,
             memo: row.memo,
+            isFavorite: row.isFavorite,
             updatedAt: row.updatedAt,
         }
     }
@@ -153,25 +163,80 @@ export class LinkService {
         }
     }
 
-    async search(userId: number, input: SearchLinkInput) {
-        const keyword = `%${input.q}%`
-        // 검색 대상: title, domain, original_url, final_url, ai_summary, memo
+    async markViewed(userId: number, linkId: number) {
+        await this.getOwnedLink(userId, linkId)
+
+        const now = new Date()
+        await this.db
+            .update(links)
+            .set({ viewedAt: now, updatedAt: now })
+            .where(and(eq(links.id, linkId), eq(links.userId, userId)))
+    }
+
+    createTag(
+        userId: number,
+        linkId: number,
+        input: CreateLinkTagInput,
+    ): never {
+        void userId
+        void linkId
+        void input
+        // TODO: 링크 소유권 확인, 태그명 정규화·중복 검사 후 tags row를 저장한다.
+        throw new NotImplementedException(
+            '링크 태그 추가 로직은 아직 구현되지 않았습니다.',
+        )
+    }
+
+    removeTag(userId: number, linkId: number, tagId: number): never {
+        void userId
+        void linkId
+        void tagId
+        // TODO: 링크·태그 소유권 확인 후 해당 tags row를 삭제한다.
+        throw new NotImplementedException(
+            '링크 태그 삭제 로직은 아직 구현되지 않았습니다.',
+        )
+    }
+
+    async list(userId: number, input: ListLinksQueryInput) {
         const conditions = [
             eq(links.userId, userId),
-            isNull(links.deletedAt),
-            or(
+            input.deleted
+                ? isNotNull(links.deletedAt)
+                : isNull(links.deletedAt),
+        ]
+
+        if (input.q) {
+            const keyword = `%${input.q}%`
+            // 검색 대상: title, domain, original_url, final_url, ai_summary, memo
+            const searchCondition = or(
                 ilike(links.title, keyword),
                 ilike(links.domain, keyword),
                 ilike(links.originalUrl, keyword),
                 ilike(links.finalUrl, keyword),
                 ilike(links.aiSummary, keyword),
                 ilike(links.memo, keyword),
-            ),
-        ]
+            )
+
+            if (searchCondition) {
+                conditions.push(searchCondition)
+            }
+        }
 
         if (input.folderId) {
             conditions.push(eq(links.folderId, input.folderId))
         }
+
+        if (input.unassigned) {
+            conditions.push(isNull(links.folderId))
+        }
+
+        // TODO: favorite=true일 때 isFavorite 조건을 목록 쿼리에 적용한다.
+        // TODO: sortBy/order와 cursor 기반 페이지네이션을 공통 로직으로 적용한다.
+        // 계약을 먼저 제공하는 단계이므로 현재는 기존과 동일하게 저장 최신순 전체 결과를 반환한다.
+        void input.favorite
+        void input.sortBy
+        void input.order
+        void input.cursor
 
         const rows = await this.db
             .select()
@@ -180,18 +245,25 @@ export class LinkService {
             .orderBy(desc(links.createdAt))
 
         return {
-            results: rows.map((row) => ({
+            links: rows.slice(0, input.limit).map((row) => ({
                 linkId: row.id,
                 title: row.title,
                 source: row.domain,
+                // TODO: 태그 선정 정책에 따라 목록 카드용 대표 태그를 연결한다.
+                representativeTag: null,
                 thumbnailUrl: pickThumbnailUrl(row.metadata),
                 savedAt: row.createdAt,
             })),
+            pagination: {
+                nextCursor: null,
+                hasNext: false,
+                limit: input.limit,
+            },
             totalCount: rows.length,
         }
     }
 
-    // 시스템 폴더(전체/미분류/최근삭제)의 링크 수를 한 번에 계산한다.
+    // 화면의 전체/미분류/최근삭제 링크 목록에 표시할 수를 한 번에 계산한다.
     async getSystemFolderCounts(userId: number) {
         const owned = eq(links.userId, userId)
 

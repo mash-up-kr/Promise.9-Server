@@ -19,6 +19,8 @@ erDiagram
     text ai_summary
     varchar ai_summary_status
     text memo
+    boolean is_favorite
+    timestamptz viewed_at
     timestamptz deleted_at
     timestamptz created_at
     timestamptz updated_at
@@ -27,23 +29,25 @@ erDiagram
 
 ## 필드
 
-| 필드 | 타입 | 필수 | 설명 |
-| --- | --- | --- | --- |
-| id | bigint | Y | 사용자 저장 링크 식별자 |
-| user_id | bigint | Y | 링크를 저장한 회원 ID |
-| folder_id | bigint | N | 저장된 커스텀 폴더 ID. `NULL`이면 미분류 |
-| original_url | text | Y | 사용자가 저장을 요청한 원본 URL |
-| normalized_url | text | Y | 사용자별 중복 저장 판단 키. redirect 추적 성공 시 `final_url`, 실패 시 `original_url`을 정규화 |
-| final_url | text | N | redirect 이후 최종 도착 URL. 추적 실패 시 `NULL` 가능 |
-| domain | varchar | N | 출처 표시와 검색에 사용하는 도메인. `final_url` 우선, 없으면 `original_url` 기준 |
-| title | varchar | N | 수집된 제목. 수집 실패 시 `NULL` 가능 |
-| metadata | jsonb | N | Open Graph, favicon, description, 이미지 정보, 색상 등 확장 메타데이터. 최상위에 `version` 포함 |
-| ai_summary | text | N | AI 요약 결과 |
-| ai_summary_status | varchar | Y | AI 요약 대표 상태. 예: `PENDING`, `SUCCESS`, `NEEDS_REVIEW`, `FAILED` |
-| memo | text | N | 사용자 메모. 최대 500자 |
-| deleted_at | timestamptz | N | 최근 삭제된 항목으로 이동한 일시 |
-| created_at | timestamptz | Y | 링크 저장 일시이자 레코드 생성 일시 |
-| updated_at | timestamptz | Y | 레코드 수정 일시 |
+| 필드              | 타입        | 필수 | 설명                                                                                            |
+| ----------------- | ----------- | ---- | ----------------------------------------------------------------------------------------------- |
+| id                | bigint      | Y    | 사용자 저장 링크 식별자                                                                         |
+| user_id           | bigint      | Y    | 링크를 저장한 회원 ID                                                                           |
+| folder_id         | bigint      | N    | 저장된 커스텀 폴더 ID. `NULL`이면 미분류                                                        |
+| original_url      | text        | Y    | 사용자가 저장을 요청한 원본 URL                                                                 |
+| normalized_url    | text        | Y    | 사용자별 중복 저장 판단 키. redirect 추적 성공 시 `final_url`, 실패 시 `original_url`을 정규화  |
+| final_url         | text        | N    | redirect 이후 최종 도착 URL. 추적 실패 시 `NULL` 가능                                           |
+| domain            | varchar     | N    | 출처 표시와 검색에 사용하는 도메인. `final_url` 우선, 없으면 `original_url` 기준                |
+| title             | varchar     | N    | 수집된 제목. 수집 실패 시 `NULL` 가능                                                           |
+| metadata          | jsonb       | N    | Open Graph, favicon, description, 이미지 정보, 색상 등 확장 메타데이터. 최상위에 `version` 포함 |
+| ai_summary        | text        | N    | AI 요약 결과                                                                                    |
+| ai_summary_status | varchar     | Y    | AI 요약 대표 상태. 예: `PENDING`, `SUCCESS`, `NEEDS_REVIEW`, `FAILED`                           |
+| memo              | text        | N    | 사용자 메모. 최대 500자                                                                         |
+| is_favorite       | boolean     | Y    | 즐겨찾기 여부. 기본값은 `false`                                                                 |
+| viewed_at         | timestamptz | N    | 링크 상세 화면을 마지막으로 조회한 시각. 조회 전에는 `NULL`                                     |
+| deleted_at        | timestamptz | N    | 최근 삭제된 항목으로 이동한 일시                                                                |
+| created_at        | timestamptz | Y    | 링크 저장 일시이자 레코드 생성 일시                                                             |
+| updated_at        | timestamptz | Y    | 레코드 수정 일시                                                                                |
 
 ## 제약
 
@@ -54,6 +58,9 @@ erDiagram
 - 같은 URL이 최근 삭제된 항목에 있을 때 새 저장을 막을지, 새 저장을 허용할지, 복원으로 유도할지는 기획 논의가 필요하다.
 - 폴더 미선택 상태와 복원 후 미분류 상태는 `folder_id IS NULL`로 표현한다.
 - 링크 저장 최신순 정렬은 `created_at`을 기준으로 한다.
+- 즐겨찾기 설정·해제는 `is_favorite`을 갱신한다.
+- 상세 화면 조회 기록은 `POST /links/{linkId}/view` 호출 시 `viewed_at`을 서버 현재 시각으로 갱신한다.
+- 조회 횟수나 이력은 저장하지 않고 마지막 조회 시각만 보관한다.
 - 영구 삭제 대상은 별도 컬럼 없이 `deleted_at <= now() - interval '30 days'` 조건으로 판단한다.
 - 복원 시 `deleted_at`을 `NULL`로 되돌린다.
 - 검색 대상은 `title`, `domain`, `original_url`, `final_url`, `ai_summary`, `memo`이며, `deleted_at IS NULL`인 링크만 포함한다.
@@ -70,18 +77,18 @@ erDiagram
 
 ```json
 {
-  "version": 1,
-  "description": "페이지 설명",
-  "faviconUrl": "https://example.com/favicon.ico",
-  "images": [
-    {
-      "url": "https://example.com/og.png",
-      "source": "og:image",
-      "width": 1200,
-      "height": 630,
-      "dominantColor": "#1F2937"
-    }
-  ]
+    "version": 1,
+    "description": "페이지 설명",
+    "faviconUrl": "https://example.com/favicon.ico",
+    "images": [
+        {
+            "url": "https://example.com/og.png",
+            "source": "og:image",
+            "width": 1200,
+            "height": 630,
+            "dominantColor": "#1F2937"
+        }
+    ]
 }
 ```
 

@@ -20,18 +20,22 @@ import { ZodValidationPipe } from '../../common/pipe/zod-validation.pipe'
 import {
     CreateLinkInput,
     createLinkSchema,
-    SearchLinkInput,
-    searchLinkSchema,
+    ListLinksQueryInput,
+    listLinksQuerySchema,
     UpdateLinkInput,
     updateLinkSchema,
 } from './dto/link.dto'
+import { CreateLinkTagInput, createLinkTagSchema } from './dto/tag.dto'
 import { LinkService } from './link.service'
 import {
     ApiCreateLink,
+    ApiCreateLinkTag,
     ApiLinkDetail,
+    ApiListLinks,
+    ApiMarkLinkViewed,
     ApiRemoveLink,
+    ApiRemoveLinkTag,
     ApiRestoreLink,
-    ApiSearchLinks,
     ApiUpdateLink,
 } from './link.swagger'
 
@@ -52,14 +56,14 @@ export class LinkController {
         return this.linkService.create(user.userId, body)
     }
 
-    // 정적 경로(:linkId 보다 먼저 선언) — /links/search
-    @Get('search')
-    @ApiSearchLinks()
-    search(
+    @Get()
+    @ApiListLinks()
+    list(
         @CurrentUser() user: AuthUser,
-        @Query(new ZodValidationPipe(searchLinkSchema)) query: SearchLinkInput,
+        @Query(new ZodValidationPipe(listLinksQuerySchema))
+        query: ListLinksQueryInput,
     ) {
-        return this.linkService.search(user.userId, query)
+        return this.linkService.list(user.userId, query)
     }
 
     @Get(':linkId')
@@ -98,5 +102,38 @@ export class LinkController {
         @Param('linkId', ParseIntPipe) linkId: number,
     ) {
         return this.linkService.restore(user.userId, linkId)
+    }
+
+    @Post(':linkId/view')
+    @HttpCode(204)
+    @ApiMarkLinkViewed()
+    markViewed(
+        @CurrentUser() user: AuthUser,
+        @Param('linkId', ParseIntPipe) linkId: number,
+    ) {
+        return this.linkService.markViewed(user.userId, linkId)
+    }
+
+    @Post(':linkId/tags')
+    @HttpCode(201)
+    @ApiCreateLinkTag()
+    createTag(
+        @CurrentUser() user: AuthUser,
+        @Param('linkId', ParseIntPipe) linkId: number,
+        @Body(new ZodValidationPipe(createLinkTagSchema))
+        body: CreateLinkTagInput,
+    ) {
+        return this.linkService.createTag(user.userId, linkId, body)
+    }
+
+    @Delete(':linkId/tags/:tagId')
+    @HttpCode(204)
+    @ApiRemoveLinkTag()
+    removeTag(
+        @CurrentUser() user: AuthUser,
+        @Param('linkId', ParseIntPipe) linkId: number,
+        @Param('tagId', ParseIntPipe) tagId: number,
+    ) {
+        return this.linkService.removeTag(user.userId, linkId, tagId)
     }
 }
