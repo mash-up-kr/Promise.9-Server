@@ -17,6 +17,17 @@ export class FolderColorsResponseDto {
     colors!: string[]
 }
 
+export class GetFolderResponseDto {
+    @ApiProperty({ example: 3, description: '폴더 ID' })
+    folderId!: number
+
+    @ApiProperty({ example: '개발 블로그', description: '폴더 이름' })
+    folderName!: string
+
+    @ApiProperty({ example: COLOR_EXAMPLE, description: '폴더 색상 hex' })
+    color!: string
+}
+
 export class CreateFolderResponseDto {
     @ApiProperty({ example: 3, description: '생성된 폴더 ID' })
     folderId!: number

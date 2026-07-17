@@ -19,6 +19,7 @@ import { CreateFolderDto, UpdateFolderDto } from './dto/folder.dto'
 import {
     CreateFolderResponseDto,
     FolderColorsResponseDto,
+    GetFolderResponseDto,
     ListFoldersResponseDto,
     UpdateFolderResponseDto,
 } from './dto/folder.response.dto'
@@ -167,6 +168,12 @@ export const ApiListFolderColors = () =>
         ApiCommonResponse(FolderColorsResponseDto, {
             description: '조회 성공',
         }),
+    )
+
+export const ApiGetFolder = () =>
+    applyDecorators(
+        ApiOperation({ summary: '폴더 상세 조회 (색상 포함)' }),
+        ApiCommonResponse(GetFolderResponseDto, { description: '조회 성공' }),
     )
 
 export const ApiCreateFolder = () =>

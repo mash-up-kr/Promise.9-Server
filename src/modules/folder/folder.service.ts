@@ -89,6 +89,13 @@ export class FolderService {
         }
     }
 
+    // 폴더 상세 조회 (색상 포함). 소유권 확인은 getOwnedFolder가 담당.
+    async get(userId: number, folderId: number) {
+        const folder = await this.getOwnedFolder(userId, folderId)
+
+        return this.toFolderSummary(folder)
+    }
+
     // 이름·색상 중 넘어온 값만 부분 수정. (이름을 바꿀 때만 중복 검사)
     async update(userId: number, folderId: number, input: UpdateFolderInput) {
         await this.getOwnedFolder(userId, folderId)

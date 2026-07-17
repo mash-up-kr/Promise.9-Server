@@ -28,6 +28,7 @@ import {
 import { FolderService } from './folder.service'
 import {
     ApiCreateFolder,
+    ApiGetFolder,
     ApiListFolderColors,
     ApiListFolders,
     ApiRemoveFolder,
@@ -56,6 +57,15 @@ export class FolderController {
     @ApiListFolderColors()
     listColors() {
         return this.folderService.listColors()
+    }
+
+    @Get(':folderId')
+    @ApiGetFolder()
+    get(
+        @CurrentUser() user: AuthUser,
+        @Param('folderId', ParseIntPipe) folderId: number,
+    ) {
+        return this.folderService.get(user.userId, folderId)
     }
 
     @Post()
