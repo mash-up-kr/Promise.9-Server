@@ -87,8 +87,7 @@ export class SystemFoldersDto {
 
     @ApiProperty({
         type: SystemFolderCountDto,
-        description:
-            '즐겨찾기 링크 수. 실제 folders row가 아닌 조회 조건 통계이며 현재는 0 고정',
+        description: '즐겨찾기 링크 수. 실제 folders row가 아닌 조회 조건 통계',
     })
     favorite!: SystemFolderCountDto
 
@@ -119,7 +118,7 @@ export class FolderListItemDto {
         example: TIMESTAMP_EXAMPLE,
         nullable: true,
         description:
-            '해당 폴더에 마지막으로 링크를 저장한 시각. 현재는 null 고정',
+            '해당 폴더에 마지막으로 링크를 저장한 시각. 활성 링크가 없으면 null',
     })
     lastSavedAt!: string | null
 }

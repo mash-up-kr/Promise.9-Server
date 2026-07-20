@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { and, desc, eq, isNull, ne } from 'drizzle-orm'
+import { and, eq, isNull, ne } from 'drizzle-orm'
 
 import { BaseException } from '../../common/exception/base.exception'
 import { DatabaseService } from '../../config/database/database.service'
@@ -49,44 +49,86 @@ export class FolderService {
     }
 
     async list(userId: number, input: ListFoldersQueryInput) {
-        const systemFolderCounts =
-            await this.linkService.getSystemFolderCounts(userId)
-        // TODO: isFavorite=true인 활성 링크의 실제 카운트를 조회한다.
-        const systemFolders = {
-            ...systemFolderCounts,
-            favorite: { linkCount: 0 },
-        }
-        const linkCounts = await this.linkService.countActiveByFolder(userId)
-
-        const folderRows = await this.db
-            .select({
-                id: folders.id,
-                name: folders.name,
-                color: folders.color,
-            })
-            .from(folders)
-            .where(eq(folders.userId, userId))
-            .orderBy(desc(folders.updatedAt))
+        // systemFolders(favorite 포함)와 폴더별 집계는 서로 독립적이라 함께 조회한다.
+        const [systemFolders, linkCounts, lastSavedAtByFolder, folderRows] =
+            await Promise.all([
+                this.linkService.getSystemFolderCounts(userId),
+                this.linkService.countActiveByFolder(userId),
+                this.linkService.lastSavedAtByFolder(userId),
+                this.db
+                    .select({
+                        id: folders.id,
+                        name: folders.name,
+                        color: folders.color,
+                        createdAt: folders.createdAt,
+                        updatedAt: folders.updatedAt,
+                    })
+                    .from(folders)
+                    .where(eq(folders.userId, userId)),
+            ])
 
         const folderList = folderRows.map((folder) => ({
             ...this.toFolderSummary(folder),
             linkCount: linkCounts.get(folder.id) ?? 0,
-            // TODO: 폴더별 MAX(links.createdAt) 집계 결과를 연결한다.
-            lastSavedAt: null,
+            lastSavedAt: lastSavedAtByFolder.get(folder.id) ?? null,
+            // 정렬 기준용 원본 값. 응답 계약에는 포함하지 않는다.
+            createdAt: folder.createdAt,
+            updatedAt: folder.updatedAt,
         }))
 
-        // TODO: sortBy/order 정렬을 실제 조회 쿼리에 적용한다.
-        // limit은 페이지네이션이 아니라 홈 화면 등에서 결과 개수만 제한할 때 사용한다.
-        void input.sortBy
-        void input.order
+        // 폴더 수는 사용자당 소수라 정렬은 메모리에서 처리한다. (lastSavedAt은
+        // 집계값이라 컬럼 orderBy로는 못 걸어 세 기준을 일관되게 다루려는 목적)
+        const sorted = this.sortFolders(folderList, input.sortBy, input.order)
+
+        // limit은 페이지네이션이 아니라 홈 화면 등에서 결과 개수만 제한하는 용도다.
+        const limited =
+            input.limit === undefined ? sorted : sorted.slice(0, input.limit)
 
         return {
             systemFolders,
-            folders:
-                input.limit === undefined
-                    ? folderList
-                    : folderList.slice(0, input.limit),
+            // 정렬 전용 필드(createdAt·updatedAt)는 응답에서 제외한다.
+            folders: limited.map(
+                ({ createdAt: _createdAt, updatedAt: _updatedAt, ...rest }) =>
+                    rest,
+            ),
         }
+    }
+
+    // sortBy/order로 폴더 목록을 정렬한다. 저장 이력이 없는 폴더(lastSavedAt=null)는
+    // 정렬 방향과 무관하게 항상 뒤로 보내고, 동률은 folderId로 안정 정렬한다.
+    private sortFolders<
+        T extends {
+            folderId: number
+            createdAt: Date
+            updatedAt: Date
+            lastSavedAt: Date | null
+        },
+    >(
+        items: T[],
+        sortBy: ListFoldersQueryInput['sortBy'],
+        order: 'asc' | 'desc',
+    ) {
+        const valueOf = (item: T): number | null => {
+            const value =
+                sortBy === 'createdAt'
+                    ? item.createdAt
+                    : sortBy === 'updatedAt'
+                      ? item.updatedAt
+                      : item.lastSavedAt
+            return value ? value.getTime() : null
+        }
+        const direction = order === 'asc' ? 1 : -1
+
+        return [...items].sort((a, b) => {
+            const av = valueOf(a)
+            const bv = valueOf(b)
+            if (av !== bv) {
+                if (av === null) return 1
+                if (bv === null) return -1
+                return (av - bv) * direction
+            }
+            return a.folderId - b.folderId
+        })
     }
 
     // 폴더 상세 조회 (색상 포함). 소유권 확인은 getOwnedFolder가 담당.

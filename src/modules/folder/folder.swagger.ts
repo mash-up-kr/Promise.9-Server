@@ -46,11 +46,9 @@ const LIST_FOLDERS_DESCRIPTION = `
 
 ### 현재 구현 상태
 
-- **현재 동작:** 전체·미분류·최근 삭제 링크 수, 사용자 폴더 목록, 폴더별 링크 수, 선택적 \`limit\`
-- **계약만 제공:** 즐겨찾기 링크 수, \`lastSavedAt\`, \`sortBy\`, \`order\`
-- 현재 사용자 폴더는 수정 최신순으로 고정되며 \`lastSavedAt=null\`을 반환합니다.
+- **현재 동작:** 전체·미분류·즐겨찾기·최근 삭제 링크 수, 사용자 폴더 목록, 폴더별 링크 수, \`lastSavedAt\`, \`sortBy\`/\`order\` 정렬, 선택적 \`limit\`
+- \`sortBy\`는 \`createdAt\`·\`updatedAt\`·\`lastSavedAt\` 기준이며, 저장 이력이 없는 폴더(\`lastSavedAt=null\`)는 정렬 방향과 무관하게 항상 뒤로 정렬됩니다.
 - 폴더 목록에는 cursor 페이지네이션을 적용하지 않으며 \`pagination\`, \`totalCount\`도 반환하지 않습니다.
-- 응답 Example은 링크 상태별 집계와 사용자 폴더 목록의 **목표 계약**을 보여줍니다.
 
 ${LINK_LIST_ITEMS_DESCRIPTION}
 `
