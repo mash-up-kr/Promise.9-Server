@@ -23,6 +23,7 @@
         "db:backup:verify": "bun run script/verify-db-backup.ts",
         "db:restore": "bun run script/restore-db.ts",
         "db:health": "bun run script/db-health.ts",
+        "db:seed:list": "bun run script/seed-links-folders.ts",
         "db:visualize_mermaid": "bun run script/visualize-db-mermaid.ts",
         "ui": "bun run script/ui/index.ts",
         "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" \"drizzle.config.ts\"",
