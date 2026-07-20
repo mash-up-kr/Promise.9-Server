@@ -322,7 +322,8 @@ export const ApiListLinks = () =>
                 enum: ['savedAt', 'viewedAt', 'deletedAt'],
                 default: 'savedAt',
             },
-            description: '[선택, 기본값: savedAt] 정렬 기준',
+            description:
+                '[선택, 기본값: savedAt] 정렬 기준. `viewedAt`은 조회 이력이 있는 링크만 대상으로 하며 `viewedAt=null` 링크는 결과에서 제외한다.',
         }),
         ApiQuery({
             name: 'order',

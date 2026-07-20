@@ -248,8 +248,15 @@ export class LinkService {
             conditions.push(eq(links.isFavorite, true))
         }
 
-        // sortBy → 실제 정렬 컬럼. viewedAt만 null 가능하고, savedAt(createdAt)과
-        // deletedAt은 각 필터 조건에서 항상 not-null이라 커서 정렬이 안정적이다.
+        // "최근 본" 정렬은 조회 이력이 있는 링크만 대상으로 한다.
+        // (계약: sortBy=viewedAt일 때 viewedAt=null 링크는 결과에서 제외)
+        if (input.sortBy === 'viewedAt') {
+            conditions.push(isNotNull(links.viewedAt))
+        }
+
+        // sortBy → 실제 정렬 컬럼. 위 조건들로 정렬 컬럼은 항상 not-null이 보장돼
+        // (savedAt=createdAt, deletedAt은 deleted 필터, viewedAt은 위 제외 조건)
+        // 커서 정렬이 안정적이다.
         const sortColumn = LINK_SORT_COLUMNS[input.sortBy]
 
         // 커서 조건은 목록 조회에만 적용하고 totalCount 집계에서는 제외한다.
