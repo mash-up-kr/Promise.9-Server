@@ -31,6 +31,7 @@ const SEED_USER_EMAIL = 'dev-seed@promise.local'
 
 type CliOptions = {
     env?: RuntimeEnvironment
+    force: boolean
     help: boolean
 }
 
@@ -40,12 +41,14 @@ const minutesAgo = (minutes: number) =>
     new Date(BASE.getTime() - minutes * 60_000)
 
 function parseArgs(argv: string[]): CliOptions {
-    const options: CliOptions = { help: false }
+    const options: CliOptions = { force: false, help: false }
 
     for (let index = 0; index < argv.length; index += 1) {
         const arg = argv[index]
         if (arg === '--help' || arg === '-h') {
             options.help = true
+        } else if (arg === '--force') {
+            options.force = true
         } else if (arg === '--env') {
             const { value, nextIndex } = readOptionValue(argv, index, '--env')
             options.env = parseRuntimeEnvironment(value)
@@ -63,10 +66,11 @@ function printHelp() {
     console.log(
         [
             '',
-            '사용법: bun run script/seed-links-folders.ts [--env development|production]',
+            '사용법: bun run script/seed-links-folders.ts [--env development|production] [--force]',
             '',
             `  고정 사용자(${SEED_USER_EMAIL})의 링크·폴더를 초기화하고 시드 데이터를 넣습니다.`,
-            '  기본 env는 development이며, production은 명시적으로 지정해야 합니다.',
+            '  --env를 생략하면 APP_ENV와 무관하게 항상 development를 사용합니다.',
+            '  --env production은 데이터 삭제 위험이 있어 --force를 함께 지정해야 실행됩니다.',
         ].join('\n'),
     )
 }
@@ -187,7 +191,16 @@ async function main() {
         return
     }
 
-    const config = resolveDatabaseConfig(options.env)
+    // 시드는 데이터를 삭제 후 재삽입하므로 APP_ENV를 그대로 따르지 않는다.
+    // --env를 생략하면 항상 development로 고정하고, production은 --force를 요구한다.
+    const appEnv: RuntimeEnvironment = options.env ?? 'development'
+    if (appEnv === 'production' && !options.force) {
+        throw new Error(
+            'production 대상 시드는 데이터 삭제 위험이 있어 "--env production --force"를 함께 지정해야 합니다.',
+        )
+    }
+
+    const config = resolveDatabaseConfig(appEnv)
     const client = postgres(config.databaseUrl, { max: 1 })
     const db = drizzle(client, { schema, casing: 'snake_case' })
 
