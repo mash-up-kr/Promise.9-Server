@@ -1,17 +1,24 @@
 import { Injectable, NotImplementedException } from '@nestjs/common'
 import {
     and,
+    Column,
     count,
-    desc,
     eq,
     ilike,
     isNotNull,
     isNull,
+    max,
     or,
     SQL,
 } from 'drizzle-orm'
 
 import { BaseException } from '../../common/exception/base.exception'
+import {
+    buildCursorCondition,
+    buildCursorOrderBy,
+    buildCursorPage,
+    decodeCursor,
+} from '../../common/pagination/cursor'
 import { DatabaseService } from '../../config/database/database.service'
 import { folders } from '../folder/folder.schema'
 import { FOLDER_ERROR } from '../folder/folder-error.constant'
@@ -25,6 +32,13 @@ import { CreateLinkTagInput } from './dto/tag.dto'
 import { LinkRow, links } from './link.schema'
 import { extractDomain, normalizeUrl, pickThumbnailUrl } from './link.util'
 import { LINK_ERROR } from './link-error.constant'
+
+// 목록 sortBy 값 → 실제 정렬 컬럼 매핑. viewedAt만 null 허용.
+const LINK_SORT_COLUMNS: Record<ListLinksQueryInput['sortBy'], Column> = {
+    savedAt: links.createdAt,
+    viewedAt: links.viewedAt,
+    deletedAt: links.deletedAt,
+}
 
 @Injectable()
 export class LinkService {
@@ -230,22 +244,48 @@ export class LinkService {
             conditions.push(isNull(links.folderId))
         }
 
-        // TODO: favorite=true일 때 isFavorite 조건을 목록 쿼리에 적용한다.
-        // TODO: sortBy/order와 cursor 기반 페이지네이션을 공통 로직으로 적용한다.
-        // 계약을 먼저 제공하는 단계이므로 현재는 기존과 동일하게 저장 최신순 전체 결과를 반환한다.
-        void input.favorite
-        void input.sortBy
-        void input.order
-        void input.cursor
+        if (input.favorite) {
+            conditions.push(eq(links.isFavorite, true))
+        }
 
-        const rows = await this.db
-            .select()
-            .from(links)
-            .where(and(...conditions))
-            .orderBy(desc(links.createdAt))
+        // sortBy → 실제 정렬 컬럼. viewedAt만 null 가능하고, savedAt(createdAt)과
+        // deletedAt은 각 필터 조건에서 항상 not-null이라 커서 정렬이 안정적이다.
+        const sortColumn = LINK_SORT_COLUMNS[input.sortBy]
+
+        // 커서 조건은 목록 조회에만 적용하고 totalCount 집계에서는 제외한다.
+        const cursorCondition = input.cursor
+            ? this.resolveCursorCondition(input.cursor, sortColumn, input.order)
+            : undefined
+
+        const [totalCount, rows] = await Promise.all([
+            this.countLinks(...conditions),
+            this.db
+                .select()
+                .from(links)
+                .where(
+                    and(
+                        ...conditions,
+                        ...(cursorCondition ? [cursorCondition] : []),
+                    ),
+                )
+                .orderBy(
+                    ...buildCursorOrderBy(sortColumn, links.id, input.order),
+                )
+                // 다음 페이지 존재 여부 판단을 위해 limit + 1개를 조회한다.
+                .limit(input.limit + 1),
+        ])
+
+        const { rows: pageRows, pagination } = buildCursorPage(
+            rows,
+            input.limit,
+            (row) => ({
+                v: this.cursorValueOf(row, input.sortBy),
+                id: row.id,
+            }),
+        )
 
         return {
-            links: rows.slice(0, input.limit).map((row) => ({
+            links: pageRows.map((row) => ({
                 linkId: row.id,
                 title: row.title,
                 source: row.domain,
@@ -254,34 +294,101 @@ export class LinkService {
                 thumbnailUrl: pickThumbnailUrl(row.metadata),
                 savedAt: row.createdAt,
             })),
-            pagination: {
-                nextCursor: null,
-                hasNext: false,
-                limit: input.limit,
-            },
-            totalCount: rows.length,
+            pagination,
+            totalCount,
         }
+    }
+
+    // 요청 cursor를 목록 쿼리 조건으로 변환한다. 형식이 어긋나면 400.
+    private resolveCursorCondition(
+        cursor: string,
+        sortColumn: Column,
+        order: 'asc' | 'desc',
+    ): SQL | undefined {
+        const decoded = decodeCursor(cursor)
+        if (!decoded) {
+            throw new BaseException(LINK_ERROR.INVALID_CURSOR)
+        }
+
+        return buildCursorCondition(
+            sortColumn,
+            links.id,
+            order,
+            decoded,
+            (raw) => {
+                const date = new Date(raw)
+                if (Number.isNaN(date.getTime())) {
+                    throw new BaseException(LINK_ERROR.INVALID_CURSOR)
+                }
+                return date
+            },
+        )
+    }
+
+    // 다음 커서에 담을 정렬 기준 값. 타임스탬프는 ISO 문자열, null이면 null.
+    private cursorValueOf(
+        row: LinkRow,
+        sortBy: ListLinksQueryInput['sortBy'],
+    ): string | null {
+        const value = {
+            savedAt: row.createdAt,
+            viewedAt: row.viewedAt,
+            deletedAt: row.deletedAt,
+        }[sortBy]
+
+        return value ? value.toISOString() : null
     }
 
     // 화면의 전체/미분류/최근삭제 링크 목록에 표시할 수를 한 번에 계산한다.
     async getSystemFolderCounts(userId: number) {
         const owned = eq(links.userId, userId)
 
-        const [all, uncategorized, recentlyDeleted] = await Promise.all([
-            this.countLinks(owned, isNull(links.deletedAt)),
-            this.countLinks(
-                owned,
-                isNull(links.folderId),
-                isNull(links.deletedAt),
-            ),
-            this.countLinks(owned, isNotNull(links.deletedAt)),
-        ])
+        const [all, uncategorized, favorite, recentlyDeleted] =
+            await Promise.all([
+                this.countLinks(owned, isNull(links.deletedAt)),
+                this.countLinks(
+                    owned,
+                    isNull(links.folderId),
+                    isNull(links.deletedAt),
+                ),
+                this.countLinks(
+                    owned,
+                    eq(links.isFavorite, true),
+                    isNull(links.deletedAt),
+                ),
+                this.countLinks(owned, isNotNull(links.deletedAt)),
+            ])
 
         return {
             all: { linkCount: all },
             uncategorized: { linkCount: uncategorized },
+            favorite: { linkCount: favorite },
             recentlyDeleted: { linkCount: recentlyDeleted },
         }
+    }
+
+    // TODO: 폴더별 links 집계 조회들(countActiveByFolder 포함)은 추후 LinkRepository 계층으로 이관한다.
+    // 사용자의 폴더별 마지막 활성 링크 저장 시각을 folderId → Date 맵으로 반환한다. (미분류 제외)
+    async lastSavedAtByFolder(userId: number): Promise<Map<number, Date>> {
+        const rows = await this.db
+            .select({
+                folderId: links.folderId,
+                lastSavedAt: max(links.createdAt),
+            })
+            .from(links)
+            .where(and(eq(links.userId, userId), isNull(links.deletedAt)))
+            .groupBy(links.folderId)
+
+        return new Map(
+            rows
+                .filter(
+                    (row) => row.folderId !== null && row.lastSavedAt !== null,
+                )
+                .map((row) => [
+                    row.folderId as number,
+                    new Date(row.lastSavedAt as string | Date),
+                ]),
+        )
     }
 
     // 사용자의 폴더별 활성 링크 수를 folderId → count 맵으로 반환한다. (미분류는 제외)
