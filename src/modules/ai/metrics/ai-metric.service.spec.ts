@@ -1,9 +1,9 @@
-import { DatabaseService } from '../../../config/database/database.service'
 import { AI_METRIC_STATUS, AI_TASK_TYPE } from '../ai.constants'
 
+import { AiMetricRepository } from './ai-metric.repository'
 import { AiMetricService } from './ai-metric.service'
 
-type DbMock = {
+type RepositoryMock = {
     insert: jest.Mock
 }
 
@@ -24,23 +24,23 @@ type MetricInsertPayload = {
 }
 
 describe('AiMetricService', () => {
-    let db: DbMock
+    let repository: RepositoryMock
     let service: AiMetricService
 
     beforeEach(() => {
-        db = {
+        repository = {
             insert: jest.fn(),
         }
-        service = new AiMetricService({
-            db,
-        } as unknown as DatabaseService)
+        service = new AiMetricService(
+            repository as unknown as AiMetricRepository,
+        )
     })
 
     it('성공 메트릭을 기록한다', async () => {
         const row = {
             id: '019886ad-0000-7000-8000-000000000001',
         }
-        const { values: insertValues } = mockInsertReturning(db, [row])
+        repository.insert.mockResolvedValue(row)
 
         const result = await service.record({
             userLinkId: 1,
@@ -55,7 +55,7 @@ describe('AiMetricService', () => {
         })
 
         expect(result).toBe(row)
-        const metric = getFirstCallArg<MetricInsertPayload>(insertValues)
+        const metric = getFirstCallArg<MetricInsertPayload>(repository.insert)
 
         expect(typeof metric.id).toBe('string')
         expect(metric).toMatchObject({
@@ -78,7 +78,7 @@ describe('AiMetricService', () => {
         const row = {
             id: '019886ad-0000-7000-8000-000000000002',
         }
-        const { values: insertValues } = mockInsertReturning(db, [row])
+        repository.insert.mockResolvedValue(row)
 
         const result = await service.record({
             userLinkId: 1,
@@ -93,7 +93,7 @@ describe('AiMetricService', () => {
         })
 
         expect(result).toBe(row)
-        const metric = getFirstCallArg<MetricInsertPayload>(insertValues)
+        const metric = getFirstCallArg<MetricInsertPayload>(repository.insert)
 
         expect(metric).toMatchObject({
             userLinkId: 1,
@@ -113,10 +113,7 @@ describe('AiMetricService', () => {
 
     it('insert 오류를 그대로 전파한다', async () => {
         const insertError = new Error('insert failed')
-        const returning = jest.fn().mockRejectedValue(insertError)
-        const values = jest.fn().mockReturnValue({ returning })
-
-        db.insert.mockReturnValue({ values })
+        repository.insert.mockRejectedValue(insertError)
 
         await expect(
             service.record({
@@ -130,25 +127,9 @@ describe('AiMetricService', () => {
                 ttlbMs: 300,
             }),
         ).rejects.toBe(insertError)
-        expect(returning).toHaveBeenCalledTimes(1)
+        expect(repository.insert).toHaveBeenCalledTimes(1)
     })
 })
-
-function mockInsertReturning(db: DbMock, rows: unknown[]) {
-    const returning = jest.fn().mockResolvedValue(rows)
-    const values = jest.fn().mockReturnValue({
-        returning,
-    })
-
-    db.insert.mockReturnValue({
-        values,
-    })
-
-    return {
-        values,
-        returning,
-    }
-}
 
 function getFirstCallArg<T>(mock: jest.Mock): T {
     const firstCall = (mock.mock.calls as Array<[T]>)[0]
