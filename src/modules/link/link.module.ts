@@ -7,12 +7,13 @@ import { AuthModule } from '../auth/auth.module'
 import { OgService } from './og/og.service'
 import { OgFetcherService } from './og/og-fetcher.service'
 import { LinkController } from './link.controller'
+import { LinkRepository } from './link.repository'
 import { LinkService } from './link.service'
 
 @Module({
     imports: [DatabaseModule, AuthModule, UrlSecurityModule],
     controllers: [LinkController],
-    providers: [LinkService, OgService, OgFetcherService],
+    providers: [LinkService, LinkRepository, OgService, OgFetcherService],
     exports: [LinkService],
 })
 export class LinkModule {}

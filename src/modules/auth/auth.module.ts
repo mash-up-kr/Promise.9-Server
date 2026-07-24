@@ -3,8 +3,8 @@ import { ConfigService } from '@nestjs/config'
 import { JwtModule } from '@nestjs/jwt'
 import { PassportModule } from '@nestjs/passport'
 
-import { DatabaseModule } from '../../config/database/database.module'
 import { ValidatedEnvironment } from '../../config/environment'
+import { UserModule } from '../user/user.module'
 
 import { GoogleProvider } from './providers/google.provider'
 import { JwtStrategy } from './strategies/jwt.strategy'
@@ -13,7 +13,7 @@ import { AuthService } from './auth.service'
 
 @Module({
     imports: [
-        DatabaseModule,
+        UserModule,
         PassportModule,
         JwtModule.registerAsync({
             inject: [ConfigService],

@@ -6,7 +6,7 @@ import {
     HttpStatus,
     Logger,
 } from '@nestjs/common'
-import { Response } from 'express'
+import { Request, Response } from 'express'
 
 import { BaseException, ErrorResponse } from '../exception/base.exception'
 import { COMMON_ERROR } from '../exception/common-error-code.constant'
@@ -17,10 +17,11 @@ export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
 
     catch(exception: HttpException, host: ArgumentsHost) {
         const ctx = host.switchToHttp()
+        const request = ctx.getRequest<Request>()
         const response = ctx.getResponse<Response>()
         const body = this.toErrorResponse(exception)
 
-        this.log(exception, body.error.code)
+        this.log(exception, request, body)
 
         response.status(body.error.code).json(body)
     }
@@ -81,8 +82,22 @@ export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
     }
 
     // 에러에 대한 Log 기록 함수
-    private log(exception: HttpException, statusCode: number) {
-        const logLevel = statusCode >= 500 ? 'error' : 'warn'
-        this.logger[logLevel](exception.message, exception.stack)
+    private log(
+        exception: HttpException,
+        request: Request,
+        body: ErrorResponse,
+    ) {
+        const { code, errorCode, message } = body.error
+        // 어떤 요청이 어떤 상태·에러코드·메시지로 실패했는지 한 줄로 남긴다.
+        const summary = `${request.method} ${request.originalUrl} → ${code} (errorCode: ${errorCode}) ${message}`
+
+        // 5xx는 서버가 확인해야 할 실제 문제이므로 스택트레이스와 함께 error로 남긴다.
+        if (code >= 500) {
+            this.logger.error(summary, exception.stack)
+            return
+        }
+
+        // 4xx는 정상적인 클라이언트 오류이므로 스택트레이스 없이 debug 수준으로만 남긴다.
+        this.logger.debug(summary)
     }
 }

@@ -1,11 +1,9 @@
 import { Injectable } from '@nestjs/common'
-import { and, eq, isNull } from 'drizzle-orm'
 
 import { BaseException } from '../../common/exception/base.exception'
-import { DatabaseService } from '../../config/database/database.service'
 
-import { socialAccounts } from './social-account.schema'
-import { users } from './user.schema'
+import { SocialAccountRepository } from './repository/social-account.repository'
+import { UserRepository } from './repository/user.repository'
 import { USER_ERROR } from './user-error.constant'
 
 export interface MeResponse {
@@ -17,24 +15,20 @@ export interface MeResponse {
 
 @Injectable()
 export class UserService {
-    private get db() {
-        return this.databaseService.db
-    }
-
-    constructor(private readonly databaseService: DatabaseService) {}
+    constructor(
+        private readonly userRepository: UserRepository,
+        private readonly socialAccountRepository: SocialAccountRepository,
+    ) {}
 
     async getMe(userId: number): Promise<MeResponse> {
-        const user = await this.db.query.users.findFirst({
-            where: and(eq(users.id, userId), isNull(users.deletedAt)),
-        })
+        const user = await this.userRepository.findActiveById(userId)
 
         if (!user) {
             throw new BaseException(USER_ERROR.NOT_FOUND)
         }
 
-        const socialAccount = await this.db.query.socialAccounts.findFirst({
-            where: eq(socialAccounts.userId, userId),
-        })
+        const socialAccount =
+            await this.socialAccountRepository.findByUserId(userId)
 
         return {
             userId: user.id,
