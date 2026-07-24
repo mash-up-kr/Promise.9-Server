@@ -3,6 +3,9 @@ import { NextFunction, Request, Response } from 'express'
 
 const logger = new Logger('HTTP')
 
+// 헬스체크 등 주기적으로 호출돼 로그를 도배하는 경로는 접근 로그에서 제외한다.
+const SKIP_PATHS = new Set(['/api/v1'])
+
 // 모든 요청의 method·url·status·소요시간을 응답 완료 시점에 남기는 접근 로그.
 // res의 'finish' 이벤트를 써서 예외로 끝난 요청까지 최종 상태코드를 기록한다.
 export function httpLoggerMiddleware(
@@ -10,6 +13,11 @@ export function httpLoggerMiddleware(
     res: Response,
     next: NextFunction,
 ) {
+    if (SKIP_PATHS.has(req.path)) {
+        next()
+        return
+    }
+
     const { method, originalUrl } = req
     const startedAt = Date.now()
 
