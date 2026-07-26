@@ -123,4 +123,4 @@ erDiagram
 
 - `folders`는 활성(`deleted_at IS NULL`) 폴더 기준 `(user_id, name)` partial unique index로 폴더명 유일성을 DB에서 보장한다. `sort_order`, `deleted_at` 컬럼을 추가했다.
 - 기존 `links` 테이블은 위 비정규화 구조로 **교체**했고, `LinkService`/`FolderService`도 새 컬럼에 맞춰 재작성했다.
-- 이 스키마는 아직 DB에 적용(`db:generate`/`db:migrate`)하지 않은 초안이다. URL 정규화·메타데이터 수집·AI 요약 파이프라인은 후속 작업이다.
+- 링크 저장 후 현재 프로세스에서 메타데이터 수집과 AI 요약·태그 생성을 비동기로 실행한다. 큐와 재시도 정책은 후속 작업이다.

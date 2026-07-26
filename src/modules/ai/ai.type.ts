@@ -10,6 +10,24 @@ import {
 import { AiMetricGeneratedResult } from './metrics/ai-metric.type'
 import { AI_METRIC_STATUS, AiTaskType } from './ai.constants'
 
+/** 링크 요약과 태그 생성에 공통으로 사용하는 링크 정보. */
+export type AiLinkAnalysisInput = {
+    userLinkId: number
+    url: string
+    title: string | null
+    description: string | null
+    content: string | null
+    llm?: LlmTargetOptions
+}
+
+export type AiSummaryResult = {
+    summary: string
+}
+
+export type AiTagResult = {
+    tags: string[]
+}
+
 /** AiService의 private text 생성 실행기에 전달하는 AI 작업 입력. */
 export type AiGenerateTextInput = {
     userLinkId: number

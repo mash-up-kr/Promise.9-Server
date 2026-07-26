@@ -5,32 +5,94 @@ import { UrlSecurityService } from '../../../common/security/url-security/url-se
 import { LINK_ERROR } from '../link-error.constant'
 
 import {
-    OG_PREVIEW_BROWSER_HEADERS,
-    OG_PREVIEW_FETCH,
-    OG_PREVIEW_REDIRECT_STATUSES,
-} from './og.constants'
+    LINK_CONTENT_FETCH,
+    LINK_CONTENT_REDIRECT_STATUSES,
+    LINK_CONTENT_REQUEST_HEADERS,
+    MAX_CRAWLED_CONTENT_LENGTH,
+} from './content.constants'
+import {
+    ParsedLinkInformation,
+    parseLinkInformation,
+    parseLinkPreview,
+} from './link-content.parser'
+import { isRobotsPathAllowed } from './robots.parser'
 
-export interface FetchedHtml {
+export type CollectedLinkContent = ParsedLinkInformation
+
+export interface LinkPreview {
+    title: string | null
+    thumbnailUrl: string | null
+    source: string
+}
+
+interface FetchedLinkHtml {
     html: string
     finalUrl: URL
 }
 
+interface FetchLinkHtmlOptions {
+    beforeRequest?: (url: URL) => Promise<void>
+}
+
 @Injectable()
-export class OgFetcherService {
-    private readonly logger = new Logger(OgFetcherService.name)
+export class LinkContentService {
+    private readonly logger = new Logger(LinkContentService.name)
 
     constructor(private readonly urlSecurity: UrlSecurityService) {}
 
+    // 저장 전 화면에 사용할 링크 제목, 대표 이미지, 출처를 수집한다.
+    async preview(url: string): Promise<LinkPreview> {
+        const { html, finalUrl } = await this.fetchHtml(url)
+        const { title, image } = parseLinkPreview(html)
+
+        return {
+            title,
+            thumbnailUrl: this.toAbsoluteImage(image, finalUrl),
+            source: finalUrl.hostname.replace(/^www\./, ''),
+        }
+    }
+
+    // robots.txt가 허용한 링크에서 요약과 태그 생성에 필요한 정보를 수집한다.
+    async collect(url: string): Promise<CollectedLinkContent | null> {
+        try {
+            const { html } = await this.fetchHtml(url, {
+                beforeRequest: async (requestUrl) => {
+                    if (!(await this.isCrawlingAllowed(requestUrl))) {
+                        throw new Error(
+                            'robots.txt에서 크롤링을 허용하지 않았습니다.',
+                        )
+                    }
+                },
+            })
+            const information = parseLinkInformation(html)
+            const content = information.content?.slice(
+                0,
+                MAX_CRAWLED_CONTENT_LENGTH,
+            )
+            const collected = {
+                ...information,
+                content: content || null,
+            }
+
+            return this.hasCollectedContent(collected) ? collected : null
+        } catch {
+            return null
+        }
+    }
+
     // 사용자 URL의 HTML을 SSRF 방어와 함께 받아온다 (타임아웃·리다이렉트·용량 제한).
-    async fetchHtml(rawUrl: string): Promise<FetchedHtml> {
+    private async fetchHtml(
+        rawUrl: string,
+        options: FetchLinkHtmlOptions = {},
+    ): Promise<FetchedLinkHtml> {
         const controller = new AbortController()
         const timeout = setTimeout(
             () => controller.abort(),
-            OG_PREVIEW_FETCH.timeoutMs,
+            LINK_CONTENT_FETCH.timeoutMs,
         )
 
         try {
-            return await this.followAndRead(rawUrl, controller.signal)
+            return await this.followAndRead(rawUrl, controller.signal, options)
         } catch (error) {
             // URL 검증 실패(400)·비정상 응답(502) 등 이미 구분된 HTTP 예외는 그대로 전달한다.
             if (error instanceof HttpException) {
@@ -48,6 +110,56 @@ export class OgFetcherService {
         }
     }
 
+    // 페이지 요청과 같은 UA로 robots.txt를 확인하며, 확인 실패 시 보수적으로 차단한다.
+    private async isCrawlingAllowed(url: URL): Promise<boolean> {
+        const controller = new AbortController()
+        const timeout = setTimeout(
+            () => controller.abort(),
+            LINK_CONTENT_FETCH.timeoutMs,
+        )
+
+        try {
+            const robotsUrl = new URL('/robots.txt', url.origin)
+            const response = await fetch(robotsUrl, {
+                headers: {
+                    ...LINK_CONTENT_REQUEST_HEADERS,
+                    Accept: 'text/plain,*/*',
+                },
+                redirect: 'manual',
+                signal: controller.signal,
+            })
+
+            if (response.status === 404) return true
+            if (!response.ok) return false
+
+            return isRobotsPathAllowed(
+                await response.text(),
+                url.pathname + url.search,
+                LINK_CONTENT_REQUEST_HEADERS['User-Agent'],
+            )
+        } catch {
+            return false
+        } finally {
+            clearTimeout(timeout)
+        }
+    }
+
+    // 대표 이미지 상대 경로를 최종 링크 URL 기준의 절대 경로로 변환한다.
+    private toAbsoluteImage(image: string | null, baseUrl: URL): string | null {
+        if (!image) return null
+
+        try {
+            return new URL(image, baseUrl).toString()
+        } catch {
+            return null
+        }
+    }
+
+    // 제목, 설명, 본문 중 하나라도 수집됐는지 확인한다.
+    private hasCollectedContent(content: CollectedLinkContent): boolean {
+        return Boolean(content.title || content.description || content.content)
+    }
+
     private isAbortError(error: unknown): boolean {
         return error instanceof Error && error.name === 'AbortError'
     }
@@ -55,24 +167,26 @@ export class OgFetcherService {
     private async followAndRead(
         rawUrl: string,
         signal: AbortSignal,
-    ): Promise<FetchedHtml> {
+        options: FetchLinkHtmlOptions,
+    ): Promise<FetchedLinkHtml> {
         let currentUrl = this.urlSecurity.parseHttpUrl(rawUrl)
 
         for (
             let redirectCount = 0;
-            redirectCount <= OG_PREVIEW_FETCH.maxRedirects;
+            redirectCount <= LINK_CONTENT_FETCH.maxRedirects;
             redirectCount++
         ) {
             // 리다이렉트 대상도 매 홉마다 같은 SSRF 기준으로 다시 검증한다.
             await this.urlSecurity.resolvePublicUrl(currentUrl)
+            await options.beforeRequest?.(currentUrl)
 
             const response = await fetch(currentUrl, {
-                headers: OG_PREVIEW_BROWSER_HEADERS,
+                headers: LINK_CONTENT_REQUEST_HEADERS,
                 redirect: 'manual',
                 signal,
             })
 
-            if (!OG_PREVIEW_REDIRECT_STATUSES.includes(response.status)) {
+            if (!LINK_CONTENT_REDIRECT_STATUSES.includes(response.status)) {
                 return this.readHtml(response, currentUrl)
             }
 
@@ -90,7 +204,7 @@ export class OgFetcherService {
     private async readHtml(
         response: Response,
         finalUrl: URL,
-    ): Promise<FetchedHtml> {
+    ): Promise<FetchedLinkHtml> {
         if (!response.ok) {
             this.cancelBody(response)
             // 원문 서버가 2xx가 아닌 상태(봇 차단 403·404·5xx 등)를 응답한 경우.
@@ -139,7 +253,7 @@ export class OgFetcherService {
                 receivedBytes += value.byteLength
                 chunks.push(value)
 
-                if (receivedBytes >= OG_PREVIEW_FETCH.maxBytes) {
+                if (receivedBytes >= LINK_CONTENT_FETCH.maxBytes) {
                     await reader.cancel()
                     break
                 }

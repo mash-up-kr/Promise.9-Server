@@ -11,10 +11,12 @@ import { AiMetricService } from './metrics/ai-metric.service'
 import { AiMetricGeneratedResult } from './metrics/ai-metric.type'
 import {
     AI_FAILURE_ERROR_CODE,
+    AI_LINK_ANALYSIS,
     AI_METRIC_STATUS,
     AI_TASK_RESPONSE_SCHEMA_NAME,
+    AI_TASK_TYPE,
 } from './ai.constants'
-import { AiGenerationError, AiUseCaseNotImplementedError } from './ai.exception'
+import { AiGenerationError } from './ai.exception'
 import {
     AiCreateGenerationErrorInput,
     AiGenerateObjectInput,
@@ -22,9 +24,22 @@ import {
     AiGenerateTextInput,
     AiGenerateTextResult,
     AiGenerationFailure,
+    AiLinkAnalysisInput,
     AiRecordMetricInput,
     AiResolveTargetInput,
+    AiSummaryResult,
+    AiTagResult,
 } from './ai.type'
+
+const summaryResultSchema = z.object({
+    summary: z.string().min(1).max(AI_LINK_ANALYSIS.summaryMaxLength),
+})
+
+const tagResultSchema = z.object({
+    tags: z
+        .array(z.string().min(1).max(AI_LINK_ANALYSIS.tagMaxLength))
+        .max(AI_LINK_ANALYSIS.tagMaxCount),
+})
 
 @Injectable()
 export class AiService {
@@ -35,16 +50,86 @@ export class AiService {
         private readonly aiMetricService: AiMetricService,
     ) {}
 
-    generateSummary(): Promise<never> {
-        // TODO: 요약 prompt 조립, text/object 방식 선택, 결과 품질과 반환 정책을 구현한다.
-        return Promise.reject(
-            new AiUseCaseNotImplementedError('generateSummary'),
-        )
+    // 수집한 링크 정보를 기반으로 최대 300자의 한국어 요약을 생성한다.
+    async generateSummary(
+        input: AiLinkAnalysisInput,
+    ): Promise<AiSummaryResult> {
+        const result = await this.generateObject({
+            userLinkId: input.userLinkId,
+            taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+            promptKey: AI_LINK_ANALYSIS.summaryPromptKey,
+            llm: input.llm,
+            system: [
+                '너는 사용자가 저장한 링크를 소개하는 친절한 콘텐츠 큐레이터다.',
+                `이 링크의 내용을 ${AI_LINK_ANALYSIS.summaryMaxLength}자 내외로 요약하되, 공백 포함 ${AI_LINK_ANALYSIS.summaryMaxLength}자를 넘지 않는다.`,
+                '핵심 주제와 중요한 내용을 처음 보는 사람도 이해하기 쉽게 정리한다.',
+                '모든 문장은 자연스러운 한국어 ~요체로 작성한다.',
+                '마지막 문장은 사용자가 이 링크에서 얻을 수 있는 정보나 도움을 안내하는 뉘앙스로 마무리한다.',
+                '마지막 문장도 반드시 원문에서 확인할 수 있는 내용에 근거한다.',
+                '입력에 없는 사실, 과장된 효용, 광고 문구, 민감정보를 추정하지 않는다.',
+            ].join('\n'),
+            prompt: this.buildLinkInformationPrompt(input),
+            schema: summaryResultSchema,
+        })
+
+        return {
+            summary: result.data.summary.trim(),
+        }
     }
 
-    generateTags(): Promise<never> {
-        // TODO: 태그 prompt 조립, text/object 방식 선택, parsing과 결과 품질 및 반환 정책을 구현한다.
-        return Promise.reject(new AiUseCaseNotImplementedError('generateTags'))
+    // 수집한 링크 정보를 기반으로 대분류 구분 없이 내용 태그를 최대 5개 생성한다.
+    async generateTags(input: AiLinkAnalysisInput): Promise<AiTagResult> {
+        const result = await this.generateObject({
+            userLinkId: input.userLinkId,
+            taskType: AI_TASK_TYPE.TAG_GENERATE,
+            promptKey: AI_LINK_ANALYSIS.tagPromptKey,
+            llm: input.llm,
+            system: [
+                '너는 링크 저장 서비스의 태그 생성기다.',
+                `링크 내용을 대표하는 구체적인 태그를 최대 ${AI_LINK_ANALYSIS.tagMaxCount}개 생성한다.`,
+                '대분류와 소분류를 구분하지 않는다.',
+                `각 태그는 공백 포함 ${AI_LINK_ANALYSIS.tagMaxLength}자를 넘지 않으며 #을 붙이지 않는다.`,
+                '중복, 광고 문구, 근거 없는 민감정보 추정을 피한다.',
+            ].join('\n'),
+            prompt: this.buildLinkInformationPrompt(input),
+            schema: tagResultSchema,
+        })
+
+        return {
+            tags: this.sanitizeTags(result.data.tags),
+        }
+    }
+
+    // URL과 실제로 수집된 필드만 조합해 요약·태그 생성의 공통 사용자 prompt를 만든다.
+    private buildLinkInformationPrompt(input: AiLinkAnalysisInput): string {
+        return [
+            `URL: ${input.url}`,
+            input.title ? `TITLE: ${input.title}` : undefined,
+            input.description ? `DESCRIPTION: ${input.description}` : undefined,
+            input.content ? `CONTENT:\n${input.content}` : undefined,
+            !input.title && !input.description && !input.content
+                ? '수집된 페이지 정보가 없으므로 URL에서 확실히 알 수 있는 범위만 사용한다.'
+                : undefined,
+        ]
+            .filter((value): value is string => Boolean(value))
+            .join('\n')
+    }
+
+    // 모델 태그의 #·공백을 정리하고 중복을 제거한 뒤 정책상 최대 개수만 남긴다.
+    private sanitizeTags(values: string[]): string[] {
+        return [
+            ...new Set(
+                values.map((value) =>
+                    value
+                        .replace(/^#+/, '')
+                        .trim()
+                        .replace(/\s+/g, ' ')
+                        .slice(0, AI_LINK_ANALYSIS.tagMaxLength),
+                ),
+            ),
+        ]
+            .filter(Boolean)
+            .slice(0, AI_LINK_ANALYSIS.tagMaxCount)
     }
 
     private async generateText(

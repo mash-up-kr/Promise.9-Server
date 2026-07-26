@@ -1,6 +1,7 @@
 import { Injectable, NotImplementedException } from '@nestjs/common'
 import {
     and,
+    asc,
     count,
     desc,
     eq,
@@ -24,11 +25,16 @@ import {
 import { CreateLinkTagInput } from './dto/tag.dto'
 import { LinkRow, links } from './link.schema'
 import { extractDomain, normalizeUrl, pickThumbnailUrl } from './link.util'
+import { LinkAnalysisService } from './link-analysis.service'
 import { LINK_ERROR } from './link-error.constant'
+import { tags } from './tag.schema'
 
 @Injectable()
 export class LinkService {
-    constructor(private readonly databaseService: DatabaseService) {}
+    constructor(
+        private readonly databaseService: DatabaseService,
+        private readonly linkAnalysisService: LinkAnalysisService,
+    ) {}
 
     private get db() {
         return this.databaseService.db
@@ -56,6 +62,12 @@ export class LinkService {
             })
             .returning()
 
+        this.linkAnalysisService.start({
+            linkId: row.id,
+            userId,
+            url: row.originalUrl,
+        })
+
         return {
             linkId: row.id,
             url: row.originalUrl,
@@ -65,8 +77,10 @@ export class LinkService {
 
     async detail(userId: number, linkId: number) {
         const link = await this.getOwnedLink(userId, linkId)
-        const folder = await this.findFolderRef(link.folderId)
-        const isProcessing = link.aiSummaryStatus === 'PENDING'
+        const [folder, linkTags] = await Promise.all([
+            this.findFolderRef(link.folderId),
+            this.findTags(userId, linkId),
+        ])
 
         return {
             linkId: link.id,
@@ -82,11 +96,9 @@ export class LinkService {
             viewedAt: link.viewedAt,
             processingStatus: link.aiSummaryStatus,
             aiSummary: link.aiSummary,
-            // 처리 중 null과 처리 완료 후 빈 결과를 구분한다.
-            // TODO: 태그·연관 링크 조회 로직을 연결한다.
-            tags: isProcessing ? null : [],
+            tags: linkTags,
             memo: link.memo,
-            relatedLinks: isProcessing ? null : [],
+            relatedLinks: [],
         }
     }
 
@@ -322,6 +334,22 @@ export class LinkService {
             .limit(1)
 
         return row ? { folderId: row.id, folderName: row.name } : null
+    }
+
+    // 링크에 저장된 사용자·규칙·AI 태그를 표시 순서와 생성 순서대로 반환한다.
+    private async findTags(userId: number, linkId: number) {
+        const rows = await this.db
+            .select()
+            .from(tags)
+            .where(and(eq(tags.userId, userId), eq(tags.linkId, linkId)))
+            .orderBy(asc(tags.sortOrder), asc(tags.id))
+
+        return rows.map((row) => ({
+            tagId: row.id,
+            name: row.name,
+            sourceType: row.sourceType,
+            sortOrder: row.sortOrder,
+        }))
     }
 
     // 링크 소유권을 확인하고, 없거나 타 사용자 소유면 404로 처리한다.

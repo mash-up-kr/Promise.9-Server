@@ -15,7 +15,7 @@ import {
     AI_TASK_TYPE,
     AiTaskType,
 } from './ai.constants'
-import { AiGenerationError, AiUseCaseNotImplementedError } from './ai.exception'
+import { AiGenerationError } from './ai.exception'
 import { AiService } from './ai.service'
 
 type InternalAiService = {
@@ -75,12 +75,70 @@ describe('AiService', () => {
         loggerErrorSpy.mockRestore()
     })
 
-    it('요약과 태그 유스케이스는 구현 전까지 명시적으로 실패한다', async () => {
-        await expect(service.generateSummary()).rejects.toBeInstanceOf(
-            AiUseCaseNotImplementedError,
+    it('수집한 링크 정보로 최대 300자 요약을 생성한다', async () => {
+        llmService.generateObjectWithResolvedTarget.mockResolvedValueOnce({
+            model: 'gpt-test',
+            data: {
+                summary: ' 생성된 요약 ',
+            },
+            ttlbMs: 120,
+        })
+
+        const result = await service.generateSummary({
+            userLinkId: 1,
+            url: 'https://example.com/article',
+            title: '링크 제목',
+            description: '링크 설명',
+            content: '링크 본문',
+        })
+
+        expect(result).toEqual({
+            summary: '생성된 요약',
+        })
+        const summaryRequest =
+            llmService.generateObjectWithResolvedTarget.mock.calls[0]?.[0]
+
+        expect(summaryRequest?.prompt).toContain('CONTENT:\n링크 본문')
+        expect(summaryRequest?.system).toContain(
+            '자연스러운 한국어 ~요체로 작성한다.',
         )
-        await expect(service.generateTags()).rejects.toBeInstanceOf(
-            AiUseCaseNotImplementedError,
+        expect(summaryRequest?.responseSchemaName).toBe(
+            AI_TASK_RESPONSE_SCHEMA_NAME[AI_TASK_TYPE.SUMMARY_GENERATE],
+        )
+        expect(aiMetricService.record).toHaveBeenCalledWith(
+            expect.objectContaining({
+                taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+                promptKey: 'link_summary_v1',
+            }),
+        )
+    })
+
+    it('대분류 없이 내용 태그를 정규화해 최대 5개 반환한다', async () => {
+        llmService.generateObjectWithResolvedTarget.mockResolvedValueOnce({
+            model: 'gpt-test',
+            data: {
+                tags: ['#AI', 'AI', ' 링크   저장 ', '', 'NestJS', 'LLM'],
+            },
+            ttlbMs: 120,
+        })
+
+        const result = await service.generateTags({
+            userLinkId: 1,
+            url: 'https://example.com/article',
+            title: null,
+            description: null,
+            content: null,
+        })
+
+        expect(result).toEqual({
+            tags: ['AI', '링크 저장', 'NestJS', 'LLM'],
+        })
+        const tagRequest =
+            llmService.generateObjectWithResolvedTarget.mock.calls[0]?.[0]
+
+        expect(tagRequest?.prompt).toContain('수집된 페이지 정보가 없으므로')
+        expect(tagRequest?.responseSchemaName).toBe(
+            AI_TASK_RESPONSE_SCHEMA_NAME[AI_TASK_TYPE.TAG_GENERATE],
         )
     })
 
