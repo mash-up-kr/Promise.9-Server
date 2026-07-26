@@ -11,11 +11,13 @@ import {
     SQL,
 } from 'drizzle-orm'
 
+import { BaseException } from '../../common/exception/base.exception'
 import { DatabaseService } from '../../config/database/database.service'
 import { FolderRow, folders } from '../folder/folder.schema'
 
 import { ListLinksQueryInput } from './dto/link.dto'
 import { LinkRow, links } from './link.schema'
+import { LINK_ERROR } from './link-error.constant'
 
 // 링크 부분 수정 시 반영할 컬럼 집합 (undefined 필드는 호출부에서 제외한다)
 export type LinkUpdatePatch = Partial<typeof links.$inferInsert>
@@ -29,7 +31,9 @@ export class LinkRepository {
     }
 
     async insert(values: typeof links.$inferInsert): Promise<LinkRow> {
-        const [row] = await this.db.insert(links).values(values).returning()
+        const [row] = await this.throwOnDuplicateUrl(() =>
+            this.db.insert(links).values(values).returning(),
+        )
 
         return row
     }
@@ -193,5 +197,21 @@ export class LinkRepository {
             .where(and(...conditions))
 
         return row.value
+    }
+
+    // 선검사와 저장 사이의 경합으로 partial unique index를 위반할 때 나는 23505를 도메인 예외로 변환한다.
+    private async throwOnDuplicateUrl<T>(run: () => Promise<T>): Promise<T> {
+        try {
+            return await run()
+        } catch (error) {
+            if (
+                error instanceof Error &&
+                'code' in error &&
+                error.code === '23505'
+            ) {
+                throw new BaseException(LINK_ERROR.ALREADY_EXISTS)
+            }
+            throw error
+        }
     }
 }
