@@ -113,11 +113,11 @@ describe('AiService', () => {
         )
     })
 
-    it('대분류 없이 내용 태그를 정규화해 최대 5개 반환한다', async () => {
+    it('대분류 없이 생성한 내용 태그를 그대로 반환한다', async () => {
         llmService.generateObjectWithResolvedTarget.mockResolvedValueOnce({
             model: 'gpt-test',
             data: {
-                tags: ['#AI', 'AI', ' 링크   저장 ', '', 'NestJS', 'LLM'],
+                tags: ['AI', '링크 저장', 'NestJS', 'LLM'],
             },
             ttlbMs: 120,
         })
@@ -137,6 +137,12 @@ describe('AiService', () => {
             llmService.generateObjectWithResolvedTarget.mock.calls[0]?.[0]
 
         expect(tagRequest?.prompt).toContain('수집된 페이지 정보가 없으므로')
+        expect(tagRequest?.system).toContain(
+            '태그 값에는 # 문자를 포함하지 않는다.',
+        )
+        expect(tagRequest?.system).toContain(
+            '같은 의미나 같은 표기의 태그를 중복해서 생성하지 않는다.',
+        )
         expect(tagRequest?.responseSchemaName).toBe(
             AI_TASK_RESPONSE_SCHEMA_NAME[AI_TASK_TYPE.TAG_GENERATE],
         )

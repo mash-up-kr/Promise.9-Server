@@ -86,18 +86,19 @@ export class AiService {
             llm: input.llm,
             system: [
                 '너는 링크 저장 서비스의 태그 생성기다.',
-                `링크 내용을 대표하는 구체적인 태그를 최대 ${AI_LINK_ANALYSIS.tagMaxCount}개 생성한다.`,
-                '대분류와 소분류를 구분하지 않는다.',
-                `각 태그는 공백 포함 ${AI_LINK_ANALYSIS.tagMaxLength}자를 넘지 않으며 #을 붙이지 않는다.`,
-                '중복, 광고 문구, 근거 없는 민감정보 추정을 피한다.',
+                `링크 내용을 대표하는 구체적인 태그를 ${AI_LINK_ANALYSIS.tagMaxCount}개 생성한다.`,
+                `각 태그는 공백 포함 1자 이상 ${AI_LINK_ANALYSIS.tagMaxLength}자 이하로 작성한다.`,
+                '태그 값에는 # 문자를 포함하지 않는다.',
+                '같은 의미나 같은 표기의 태그를 중복해서 생성하지 않는다.',
+                '태그 앞뒤에 공백을 넣지 않고 단어 사이에 연속 공백을 사용하지 않는다.',
+                '태그를 공백으로 생성하지 않는다.',
+                '광고 문구와 근거 없는 민감정보 추정을 피한다.',
             ].join('\n'),
             prompt: this.buildLinkInformationPrompt(input),
             schema: tagResultSchema,
         })
 
-        return {
-            tags: this.sanitizeTags(result.data.tags),
-        }
+        return result.data
     }
 
     // URL과 실제로 수집된 필드만 조합해 요약·태그 생성의 공통 사용자 prompt를 만든다.
@@ -113,23 +114,6 @@ export class AiService {
         ]
             .filter((value): value is string => Boolean(value))
             .join('\n')
-    }
-
-    // 모델 태그의 #·공백을 정리하고 중복을 제거한 뒤 정책상 최대 개수만 남긴다.
-    private sanitizeTags(values: string[]): string[] {
-        return [
-            ...new Set(
-                values.map((value) =>
-                    value
-                        .replace(/^#+/, '')
-                        .trim()
-                        .replace(/\s+/g, ' ')
-                        .slice(0, AI_LINK_ANALYSIS.tagMaxLength),
-                ),
-            ),
-        ]
-            .filter(Boolean)
-            .slice(0, AI_LINK_ANALYSIS.tagMaxCount)
     }
 
     private async generateText(
