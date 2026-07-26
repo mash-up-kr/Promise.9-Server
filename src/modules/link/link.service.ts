@@ -1,4 +1,4 @@
-import { Injectable, NotImplementedException } from '@nestjs/common'
+import { Injectable, Logger, NotImplementedException } from '@nestjs/common'
 import {
     and,
     asc,
@@ -17,6 +17,8 @@ import { DatabaseService } from '../../config/database/database.service'
 import { folders } from '../folder/folder.schema'
 import { FOLDER_ERROR } from '../folder/folder-error.constant'
 
+import { LinkAnalysisService } from './analysis/link-analysis.service'
+import { LinkAnalysisInput } from './analysis/link-analysis.type'
 import {
     CreateLinkInput,
     ListLinksQueryInput,
@@ -25,12 +27,13 @@ import {
 import { CreateLinkTagInput } from './dto/tag.dto'
 import { LinkRow, links } from './link.schema'
 import { extractDomain, normalizeUrl, pickThumbnailUrl } from './link.util'
-import { LinkAnalysisService } from './link-analysis.service'
 import { LINK_ERROR } from './link-error.constant'
 import { tags } from './tag.schema'
 
 @Injectable()
 export class LinkService {
+    private readonly logger = new Logger(LinkService.name)
+
     constructor(
         private readonly databaseService: DatabaseService,
         private readonly linkAnalysisService: LinkAnalysisService,
@@ -56,13 +59,13 @@ export class LinkService {
                 originalUrl: input.url,
                 normalizedUrl,
                 domain: extractDomain(input.url),
-                // 메타데이터/요약 수집은 후속 작업 — 저장 시점엔 대기 상태로 둔다.
+                // 링크 정보와 AI 요약은 저장 이후 비동기로 생성하므로 대기 상태로 둔다.
                 aiSummaryStatus: 'PENDING',
                 memo: input.memo ?? null,
             })
             .returning()
 
-        this.linkAnalysisService.start({
+        this.startLinkAnalysis({
             linkId: row.id,
             userId,
             url: row.originalUrl,
@@ -309,6 +312,17 @@ export class LinkService {
                 .filter((row) => row.folderId !== null)
                 .map((row) => [row.folderId as number, row.linkCount]),
         )
+    }
+
+    // 링크 저장 응답과 분석 작업을 분리하고, 현재 프로세스의 예상 밖 실패를 안전하게 기록한다.
+    private startLinkAnalysis(input: LinkAnalysisInput): void {
+        this.linkAnalysisService.analyze(input).catch((error: unknown) => {
+            const errorType = error instanceof Error ? error.name : typeof error
+
+            this.logger.error(
+                `링크 분석 작업이 중단되었습니다. linkId=${input.linkId}, errorType=${errorType}`,
+            )
+        })
     }
 
     // 조건에 맞는 링크 수를 센다. (화면의 링크 상태별 카운트용)

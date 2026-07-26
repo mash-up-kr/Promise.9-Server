@@ -88,6 +88,24 @@ describe('LinkContentService', () => {
         expect(fetchSpy).toHaveBeenCalledTimes(1)
     })
 
+    it('수집한 제목·설명·본문을 각 입력 제한 길이로 자른다', async () => {
+        fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 404 }))
+            .mockResolvedValueOnce(
+                htmlResponse(`
+                    <meta property="og:title" content="${'제'.repeat(600)}" />
+                    <meta name="description" content="${'설'.repeat(3_000)}" />
+                    <body>${'본'.repeat(17_000)}</body>
+                `),
+            )
+
+        const result = await service.collect('https://example.com/article')
+
+        expect(result?.title).toHaveLength(512)
+        expect(result?.description).toHaveLength(2_000)
+        expect(result?.content).toHaveLength(16_000)
+    })
+
     it('리다이렉트된 링크도 robots.txt가 허용한 경우에만 요청한다', async () => {
         fetchSpy
             .mockResolvedValueOnce(

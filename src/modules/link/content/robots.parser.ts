@@ -5,11 +5,16 @@ export function isRobotsPathAllowed(
     userAgent: string,
 ): boolean {
     const groups = parseRobotsGroups(robotsTxt)
-    const applicable = groups.filter((group) =>
+    const normalizedUserAgent = userAgent.toLowerCase()
+    const matchedGroups = groups.filter((group) =>
         group.agents.some(
-            (agent) => agent === '*' || userAgent.toLowerCase().includes(agent),
+            (agent) => agent !== '*' && normalizedUserAgent.includes(agent),
         ),
     )
+    const applicable =
+        matchedGroups.length > 0
+            ? matchedGroups
+            : groups.filter((group) => group.agents.includes('*'))
     const rules = applicable.flatMap((group) => group.rules)
     const matches = rules.filter(
         (rule) => rule.path && matchesPath(path, rule.path),
@@ -38,10 +43,8 @@ function parseRobotsGroups(robotsTxt: string) {
     for (const rawLine of robotsTxt.split(/\r?\n/)) {
         const line = rawLine.replace(/#.*/, '').trim()
 
-        if (!line) {
-            current = undefined
-            continue
-        }
+        // 빈 줄과 주석 줄은 현재 user-agent 그룹을 끝내지 않는다.
+        if (!line) continue
 
         const separator = line.indexOf(':')
 
@@ -71,8 +74,12 @@ function parseRobotsGroups(robotsTxt: string) {
     return groups
 }
 
-// robots 경로의 * wildcard를 반영해 요청 경로가 규칙에 매칭되는지 확인한다.
+// robots 경로의 * wildcard와 끝 일치 표식($)을 반영한다.
 function matchesPath(path: string, rulePath: string): boolean {
-    const escaped = rulePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    return new RegExp(`^${escaped.replace(/\\\*/g, '.*')}`).test(path)
+    const endsAtPath = rulePath.endsWith('$')
+    const pathPattern = endsAtPath ? rulePath.slice(0, -1) : rulePath
+    const escaped = pathPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const pattern = escaped.replace(/\\\*/g, '.*')
+
+    return new RegExp(`^${pattern}${endsAtPath ? '$' : ''}`).test(path)
 }

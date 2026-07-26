@@ -1,22 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { and, eq, isNull } from 'drizzle-orm'
 
-import { DatabaseService } from '../../config/database/database.service'
-import { AiService } from '../ai/ai.service'
-import { AiLinkAnalysisInput } from '../ai/ai.type'
+import { DatabaseService } from '../../../config/database/database.service'
+import { AiService } from '../../ai/ai.service'
+import { AiLinkAnalysisInput } from '../../ai/ai.type'
+import { LinkContentService } from '../content/link-content.service'
+import { CollectedLinkContent } from '../content/link-content.type'
+import { LinkMetadata, links } from '../link.schema'
+import { tags } from '../tag.schema'
 
-import {
-    CollectedLinkContent,
-    LinkContentService,
-} from './content/link-content.service'
-import { LinkMetadata, links } from './link.schema'
-import { tags } from './tag.schema'
-
-export type StartLinkAnalysisInput = {
-    linkId: number
-    userId: number
-    url: string
-}
+import { LinkAnalysisInput } from './link-analysis.type'
 
 @Injectable()
 export class LinkAnalysisService {
@@ -32,28 +25,18 @@ export class LinkAnalysisService {
         return this.databaseService.db
     }
 
-    // 링크 저장 응답을 기다리게 하지 않고 현재 프로세스에서 분석 작업을 시작한다.
-    start(input: StartLinkAnalysisInput): void {
-        void this.analyze(input).catch((error: unknown) => {
-            this.logFailure(
-                `링크 분석 작업이 중단되었습니다. linkId=${input.linkId}`,
-                error,
-            )
-        })
-    }
-
     // 링크 정보를 먼저 수집한 뒤 요약과 태그 생성 작업을 서로 독립적으로 실행한다.
-    private async analyze(input: StartLinkAnalysisInput): Promise<void> {
+    async analyze(input: LinkAnalysisInput): Promise<void> {
         const information = await this.linkContentService.collect(input.url)
 
-        await this.updateCollectedInformation(input, information).catch(
-            (error: unknown) => {
-                this.logFailure(
-                    `수집한 링크 정보 저장에 실패했습니다. linkId=${input.linkId}`,
-                    error,
-                )
-            },
-        )
+        try {
+            await this.updateCollectedInformation(input, information)
+        } catch (error) {
+            this.logFailure(
+                `수집한 링크 정보 저장에 실패했습니다. linkId=${input.linkId}`,
+                error,
+            )
+        }
 
         const aiInput: AiLinkAnalysisInput = {
             userLinkId: input.linkId,
@@ -63,7 +46,7 @@ export class LinkAnalysisService {
             content: information?.content ?? null,
         }
 
-        await Promise.allSettled([
+        await Promise.all([
             this.generateAndSaveSummary(input, aiInput),
             this.generateAndSaveTags(input, aiInput),
         ])
@@ -71,7 +54,7 @@ export class LinkAnalysisService {
 
     // 화면과 검색에 사용하는 제목·설명만 저장하고, 크롤링 본문은 DB에 보관하지 않는다.
     private async updateCollectedInformation(
-        input: StartLinkAnalysisInput,
+        input: LinkAnalysisInput,
         information: CollectedLinkContent | null,
     ): Promise<void> {
         if (!information?.title && !information?.description) return
@@ -119,7 +102,7 @@ export class LinkAnalysisService {
 
     // 요약 성공 시 결과와 SUCCESS를 저장하고, 실패 시 요약 상태만 FAILED로 변경한다.
     private async generateAndSaveSummary(
-        input: StartLinkAnalysisInput,
+        input: LinkAnalysisInput,
         aiInput: AiLinkAnalysisInput,
     ): Promise<void> {
         try {
@@ -144,20 +127,21 @@ export class LinkAnalysisService {
                 `AI 요약 생성에 실패했습니다. linkId=${input.linkId}`,
                 error,
             )
-            await this.markSummaryFailed(input).catch(
-                (statusUpdateError: unknown) => {
-                    this.logFailure(
-                        `AI 요약 실패 상태 저장에 실패했습니다. linkId=${input.linkId}`,
-                        statusUpdateError,
-                    )
-                },
-            )
+
+            try {
+                await this.markSummaryFailed(input)
+            } catch (statusUpdateError) {
+                this.logFailure(
+                    `AI 요약 실패 상태 저장에 실패했습니다. linkId=${input.linkId}`,
+                    statusUpdateError,
+                )
+            }
         }
     }
 
     // 태그 생성이 성공하고 결과가 있을 때만 기존 AI 태그를 새 결과로 교체한다.
     private async generateAndSaveTags(
-        input: StartLinkAnalysisInput,
+        input: LinkAnalysisInput,
         aiInput: AiLinkAnalysisInput,
     ): Promise<void> {
         try {
@@ -176,7 +160,7 @@ export class LinkAnalysisService {
 
     // 사용자·규칙 태그는 보존하고 AI 태그만 transaction 안에서 멱등하게 교체한다.
     private async replaceAiTags(
-        input: StartLinkAnalysisInput,
+        input: LinkAnalysisInput,
         generatedTags: string[],
     ): Promise<void> {
         await this.db.transaction(async (tx) => {
@@ -221,9 +205,7 @@ export class LinkAnalysisService {
     }
 
     // 요약 생성 또는 결과 저장이 실패한 링크의 요약 상태를 FAILED로 변경한다.
-    private async markSummaryFailed(
-        input: StartLinkAnalysisInput,
-    ): Promise<void> {
+    private async markSummaryFailed(input: LinkAnalysisInput): Promise<void> {
         await this.db
             .update(links)
             .set({

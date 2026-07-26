@@ -1,21 +1,13 @@
 import { Logger } from '@nestjs/common'
 
-import { DatabaseService } from '../../config/database/database.service'
-import { AiService } from '../ai/ai.service'
+import { DatabaseService } from '../../../config/database/database.service'
+import { AiService } from '../../ai/ai.service'
+import { LinkContentService } from '../content/link-content.service'
 
-import { LinkContentService } from './content/link-content.service'
-import {
-    LinkAnalysisService,
-    StartLinkAnalysisInput,
-} from './link-analysis.service'
-
-type InternalLinkAnalysisService = {
-    analyze(input: StartLinkAnalysisInput): Promise<void>
-}
+import { LinkAnalysisService } from './link-analysis.service'
 
 describe('LinkAnalysisService', () => {
     let service: LinkAnalysisService
-    let internalService: InternalLinkAnalysisService
     let linkContentService: jest.Mocked<Pick<LinkContentService, 'collect'>>
     let aiService: jest.Mocked<
         Pick<AiService, 'generateSummary' | 'generateTags'>
@@ -55,7 +47,6 @@ describe('LinkAnalysisService', () => {
             linkContentService as unknown as LinkContentService,
             aiService as unknown as AiService,
         )
-        internalService = service as unknown as InternalLinkAnalysisService
     })
 
     afterEach(() => {
@@ -75,7 +66,7 @@ describe('LinkAnalysisService', () => {
             tags: ['AI', '링크 저장'],
         })
 
-        await internalService.analyze({
+        await service.analyze({
             linkId: 1,
             userId: 2,
             url: 'https://example.com/article',
@@ -138,7 +129,7 @@ describe('LinkAnalysisService', () => {
             tags: [],
         })
 
-        await internalService.analyze({
+        await service.analyze({
             linkId: 1,
             userId: 2,
             url: 'https://example.com/article',
@@ -151,6 +142,41 @@ describe('LinkAnalysisService', () => {
         ])
         expect(transactionMock).not.toHaveBeenCalled()
         expect(insertedTags).toEqual([])
+    })
+
+    it('태그 생성 실패는 성공한 요약 상태에 영향을 주지 않는다', async () => {
+        linkContentService.collect.mockResolvedValueOnce({
+            title: '링크 제목',
+            description: null,
+            content: '링크 본문',
+        })
+        aiService.generateSummary.mockResolvedValueOnce({
+            summary: '생성된 요약이에요.',
+        })
+        aiService.generateTags.mockRejectedValueOnce(new Error('tag failed'))
+
+        await service.analyze({
+            linkId: 1,
+            userId: 2,
+            url: 'https://example.com/article',
+        })
+
+        expect(updatePatches).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    aiSummary: '생성된 요약이에요.',
+                    aiSummaryStatus: 'SUCCESS',
+                }),
+            ]),
+        )
+        expect(updatePatches).not.toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    aiSummaryStatus: 'FAILED',
+                }),
+            ]),
+        )
+        expect(transactionMock).not.toHaveBeenCalled()
     })
 })
 

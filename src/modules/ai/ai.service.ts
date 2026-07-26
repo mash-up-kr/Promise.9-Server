@@ -28,18 +28,12 @@ import {
     AiRecordMetricInput,
     AiResolveTargetInput,
     AiSummaryResult,
-    AiTagResult,
+    AiTagsResult,
 } from './ai.type'
-
-const summaryResultSchema = z.object({
-    summary: z.string().min(1).max(AI_LINK_ANALYSIS.summaryMaxLength),
-})
-
-const tagResultSchema = z.object({
-    tags: z
-        .array(z.string().min(1).max(AI_LINK_ANALYSIS.tagMaxLength))
-        .max(AI_LINK_ANALYSIS.tagMaxCount),
-})
+import {
+    aiSummaryResultSchema,
+    aiTagsResultSchema,
+} from './ai-link-analysis.schema'
 
 @Injectable()
 export class AiService {
@@ -69,7 +63,7 @@ export class AiService {
                 '입력에 없는 사실, 과장된 효용, 광고 문구, 민감정보를 추정하지 않는다.',
             ].join('\n'),
             prompt: this.buildLinkInformationPrompt(input),
-            schema: summaryResultSchema,
+            schema: aiSummaryResultSchema,
         })
 
         return {
@@ -78,7 +72,7 @@ export class AiService {
     }
 
     // 수집한 링크 정보를 기반으로 대분류 구분 없이 내용 태그를 최대 5개 생성한다.
-    async generateTags(input: AiLinkAnalysisInput): Promise<AiTagResult> {
+    async generateTags(input: AiLinkAnalysisInput): Promise<AiTagsResult> {
         const result = await this.generateObject({
             userLinkId: input.userLinkId,
             taskType: AI_TASK_TYPE.TAG_GENERATE,
@@ -95,7 +89,7 @@ export class AiService {
                 '광고 문구와 근거 없는 민감정보 추정을 피한다.',
             ].join('\n'),
             prompt: this.buildLinkInformationPrompt(input),
-            schema: tagResultSchema,
+            schema: aiTagsResultSchema,
         })
 
         return result.data

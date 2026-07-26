@@ -8,31 +8,17 @@ import {
     LINK_CONTENT_FETCH,
     LINK_CONTENT_REDIRECT_STATUSES,
     LINK_CONTENT_REQUEST_HEADERS,
-    MAX_CRAWLED_CONTENT_LENGTH,
-} from './content.constants'
+    LINK_CONTENT_TEXT_LIMIT,
+    LINK_CONTENT_USER_AGENT,
+} from './link-content.constants'
+import { parseLinkInformation, parseLinkPreview } from './link-content.parser'
 import {
-    ParsedLinkInformation,
-    parseLinkInformation,
-    parseLinkPreview,
-} from './link-content.parser'
+    CollectedLinkContent,
+    FetchedLinkHtml,
+    FetchLinkHtmlOptions,
+    LinkPreview,
+} from './link-content.type'
 import { isRobotsPathAllowed } from './robots.parser'
-
-export type CollectedLinkContent = ParsedLinkInformation
-
-export interface LinkPreview {
-    title: string | null
-    thumbnailUrl: string | null
-    source: string
-}
-
-interface FetchedLinkHtml {
-    html: string
-    finalUrl: URL
-}
-
-interface FetchLinkHtmlOptions {
-    beforeRequest?: (url: URL) => Promise<void>
-}
 
 @Injectable()
 export class LinkContentService {
@@ -48,7 +34,7 @@ export class LinkContentService {
         return {
             title,
             thumbnailUrl: this.toAbsoluteImage(image, finalUrl),
-            source: finalUrl.hostname.replace(/^www\./, ''),
+            source: this.toSource(finalUrl),
         }
     }
 
@@ -65,13 +51,19 @@ export class LinkContentService {
                 },
             })
             const information = parseLinkInformation(html)
-            const content = information.content?.slice(
-                0,
-                MAX_CRAWLED_CONTENT_LENGTH,
-            )
             const collected = {
-                ...information,
-                content: content || null,
+                title: this.limitText(
+                    information.title,
+                    LINK_CONTENT_TEXT_LIMIT.title,
+                ),
+                description: this.limitText(
+                    information.description,
+                    LINK_CONTENT_TEXT_LIMIT.description,
+                ),
+                content: this.limitText(
+                    information.content,
+                    LINK_CONTENT_TEXT_LIMIT.content,
+                ),
             }
 
             return this.hasCollectedContent(collected) ? collected : null
@@ -129,13 +121,20 @@ export class LinkContentService {
                 signal: controller.signal,
             })
 
-            if (response.status === 404) return true
-            if (!response.ok) return false
+            if (response.status === 404) {
+                this.cancelBody(response)
+                return true
+            }
+
+            if (!response.ok) {
+                this.cancelBody(response)
+                return false
+            }
 
             return isRobotsPathAllowed(
-                await response.text(),
+                await this.readLimitedText(response),
                 url.pathname + url.search,
-                LINK_CONTENT_REQUEST_HEADERS['User-Agent'],
+                LINK_CONTENT_USER_AGENT,
             )
         } catch {
             return false
@@ -155,15 +154,27 @@ export class LinkContentService {
         }
     }
 
+    // 최종 URL의 호스트에서 표시용 도메인(선행 www. 제거)을 만든다.
+    private toSource(finalUrl: URL): string {
+        return finalUrl.hostname.replace(/^www\./, '')
+    }
+
     // 제목, 설명, 본문 중 하나라도 수집됐는지 확인한다.
     private hasCollectedContent(content: CollectedLinkContent): boolean {
         return Boolean(content.title || content.description || content.content)
     }
 
+    // HTML에서 수집한 문자열을 저장·AI 입력에 허용된 길이까지만 유지한다.
+    private limitText(value: string | null, maxLength: number): string | null {
+        return value?.slice(0, maxLength) || null
+    }
+
+    // 네트워크 예외가 AbortController의 타임아웃 취소인지 구분한다.
     private isAbortError(error: unknown): boolean {
         return error instanceof Error && error.name === 'AbortError'
     }
 
+    // 리다이렉트의 각 URL을 다시 검증하고 최종 HTML 응답을 읽는다.
     private async followAndRead(
         rawUrl: string,
         signal: AbortSignal,

@@ -1,13 +1,4 @@
-export type ParsedLinkInformation = {
-    title: string | null
-    description: string | null
-    content: string | null
-}
-
-export type ParsedLinkPreview = {
-    title: string | null
-    image: string | null
-}
+import { ParsedLinkInformation, ParsedLinkPreview } from './link-content.type'
 
 // 요약과 태그 생성에 필요한 제목, 설명, 읽을 수 있는 본문을 HTML에서 추출한다.
 export function parseLinkInformation(html: string): ParsedLinkInformation {
@@ -48,8 +39,9 @@ function findMetaContent(
         if (attributeValue?.toLowerCase() !== key) continue
 
         const content = readAttribute(tag, 'content')
+        const decoded = content ? decodeHtml(content) : ''
 
-        if (content) return decodeHtml(content)
+        if (decoded) return decoded
     }
 
     return null
@@ -57,9 +49,11 @@ function findMetaContent(
 
 // og:title이 없는 페이지에서 title 태그의 텍스트를 제목으로 사용한다.
 function extractTitle(html: string): string | null {
-    const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
+    const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
 
-    return title ? decodeHtml(title) : null
+    if (!match) return null
+
+    return decodeHtml(match[1]) || null
 }
 
 // AI 입력에 불필요한 실행 요소와 HTML 태그를 제거해 읽을 수 있는 본문으로 만든다.
@@ -95,7 +89,7 @@ function decodeHtml(value: string): string {
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'")
-        .replace(/&#x2F;/gi, '/')
+        .replace(/&#x2F;/g, '/')
         .replace(/\s+/g, ' ')
         .trim()
 }

@@ -24,7 +24,7 @@ export type AiSummaryResult = {
     summary: string
 }
 
-export type AiTagResult = {
+export type AiTagsResult = {
     tags: string[]
 }
 
