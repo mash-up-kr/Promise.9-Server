@@ -12,6 +12,14 @@ import { ValidatedEnvironment } from '../environment'
 
 import * as schema from './schema'
 
+// drizzle 트랜잭션 콜백이 넘겨주는 tx 타입 (db와 동일한 쿼리 인터페이스)
+export type Transaction = Parameters<
+    Parameters<PostgresJsDatabase<typeof schema>['transaction']>[0]
+>[0]
+
+// repository 메서드가 일반 커넥션(db) 또는 트랜잭션(tx) 어느 쪽에서도 실행되게 하는 실행자 타입
+export type DbExecutor = PostgresJsDatabase<typeof schema> | Transaction
+
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     private readonly logger = new Logger(DatabaseService.name)
