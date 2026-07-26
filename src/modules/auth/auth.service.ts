@@ -5,13 +5,14 @@ import { randomUUID } from 'crypto'
 import type { StringValue } from 'ms'
 
 import { BaseException } from '../../common/exception/base.exception'
+import { DatabaseService } from '../../config/database/database.service'
 import { ValidatedEnvironment } from '../../config/environment'
-import { RefreshTokenRepository } from '../user/repository/refresh-token.repository'
 import { UserRepository } from '../user/repository/user.repository'
 
 import { SupportedProvider } from './dto/auth.dto'
 import { GoogleProvider } from './providers/google.provider'
 import { SocialProvider } from './providers/social-provider.interface'
+import { RefreshTokenRepository } from './repository/refresh-token.repository'
 import { TOKEN_TYPE, TokenType } from './auth.constants'
 import { AUTH_ERROR } from './auth-error.constant'
 import { hashToken } from './crypto.utils'
@@ -39,6 +40,7 @@ export class AuthService {
     private readonly refreshExpiresIn: string
 
     constructor(
+        private readonly databaseService: DatabaseService,
         private readonly userRepository: UserRepository,
         private readonly refreshTokenRepository: RefreshTokenRepository,
         private readonly jwtService: JwtService,
@@ -125,7 +127,12 @@ export class AuthService {
             throw new BaseException(AUTH_ERROR.INVALID_TOKEN)
         }
 
-        await this.userRepository.withdraw(payload.sub)
+        // 리프레시 토큰(auth 도메인) 삭제와 회원·소셜 정리(user 도메인)를 한 트랜잭션으로 묶는다.
+        // 두 모듈에 걸친 크로스 도메인 트랜잭션이라 진입점인 AuthService가 경계를 연다.
+        await this.databaseService.db.transaction(async (tx) => {
+            await this.refreshTokenRepository.deleteByUserId(payload.sub, tx)
+            await this.userRepository.deleteAccount(payload.sub, tx)
+        })
     }
 
     private getProvider(provider: SupportedProvider): SocialProvider {

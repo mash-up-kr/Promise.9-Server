@@ -3,16 +3,19 @@ import { ConfigService } from '@nestjs/config'
 import { JwtModule } from '@nestjs/jwt'
 import { PassportModule } from '@nestjs/passport'
 
+import { DatabaseModule } from '../../config/database/database.module'
 import { ValidatedEnvironment } from '../../config/environment'
 import { UserModule } from '../user/user.module'
 
 import { GoogleProvider } from './providers/google.provider'
+import { RefreshTokenRepository } from './repository/refresh-token.repository'
 import { JwtStrategy } from './strategies/jwt.strategy'
 import { AuthController } from './auth.controller'
 import { AuthService } from './auth.service'
 
 @Module({
     imports: [
+        DatabaseModule,
         UserModule,
         PassportModule,
         JwtModule.registerAsync({
@@ -25,7 +28,12 @@ import { AuthService } from './auth.service'
         }),
     ],
     controllers: [AuthController],
-    providers: [AuthService, JwtStrategy, GoogleProvider],
+    providers: [
+        AuthService,
+        RefreshTokenRepository,
+        JwtStrategy,
+        GoogleProvider,
+    ],
     exports: [JwtStrategy, JwtModule],
 })
 export class AuthModule {}

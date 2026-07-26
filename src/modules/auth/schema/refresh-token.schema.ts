@@ -8,7 +8,7 @@ import {
     varchar,
 } from 'drizzle-orm/pg-core'
 
-import { users } from './user.schema'
+import { users } from '../../user/schema/user.schema'
 
 // 리프레시 토큰 저장 테이블. 원문 대신 해시만 보관하고 RTR(rotation)로 재사용을 탐지한다.
 // tokenFamily는 회전 체인을 묶는 식별자 — 탈취 감지 시 family 전체를 revoke한다.

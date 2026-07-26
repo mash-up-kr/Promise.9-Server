@@ -1,20 +1,20 @@
 import { Injectable } from '@nestjs/common'
 import { and, eq, isNull } from 'drizzle-orm'
 
-import { DatabaseService } from '../../../config/database/database.service'
+import {
+    DatabaseService,
+    DbExecutor,
+} from '../../../config/database/database.service'
 import { users } from '../schema/user.schema'
 
-import { RefreshTokenRepository } from './refresh-token.repository'
 import { SocialAccountRepository } from './social-account.repository'
 
-// 회원(users) 테이블 접근과, users를 포함하는 다중 테이블 트랜잭션을 담당한다.
-// social/refresh 리포지토리를 주입받아 트랜잭션을 이 계층 안에서 완결한다.
+// 회원(users) 테이블 접근과, users·social을 아우르는 user 도메인 트랜잭션을 담당한다.
 @Injectable()
 export class UserRepository {
     constructor(
         private readonly databaseService: DatabaseService,
         private readonly socialAccountRepository: SocialAccountRepository,
-        private readonly refreshTokenRepository: RefreshTokenRepository,
     ) {}
 
     private get db() {
@@ -72,16 +72,14 @@ export class UserRepository {
         })
     }
 
-    // 리프레시 토큰·소셜 연동 정보를 먼저 지우고, 유저는 hard delete 대신 soft delete한다.
-    async withdraw(userId: number) {
-        await this.db.transaction(async (tx) => {
-            await this.refreshTokenRepository.deleteByUserId(userId, tx)
-            await this.socialAccountRepository.deleteByUserId(userId, tx)
+    // 회원 탈퇴 시 user 도메인 정리: 소셜 연동을 지우고 유저는 hard delete 대신 soft delete한다.
+    // (리프레시 토큰 삭제는 auth 도메인 소관이라 호출부인 AuthService가 같은 트랜잭션에서 함께 처리한다.)
+    async deleteAccount(userId: number, executor: DbExecutor = this.db) {
+        await this.socialAccountRepository.deleteByUserId(userId, executor)
 
-            await tx
-                .update(users)
-                .set({ deletedAt: new Date() })
-                .where(and(eq(users.id, userId), isNull(users.deletedAt)))
-        })
+        await executor
+            .update(users)
+            .set({ deletedAt: new Date() })
+            .where(and(eq(users.id, userId), isNull(users.deletedAt)))
     }
 }
