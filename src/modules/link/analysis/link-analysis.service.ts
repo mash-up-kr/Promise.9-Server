@@ -1,13 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { and, eq, isNull } from 'drizzle-orm'
 
-import { DatabaseService } from '../../../config/database/database.service'
 import { AiService } from '../../ai/ai.service'
 import { AiLinkAnalysisInput } from '../../ai/ai.type'
 import { LinkContentService } from '../content/link-content.service'
 import { CollectedLinkContent } from '../content/link-content.type'
-import { LinkMetadata, links } from '../link.schema'
-import { tags } from '../tag.schema'
+import { LinkRepository, LinkUpdatePatch } from '../link.repository'
+import { LinkMetadata } from '../link.schema'
 
 import { LinkAnalysisInput } from './link-analysis.type'
 
@@ -16,14 +14,10 @@ export class LinkAnalysisService {
     private readonly logger = new Logger(LinkAnalysisService.name)
 
     constructor(
-        private readonly databaseService: DatabaseService,
+        private readonly linkRepository: LinkRepository,
         private readonly linkContentService: LinkContentService,
         private readonly aiService: AiService,
     ) {}
-
-    private get db() {
-        return this.databaseService.db
-    }
 
     // 링크 정보를 먼저 수집한 뒤 요약과 태그 생성 작업을 서로 독립적으로 실행한다.
     async analyze(input: LinkAnalysisInput): Promise<void> {
@@ -59,21 +53,14 @@ export class LinkAnalysisService {
     ): Promise<void> {
         if (!information?.title && !information?.description) return
 
-        const [row] = await this.db
-            .select({ metadata: links.metadata })
-            .from(links)
-            .where(
-                and(
-                    eq(links.id, input.linkId),
-                    eq(links.userId, input.userId),
-                    isNull(links.deletedAt),
-                ),
-            )
-            .limit(1)
+        const row = await this.linkRepository.findAnalysisMetadata(
+            input.userId,
+            input.linkId,
+        )
 
         if (!row) return
 
-        const patch: Partial<typeof links.$inferInsert> = {
+        const patch: LinkUpdatePatch = {
             updatedAt: new Date(),
         }
 
@@ -88,16 +75,11 @@ export class LinkAnalysisService {
             )
         }
 
-        await this.db
-            .update(links)
-            .set(patch)
-            .where(
-                and(
-                    eq(links.id, input.linkId),
-                    eq(links.userId, input.userId),
-                    isNull(links.deletedAt),
-                ),
-            )
+        await this.linkRepository.updateActive(
+            input.userId,
+            input.linkId,
+            patch,
+        )
     }
 
     // 요약 성공 시 결과와 SUCCESS를 저장하고, 실패 시 요약 상태만 FAILED로 변경한다.
@@ -108,20 +90,11 @@ export class LinkAnalysisService {
         try {
             const result = await this.aiService.generateSummary(aiInput)
 
-            await this.db
-                .update(links)
-                .set({
-                    aiSummary: result.summary,
-                    aiSummaryStatus: 'SUCCESS',
-                    updatedAt: new Date(),
-                })
-                .where(
-                    and(
-                        eq(links.id, input.linkId),
-                        eq(links.userId, input.userId),
-                        isNull(links.deletedAt),
-                    ),
-                )
+            await this.linkRepository.updateActive(input.userId, input.linkId, {
+                aiSummary: result.summary,
+                aiSummaryStatus: 'SUCCESS',
+                updatedAt: new Date(),
+            })
         } catch (error) {
             this.logFailure(
                 `AI 요약 생성에 실패했습니다. linkId=${input.linkId}`,
@@ -163,62 +136,23 @@ export class LinkAnalysisService {
         input: LinkAnalysisInput,
         generatedTags: string[],
     ): Promise<void> {
-        await this.db.transaction(async (tx) => {
-            const [link] = await tx
-                .select({ id: links.id })
-                .from(links)
-                .where(
-                    and(
-                        eq(links.id, input.linkId),
-                        eq(links.userId, input.userId),
-                        isNull(links.deletedAt),
-                    ),
-                )
-                .limit(1)
-
-            if (!link) return
-
-            await tx
-                .delete(tags)
-                .where(
-                    and(
-                        eq(tags.linkId, input.linkId),
-                        eq(tags.userId, input.userId),
-                        eq(tags.sourceType, 'ai'),
-                    ),
-                )
-
-            await tx
-                .insert(tags)
-                .values(
-                    generatedTags.map((name, index) => ({
-                        userId: input.userId,
-                        linkId: input.linkId,
-                        name,
-                        normalizedName: this.normalizeTagName(name),
-                        sourceType: 'ai',
-                        sortOrder: index + 1,
-                    })),
-                )
-                .onConflictDoNothing()
-        })
+        await this.linkRepository.replaceAiTags(
+            input.userId,
+            input.linkId,
+            generatedTags.map((name, index) => ({
+                name,
+                normalizedName: this.normalizeTagName(name),
+                sortOrder: index + 1,
+            })),
+        )
     }
 
     // 요약 생성 또는 결과 저장이 실패한 링크의 요약 상태를 FAILED로 변경한다.
     private async markSummaryFailed(input: LinkAnalysisInput): Promise<void> {
-        await this.db
-            .update(links)
-            .set({
-                aiSummaryStatus: 'FAILED',
-                updatedAt: new Date(),
-            })
-            .where(
-                and(
-                    eq(links.id, input.linkId),
-                    eq(links.userId, input.userId),
-                    isNull(links.deletedAt),
-                ),
-            )
+        await this.linkRepository.updateActive(input.userId, input.linkId, {
+            aiSummaryStatus: 'FAILED',
+            updatedAt: new Date(),
+        })
     }
 
     // 기존 metadata 확장 필드를 보존하면서 수집한 description만 갱신한다.

@@ -1,25 +1,44 @@
 import { Logger } from '@nestjs/common'
 
-import { DatabaseService } from '../../../config/database/database.service'
 import { AiService } from '../../ai/ai.service'
 import { LinkContentService } from '../content/link-content.service'
+import { LinkRepository } from '../link.repository'
 
 import { LinkAnalysisService } from './link-analysis.service'
 
 describe('LinkAnalysisService', () => {
     let service: LinkAnalysisService
+    let linkRepository: jest.Mocked<
+        Pick<
+            LinkRepository,
+            'findAnalysisMetadata' | 'updateActive' | 'replaceAiTags'
+        >
+    >
     let linkContentService: jest.Mocked<Pick<LinkContentService, 'collect'>>
     let aiService: jest.Mocked<
         Pick<AiService, 'generateSummary' | 'generateTags'>
     >
     let updatePatches: Array<Record<string, unknown>>
-    let insertedTags: Array<Record<string, unknown>>
-    let transactionMock: jest.Mock
     let loggerErrorSpy: jest.SpyInstance
 
     beforeEach(() => {
         updatePatches = []
-        insertedTags = []
+        linkRepository = {
+            findAnalysisMetadata: jest
+                .fn()
+                .mockResolvedValue({ metadata: null }),
+            updateActive: jest.fn(
+                (
+                    _userId: number,
+                    _linkId: number,
+                    patch: Record<string, unknown>,
+                ) => {
+                    updatePatches.push(patch)
+                    return Promise.resolve()
+                },
+            ),
+            replaceAiTags: jest.fn().mockResolvedValue(undefined),
+        }
         linkContentService = {
             collect: jest.fn(),
         }
@@ -27,23 +46,12 @@ describe('LinkAnalysisService', () => {
             generateSummary: jest.fn(),
             generateTags: jest.fn(),
         }
-        transactionMock = jest.fn((callback: (tx: unknown) => unknown) =>
-            Promise.resolve(callback(createTransactionMock(insertedTags))),
-        )
         loggerErrorSpy = jest
             .spyOn(Logger.prototype, 'error')
             .mockImplementation()
 
-        const databaseService = {
-            db: {
-                select: jest.fn(() => createSelectMock([{ metadata: null }])),
-                update: jest.fn(() => createUpdateMock(updatePatches)),
-                transaction: transactionMock,
-            },
-        }
-
         service = new LinkAnalysisService(
-            databaseService as unknown as DatabaseService,
+            linkRepository as unknown as LinkRepository,
             linkContentService as unknown as LinkContentService,
             aiService as unknown as AiService,
         )
@@ -100,21 +108,15 @@ describe('LinkAnalysisService', () => {
                 }),
             ]),
         )
-        expect(insertedTags).toEqual([
+        expect(linkRepository.replaceAiTags).toHaveBeenCalledWith(2, 1, [
             {
-                userId: 2,
-                linkId: 1,
                 name: 'AI',
                 normalizedName: 'ai',
-                sourceType: 'ai',
                 sortOrder: 1,
             },
             {
-                userId: 2,
-                linkId: 1,
                 name: '링크 저장',
                 normalizedName: '링크 저장',
-                sourceType: 'ai',
                 sortOrder: 2,
             },
         ])
@@ -140,8 +142,7 @@ describe('LinkAnalysisService', () => {
                 aiSummaryStatus: 'FAILED',
             }),
         ])
-        expect(transactionMock).not.toHaveBeenCalled()
-        expect(insertedTags).toEqual([])
+        expect(linkRepository.replaceAiTags).not.toHaveBeenCalled()
     })
 
     it('태그 생성 실패는 성공한 요약 상태에 영향을 주지 않는다', async () => {
@@ -176,46 +177,6 @@ describe('LinkAnalysisService', () => {
                 }),
             ]),
         )
-        expect(transactionMock).not.toHaveBeenCalled()
+        expect(linkRepository.replaceAiTags).not.toHaveBeenCalled()
     })
 })
-
-function createSelectMock(rows: unknown[]) {
-    return {
-        from: jest.fn(() => ({
-            where: jest.fn(() => ({
-                limit: jest.fn().mockResolvedValue(rows),
-            })),
-        })),
-    }
-}
-
-function createUpdateMock(updatePatches: Array<Record<string, unknown>>) {
-    return {
-        set: jest.fn((patch: Record<string, unknown>) => {
-            updatePatches.push(patch)
-
-            return {
-                where: jest.fn().mockResolvedValue(undefined),
-            }
-        }),
-    }
-}
-
-function createTransactionMock(insertedTags: Array<Record<string, unknown>>) {
-    return {
-        select: jest.fn(() => createSelectMock([{ id: 1 }])),
-        delete: jest.fn(() => ({
-            where: jest.fn().mockResolvedValue(undefined),
-        })),
-        insert: jest.fn(() => ({
-            values: jest.fn((values: Array<Record<string, unknown>>) => {
-                insertedTags.push(...values)
-
-                return {
-                    onConflictDoNothing: jest.fn().mockResolvedValue(undefined),
-                }
-            }),
-        })),
-    }
-}

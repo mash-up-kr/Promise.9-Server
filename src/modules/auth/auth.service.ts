@@ -2,19 +2,17 @@ import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { JwtService } from '@nestjs/jwt'
 import { randomUUID } from 'crypto'
-import { and, eq, isNull } from 'drizzle-orm'
 import type { StringValue } from 'ms'
 
 import { BaseException } from '../../common/exception/base.exception'
 import { DatabaseService } from '../../config/database/database.service'
 import { ValidatedEnvironment } from '../../config/environment'
-import { refreshTokens } from '../user/refresh-token.schema'
-import { socialAccounts } from '../user/social-account.schema'
-import { users } from '../user/user.schema'
+import { UserRepository } from '../user/repository/user.repository'
 
 import { SupportedProvider } from './dto/auth.dto'
 import { GoogleProvider } from './providers/google.provider'
 import { SocialProvider } from './providers/social-provider.interface'
+import { RefreshTokenRepository } from './repository/refresh-token.repository'
 import { TOKEN_TYPE, TokenType } from './auth.constants'
 import { AUTH_ERROR } from './auth-error.constant'
 import { hashToken } from './crypto.utils'
@@ -41,12 +39,10 @@ export class AuthService {
     private readonly accessExpiresIn: string
     private readonly refreshExpiresIn: string
 
-    private get db() {
-        return this.databaseService.db
-    }
-
     constructor(
         private readonly databaseService: DatabaseService,
+        private readonly userRepository: UserRepository,
+        private readonly refreshTokenRepository: RefreshTokenRepository,
         private readonly jwtService: JwtService,
         private readonly googleProvider: GoogleProvider,
         config: ConfigService<ValidatedEnvironment, true>,
@@ -72,43 +68,12 @@ export class AuthService {
         const socialProvider = this.getProvider(provider)
         const { providerId, email } = await socialProvider.verify(idToken)
 
-        const { userId, isNewUser } = await this.db.transaction(async (tx) => {
-            // 탈퇴 후 재가입 시 deletedAt을 초기화해 계정을 복구한다.
-            const [user] = await tx
-                .insert(users)
-                .values({ email })
-                .onConflictDoUpdate({
-                    target: users.email,
-                    set: { updatedAt: new Date(), deletedAt: null },
-                })
-                .returning({ id: users.id })
-
-            // insert 성공(= 신규 소셜 연동)이면 isNewUser: true,
-            // (provider, providerUserId) 충돌로 doNothing이 발동되면 기존 row를 조회해 isNewUser: false를 반환한다.
-            const [inserted] = await tx
-                .insert(socialAccounts)
-                .values({
-                    userId: user.id,
-                    provider,
-                    providerUserId: providerId,
-                    providerEmail: email,
-                })
-                .onConflictDoNothing()
-                .returning({ userId: socialAccounts.userId })
-
-            if (inserted) {
-                return { userId: user.id, isNewUser: true }
-            }
-
-            const existing = await tx.query.socialAccounts.findFirst({
-                where: and(
-                    eq(socialAccounts.provider, provider),
-                    eq(socialAccounts.providerUserId, providerId),
-                ),
+        const { userId, isNewUser } =
+            await this.userRepository.upsertWithSocialAccount({
+                email,
+                provider,
+                providerUserId: providerId,
             })
-
-            return { userId: existing!.userId, isNewUser: false }
-        })
 
         const tokens = await this.issueTokens(userId)
         return { ...tokens, isNewUser }
@@ -119,9 +84,7 @@ export class AuthService {
         const tokenHash = hashToken(rawRefreshToken)
 
         // DB에 저장된 토큰과 대조해 탈취된 토큰으로 재사용하는 경우를 막는다.
-        const stored = await this.db.query.refreshTokens.findFirst({
-            where: eq(refreshTokens.tokenHash, tokenHash),
-        })
+        const stored = await this.refreshTokenRepository.findByHash(tokenHash)
 
         if (!stored) {
             throw new BaseException(AUTH_ERROR.INVALID_TOKEN)
@@ -129,18 +92,13 @@ export class AuthService {
 
         // 이미 폐기된 토큰이 재사용됨 → 탈취로 간주, 해당 family 전체 폐기
         if (stored.revokedAt) {
-            await this.db
-                .delete(refreshTokens)
-                .where(eq(refreshTokens.tokenFamily, stored.tokenFamily))
+            await this.refreshTokenRepository.deleteByFamily(stored.tokenFamily)
             throw new BaseException(AUTH_ERROR.INVALID_TOKEN)
         }
 
         // Refresh Token Rotation: 기존 토큰을 soft revoke하고 새 토큰 쌍을 발급한다.
         // 동일 family를 이어받아 rotation 체인을 유지한다.
-        await this.db
-            .update(refreshTokens)
-            .set({ revokedAt: new Date() })
-            .where(eq(refreshTokens.id, stored.id))
+        await this.refreshTokenRepository.revokeById(stored.id)
 
         return this.issueTokens(payload.sub, stored.tokenFamily)
     }
@@ -149,48 +107,31 @@ export class AuthService {
         const payload = this.verifyRefreshToken(rawRefreshToken)
         const tokenHash = hashToken(rawRefreshToken)
 
-        await this.db
-            .delete(refreshTokens)
-            .where(
-                and(
-                    eq(refreshTokens.tokenHash, tokenHash),
-                    eq(refreshTokens.userId, payload.sub),
-                ),
-            )
+        await this.refreshTokenRepository.deleteByHashAndUser(
+            tokenHash,
+            payload.sub,
+        )
     }
 
     async withdraw(rawRefreshToken: string): Promise<void> {
         const payload = this.verifyRefreshToken(rawRefreshToken)
         const tokenHash = hashToken(rawRefreshToken)
 
-        const stored = await this.db.query.refreshTokens.findFirst({
-            where: and(
-                eq(refreshTokens.tokenHash, tokenHash),
-                eq(refreshTokens.userId, payload.sub),
-                isNull(refreshTokens.revokedAt),
-            ),
-        })
+        const stored =
+            await this.refreshTokenRepository.findActiveByHashAndUser(
+                tokenHash,
+                payload.sub,
+            )
 
         if (!stored) {
             throw new BaseException(AUTH_ERROR.INVALID_TOKEN)
         }
 
-        const userId = payload.sub
-
-        // 리프레시 토큰·소셜 연동 정보를 먼저 지우고, 유저는 hard delete 대신 soft delete한다.
-        await this.db.transaction(async (tx) => {
-            await tx
-                .delete(refreshTokens)
-                .where(eq(refreshTokens.userId, userId))
-
-            await tx
-                .delete(socialAccounts)
-                .where(eq(socialAccounts.userId, userId))
-
-            await tx
-                .update(users)
-                .set({ deletedAt: new Date() })
-                .where(and(eq(users.id, userId), isNull(users.deletedAt)))
+        // 리프레시 토큰(auth 도메인) 삭제와 회원·소셜 정리(user 도메인)를 한 트랜잭션으로 묶는다.
+        // 두 모듈에 걸친 크로스 도메인 트랜잭션이라 진입점인 AuthService가 경계를 연다.
+        await this.databaseService.db.transaction(async (tx) => {
+            await this.refreshTokenRepository.deleteByUserId(payload.sub, tx)
+            await this.userRepository.deleteAccount(payload.sub, tx)
         })
     }
 
@@ -229,7 +170,7 @@ export class AuthService {
             },
         )
 
-        await this.db.insert(refreshTokens).values({
+        await this.refreshTokenRepository.insert({
             userId,
             tokenHash: hashToken(rawRefreshToken),
             tokenFamily,

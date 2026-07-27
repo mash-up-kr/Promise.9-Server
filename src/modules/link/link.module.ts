@@ -8,12 +8,18 @@ import { AuthModule } from '../auth/auth.module'
 import { LinkAnalysisService } from './analysis/link-analysis.service'
 import { LinkContentService } from './content/link-content.service'
 import { LinkController } from './link.controller'
+import { LinkRepository } from './link.repository'
 import { LinkService } from './link.service'
 
 @Module({
     imports: [DatabaseModule, AiModule, AuthModule, UrlSecurityModule],
     controllers: [LinkController],
-    providers: [LinkService, LinkAnalysisService, LinkContentService],
+    providers: [
+        LinkService,
+        LinkRepository,
+        LinkAnalysisService,
+        LinkContentService,
+    ],
     exports: [LinkService],
 })
 export class LinkModule {}
