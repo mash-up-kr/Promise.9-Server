@@ -1,23 +1,23 @@
 import { Injectable } from '@nestjs/common'
 import {
     and,
+    asc,
     Column,
     count,
+    desc,
     eq,
+    gt,
     ilike,
     isNotNull,
     isNull,
+    lt,
     max,
     or,
     SQL,
 } from 'drizzle-orm'
 
 import { BaseException } from '../../common/exception/base.exception'
-import {
-    buildCursorCondition,
-    buildCursorOrderBy,
-    decodeCursor,
-} from '../../common/pagination/cursor'
+import { CursorPayload, decodeCursor } from '../../common/pagination/cursor'
 import { DatabaseService } from '../../config/database/database.service'
 import { FolderRow, folders } from '../folder/folder.schema'
 
@@ -33,6 +33,62 @@ const LINK_SORT_COLUMNS: Record<ListLinksQueryInput['sortBy'], Column> = {
     savedAt: links.createdAt,
     viewedAt: links.viewedAt,
     deletedAt: links.deletedAt,
+}
+
+// 커서 이후 행을 걸러내는 조건을 만든다.
+// 정렬은 (sortColumn <dir>, idColumn <dir>)이며 null 위치는 Postgres 기본값
+// (DESC → NULLS FIRST, ASC → NULLS LAST)을 그대로 따른다.
+function buildCursorCondition(
+    sortColumn: Column,
+    idColumn: Column,
+    order: 'asc' | 'desc',
+    cursor: CursorPayload,
+    parseValue: (raw: string) => unknown,
+): SQL | undefined {
+    const value = cursor.v === null ? null : parseValue(cursor.v)
+
+    if (order === 'desc') {
+        // DESC → NULLS FIRST
+        if (value === null) {
+            // 커서가 null 블록(맨 앞) 안에 있음: 더 뒤의 null 또는 모든 비-null
+            return or(
+                isNotNull(sortColumn),
+                and(isNull(sortColumn), lt(idColumn, cursor.id)),
+            )
+        }
+        return and(
+            isNotNull(sortColumn),
+            or(
+                lt(sortColumn, value),
+                and(eq(sortColumn, value), lt(idColumn, cursor.id)),
+            ),
+        )
+    }
+
+    // ASC → NULLS LAST
+    if (value === null) {
+        return and(isNull(sortColumn), gt(idColumn, cursor.id))
+    }
+    return or(
+        isNull(sortColumn),
+        and(
+            isNotNull(sortColumn),
+            or(
+                gt(sortColumn, value),
+                and(eq(sortColumn, value), gt(idColumn, cursor.id)),
+            ),
+        ),
+    )
+}
+
+// 커서 페이지네이션용 orderBy (정렬 컬럼 + tiebreaker id, 같은 방향).
+function buildCursorOrderBy(
+    sortColumn: Column,
+    idColumn: Column,
+    order: 'asc' | 'desc',
+): SQL[] {
+    const direction = order === 'desc' ? desc : asc
+    return [direction(sortColumn), direction(idColumn)]
 }
 
 @Injectable()

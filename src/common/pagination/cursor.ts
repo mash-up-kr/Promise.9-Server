@@ -1,22 +1,21 @@
-import {
-    and,
-    asc,
-    Column,
-    desc,
-    eq,
-    gt,
-    isNotNull,
-    isNull,
-    lt,
-    or,
-    SQL,
-} from 'drizzle-orm'
+// 커서 인코딩/디코딩과 페이지 봉투 계산 같은 DB 비의존 로직만 공통에 둔다.
+// 정렬 컬럼·drizzle 조건(buildCursorCondition/buildCursorOrderBy) 등 DB 세부는
+// 이를 쓰는 각 모듈의 repository가 담당한다.
 
 // 커서 페이로드: 정렬 기준 컬럼 값(v)과 안정 정렬용 tiebreaker(id).
 // 타임스탬프 정렬 값은 ISO 문자열로, null 정렬 값은 null로 인코딩한다.
 export interface CursorPayload {
     v: string | null
     id: number
+}
+
+export interface CursorPage<T> {
+    rows: T[]
+    pagination: {
+        nextCursor: string | null
+        hasNext: boolean
+        limit: number
+    }
 }
 
 export function encodeCursor(payload: CursorPayload): string {
@@ -51,71 +50,6 @@ export function decodeCursor(cursor: string): CursorPayload | null {
         return { id, v }
     } catch {
         return null
-    }
-}
-
-// 커서 이후 행을 걸러내는 조건을 만든다.
-// 정렬은 (sortColumn <dir>, idColumn <dir>)이며 null 위치는 Postgres 기본값
-// (DESC → NULLS FIRST, ASC → NULLS LAST)을 그대로 따른다.
-export function buildCursorCondition(
-    sortColumn: Column,
-    idColumn: Column,
-    order: 'asc' | 'desc',
-    cursor: CursorPayload,
-    parseValue: (raw: string) => unknown,
-): SQL | undefined {
-    const value = cursor.v === null ? null : parseValue(cursor.v)
-
-    if (order === 'desc') {
-        // DESC → NULLS FIRST
-        if (value === null) {
-            // 커서가 null 블록(맨 앞) 안에 있음: 더 뒤의 null 또는 모든 비-null
-            return or(
-                isNotNull(sortColumn),
-                and(isNull(sortColumn), lt(idColumn, cursor.id)),
-            )
-        }
-        return and(
-            isNotNull(sortColumn),
-            or(
-                lt(sortColumn, value),
-                and(eq(sortColumn, value), lt(idColumn, cursor.id)),
-            ),
-        )
-    }
-
-    // ASC → NULLS LAST
-    if (value === null) {
-        return and(isNull(sortColumn), gt(idColumn, cursor.id))
-    }
-    return or(
-        isNull(sortColumn),
-        and(
-            isNotNull(sortColumn),
-            or(
-                gt(sortColumn, value),
-                and(eq(sortColumn, value), gt(idColumn, cursor.id)),
-            ),
-        ),
-    )
-}
-
-// 커서 페이지네이션용 orderBy (정렬 컬럼 + tiebreaker id, 같은 방향).
-export function buildCursorOrderBy(
-    sortColumn: Column,
-    idColumn: Column,
-    order: 'asc' | 'desc',
-): SQL[] {
-    const direction = order === 'desc' ? desc : asc
-    return [direction(sortColumn), direction(idColumn)]
-}
-
-export interface CursorPage<T> {
-    rows: T[]
-    pagination: {
-        nextCursor: string | null
-        hasNext: boolean
-        limit: number
     }
 }
 
