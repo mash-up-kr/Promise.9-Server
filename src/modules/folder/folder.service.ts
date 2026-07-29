@@ -1,9 +1,8 @@
 import { Injectable } from '@nestjs/common'
-import { and, eq, isNull, ne } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 
 import { BaseException } from '../../common/exception/base.exception'
 import { DatabaseService } from '../../config/database/database.service'
-import { links } from '../link/link.schema'
 import { LinkService } from '../link/link.service'
 
 import {
@@ -12,16 +11,20 @@ import {
     UpdateFolderInput,
 } from './dto/folder.dto'
 import { FOLDER_COLORS } from './folder.constants'
+import { FolderRepository } from './folder.repository'
 import { FolderRow, folders } from './folder.schema'
 import { FOLDER_ERROR } from './folder-error.constant'
 
 @Injectable()
 export class FolderService {
     constructor(
-        private readonly databaseService: DatabaseService,
+        private readonly folderRepository: FolderRepository,
         private readonly linkService: LinkService,
+        private readonly databaseService: DatabaseService,
     ) {}
 
+    // TODO: 아래 폴더 목록 집계 쿼리는 추후 FolderRepository 계층으로 이관하고
+    // databaseService 의존도 함께 제거한다.
     private get db() {
         return this.databaseService.db
     }
@@ -34,16 +37,11 @@ export class FolderService {
     async create(userId: number, input: CreateFolderInput) {
         await this.assertActiveNameAvailable(userId, input.folderName)
 
-        const [row] = await this.throwOnDuplicateName(() =>
-            this.db
-                .insert(folders)
-                .values({
-                    userId,
-                    name: input.folderName,
-                    color: input.color,
-                })
-                .returning(),
-        )
+        const row = await this.folderRepository.insert({
+            userId,
+            name: input.folderName,
+            color: input.color,
+        })
 
         return { ...this.toFolderSummary(row), createdAt: row.createdAt }
     }
@@ -157,59 +155,17 @@ export class FolderService {
             updatedAt: new Date(),
         }
 
-        const [row] = await this.throwOnDuplicateName(() =>
-            this.db
-                .update(folders)
-                .set(changes)
-                .where(
-                    and(eq(folders.id, folderId), eq(folders.userId, userId)),
-                )
-                .returning(),
+        const row = await this.folderRepository.update(
+            userId,
+            folderId,
+            changes,
         )
 
         return { ...this.toFolderSummary(row), updatedAt: row.updatedAt }
     }
 
     async remove(userId: number, folderId: number) {
-        // 링크 이동과 폴더 삭제를 하나의 트랜잭션으로 묶고, 폴더 row를 FOR UPDATE로 잠가
-        // 삭제 도중 같은 폴더로 링크가 새로 유입되어 활성 미분류로 남는 경합을 막는다.
-        // TODO: DB 관련 로직은 추후 service 계층이 아닌 repository 계층으로 리팩토링
-        await this.db.transaction(async (tx) => {
-            const [folder] = await tx
-                .select({ id: folders.id })
-                .from(folders)
-                .where(
-                    and(eq(folders.id, folderId), eq(folders.userId, userId)),
-                )
-                .for('update')
-                .limit(1)
-
-            if (!folder) {
-                throw new BaseException(FOLDER_ERROR.NOT_FOUND)
-            }
-
-            // 폴더에 속한 링크는 "최근 삭제된 항목"으로 이동 (soft delete + 미분류 처리)
-            await tx
-                .update(links)
-                .set({
-                    deletedAt: new Date(),
-                    folderId: null,
-                    updatedAt: new Date(),
-                })
-                .where(
-                    and(
-                        eq(links.folderId, folderId),
-                        eq(links.userId, userId),
-                        isNull(links.deletedAt),
-                    ),
-                )
-
-            await tx
-                .delete(folders)
-                .where(
-                    and(eq(folders.id, folderId), eq(folders.userId, userId)),
-                )
-        })
+        await this.folderRepository.removeWithLinks(userId, folderId)
     }
 
     // 활성 폴더(deleted_at IS NULL) 기준 폴더명 중복을 사전 검증한다. (rename 시 자기 자신 제외)
@@ -219,23 +175,13 @@ export class FolderService {
         name: string,
         excludeFolderId?: number,
     ) {
-        const conditions = [
-            eq(folders.userId, userId),
-            eq(folders.name, name),
-            isNull(folders.deletedAt),
-        ]
+        const existing = await this.folderRepository.findActiveByName(
+            userId,
+            name,
+            excludeFolderId,
+        )
 
-        if (excludeFolderId !== undefined) {
-            conditions.push(ne(folders.id, excludeFolderId))
-        }
-
-        const [row] = await this.db
-            .select({ id: folders.id })
-            .from(folders)
-            .where(and(...conditions))
-            .limit(1)
-
-        if (row) {
+        if (existing) {
             throw new BaseException(FOLDER_ERROR.NAME_DUPLICATE)
         }
     }
@@ -250,32 +196,12 @@ export class FolderService {
         userId: number,
         folderId: number,
     ): Promise<FolderRow> {
-        const [row] = await this.db
-            .select()
-            .from(folders)
-            .where(and(eq(folders.id, folderId), eq(folders.userId, userId)))
-            .limit(1)
+        const row = await this.folderRepository.findOwned(userId, folderId)
 
         if (!row) {
             throw new BaseException(FOLDER_ERROR.NOT_FOUND)
         }
 
         return row
-    }
-
-    // 동시 요청 경합으로 unique index를 위반할 때 나는 23505를 도메인 예외로 변환한다.
-    private async throwOnDuplicateName<T>(run: () => Promise<T>): Promise<T> {
-        try {
-            return await run()
-        } catch (error) {
-            if (
-                error instanceof Error &&
-                'code' in error &&
-                error.code === '23505'
-            ) {
-                throw new BaseException(FOLDER_ERROR.NAME_DUPLICATE)
-            }
-            throw error
-        }
     }
 }

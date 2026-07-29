@@ -6,7 +6,7 @@ import postgres from 'postgres'
 import * as schema from '../src/config/database/schema'
 import { folders } from '../src/modules/folder/folder.schema'
 import { links } from '../src/modules/link/link.schema'
-import { users } from '../src/modules/user/user.schema'
+import { users } from '../src/modules/user/schema/user.schema'
 
 import {
     parseRuntimeEnvironment,

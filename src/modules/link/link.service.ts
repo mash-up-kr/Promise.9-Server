@@ -20,7 +20,6 @@ import {
     decodeCursor,
 } from '../../common/pagination/cursor'
 import { DatabaseService } from '../../config/database/database.service'
-import { folders } from '../folder/folder.schema'
 import { FOLDER_ERROR } from '../folder/folder-error.constant'
 
 import {
@@ -29,6 +28,7 @@ import {
     UpdateLinkInput,
 } from './dto/link.dto'
 import { CreateLinkTagInput } from './dto/tag.dto'
+import { LinkRepository, LinkUpdatePatch } from './link.repository'
 import { LinkRow, links } from './link.schema'
 import { extractDomain, normalizeUrl, pickThumbnailUrl } from './link.util'
 import { LINK_ERROR } from './link-error.constant'
@@ -42,8 +42,13 @@ const LINK_SORT_COLUMNS: Record<ListLinksQueryInput['sortBy'], Column> = {
 
 @Injectable()
 export class LinkService {
-    constructor(private readonly databaseService: DatabaseService) {}
+    constructor(
+        private readonly linkRepository: LinkRepository,
+        private readonly databaseService: DatabaseService,
+    ) {}
 
+    // TODO: 아래 목록/집계 쿼리(list·getSystemFolderCounts·lastSavedAtByFolder·countLinks)는
+    // 추후 LinkRepository 계층으로 이관한다. 그때 databaseService 의존도 함께 제거한다.
     private get db() {
         return this.databaseService.db
     }
@@ -56,19 +61,16 @@ export class LinkService {
         const normalizedUrl = normalizeUrl(input.url)
         await this.assertNotDuplicated(userId, normalizedUrl)
 
-        const [row] = await this.db
-            .insert(links)
-            .values({
-                userId,
-                folderId: input.folderId ?? null,
-                originalUrl: input.url,
-                normalizedUrl,
-                domain: extractDomain(input.url),
-                // 메타데이터/요약 수집은 후속 작업 — 저장 시점엔 대기 상태로 둔다.
-                aiSummaryStatus: 'PENDING',
-                memo: input.memo ?? null,
-            })
-            .returning()
+        const row = await this.linkRepository.insert({
+            userId,
+            folderId: input.folderId ?? null,
+            originalUrl: input.url,
+            normalizedUrl,
+            domain: extractDomain(input.url),
+            // 메타데이터/요약 수집은 후속 작업 — 저장 시점엔 대기 상태로 둔다.
+            aiSummaryStatus: 'PENDING',
+            memo: input.memo ?? null,
+        })
 
         return {
             linkId: row.id,
@@ -107,7 +109,7 @@ export class LinkService {
     async update(userId: number, linkId: number, input: UpdateLinkInput) {
         await this.getOwnedLink(userId, linkId)
 
-        const patch: Partial<typeof links.$inferInsert> = {
+        const patch: LinkUpdatePatch = {
             updatedAt: new Date(),
         }
 
@@ -127,11 +129,7 @@ export class LinkService {
             patch.isFavorite = input.isFavorite
         }
 
-        const [row] = await this.db
-            .update(links)
-            .set(patch)
-            .where(and(eq(links.id, linkId), eq(links.userId, userId)))
-            .returning()
+        const row = await this.linkRepository.update(userId, linkId, patch)
 
         return {
             linkId: row.id,
@@ -146,10 +144,10 @@ export class LinkService {
         await this.getOwnedLink(userId, linkId)
 
         // "최근 삭제된 항목"으로 이동 (30일 유예 후 영구 삭제 — 배치는 추후)
-        await this.db
-            .update(links)
-            .set({ deletedAt: new Date(), updatedAt: new Date() })
-            .where(and(eq(links.id, linkId), eq(links.userId, userId)))
+        await this.linkRepository.update(userId, linkId, {
+            deletedAt: new Date(),
+            updatedAt: new Date(),
+        })
     }
 
     async restore(userId: number, linkId: number) {
@@ -164,11 +162,11 @@ export class LinkService {
         }
 
         // 복구된 링크는 "미분류"로 복원
-        const [row] = await this.db
-            .update(links)
-            .set({ deletedAt: null, folderId: null, updatedAt: new Date() })
-            .where(and(eq(links.id, linkId), eq(links.userId, userId)))
-            .returning()
+        const row = await this.linkRepository.update(userId, linkId, {
+            deletedAt: null,
+            folderId: null,
+            updatedAt: new Date(),
+        })
 
         return {
             linkId: row.id,
@@ -181,10 +179,10 @@ export class LinkService {
         await this.getOwnedLink(userId, linkId)
 
         const now = new Date()
-        await this.db
-            .update(links)
-            .set({ viewedAt: now, updatedAt: now })
-            .where(and(eq(links.id, linkId), eq(links.userId, userId)))
+        await this.linkRepository.update(userId, linkId, {
+            viewedAt: now,
+            updatedAt: now,
+        })
     }
 
     createTag(
@@ -400,11 +398,8 @@ export class LinkService {
 
     // 사용자의 폴더별 활성 링크 수를 folderId → count 맵으로 반환한다. (미분류는 제외)
     async countActiveByFolder(userId: number): Promise<Map<number, number>> {
-        const rows = await this.db
-            .select({ folderId: links.folderId, linkCount: count(links.id) })
-            .from(links)
-            .where(and(eq(links.userId, userId), isNull(links.deletedAt)))
-            .groupBy(links.folderId)
+        const rows =
+            await this.linkRepository.countActiveGroupedByFolder(userId)
 
         return new Map(
             rows
@@ -429,13 +424,9 @@ export class LinkService {
             return null
         }
 
-        const [row] = await this.db
-            .select()
-            .from(folders)
-            .where(eq(folders.id, folderId))
-            .limit(1)
+        const folder = await this.linkRepository.findFolder(folderId)
 
-        return row ? { folderId: row.id, folderName: row.name } : null
+        return folder ? { folderId: folder.id, folderName: folder.name } : null
     }
 
     // 링크 소유권을 확인하고, 없거나 타 사용자 소유면 404로 처리한다.
@@ -444,17 +435,7 @@ export class LinkService {
         linkId: number,
         options: { includeDeleted?: boolean } = {},
     ): Promise<LinkRow> {
-        const conditions = [eq(links.id, linkId), eq(links.userId, userId)]
-
-        if (!options.includeDeleted) {
-            conditions.push(isNull(links.deletedAt))
-        }
-
-        const [row] = await this.db
-            .select()
-            .from(links)
-            .where(and(...conditions))
-            .limit(1)
+        const row = await this.linkRepository.findOwned(userId, linkId, options)
 
         if (!row) {
             throw new BaseException(LINK_ERROR.NOT_FOUND)
@@ -465,31 +446,23 @@ export class LinkService {
 
     // 같은 사용자가 이미 저장한(삭제되지 않은) 동일 URL(정규화 기준)이 있으면 중복 저장을 막는다.
     private async assertNotDuplicated(userId: number, normalizedUrl: string) {
-        const [row] = await this.db
-            .select({ id: links.id })
-            .from(links)
-            .where(
-                and(
-                    eq(links.userId, userId),
-                    eq(links.normalizedUrl, normalizedUrl),
-                    isNull(links.deletedAt),
-                ),
-            )
-            .limit(1)
+        const existing = await this.linkRepository.findActiveByNormalizedUrl(
+            userId,
+            normalizedUrl,
+        )
 
-        if (row) {
+        if (existing) {
             throw new BaseException(LINK_ERROR.ALREADY_EXISTS)
         }
     }
 
     private async assertOwnedFolder(userId: number, folderId: number) {
-        const [row] = await this.db
-            .select({ id: folders.id })
-            .from(folders)
-            .where(and(eq(folders.id, folderId), eq(folders.userId, userId)))
-            .limit(1)
+        const folder = await this.linkRepository.findFolderOwnedBy(
+            userId,
+            folderId,
+        )
 
-        if (!row) {
+        if (!folder) {
             throw new BaseException(FOLDER_ERROR.NOT_FOUND)
         }
     }
