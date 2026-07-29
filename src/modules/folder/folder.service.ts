@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common'
-import { eq } from 'drizzle-orm'
 
 import { BaseException } from '../../common/exception/base.exception'
-import { DatabaseService } from '../../config/database/database.service'
 import { LinkService } from '../link/link.service'
 
 import {
@@ -12,7 +10,7 @@ import {
 } from './dto/folder.dto'
 import { FOLDER_COLORS } from './folder.constants'
 import { FolderRepository } from './folder.repository'
-import { FolderRow, folders } from './folder.schema'
+import { FolderRow } from './folder.schema'
 import { FOLDER_ERROR } from './folder-error.constant'
 
 @Injectable()
@@ -20,14 +18,7 @@ export class FolderService {
     constructor(
         private readonly folderRepository: FolderRepository,
         private readonly linkService: LinkService,
-        private readonly databaseService: DatabaseService,
     ) {}
-
-    // TODO: 아래 폴더 목록 집계 쿼리는 추후 FolderRepository 계층으로 이관하고
-    // databaseService 의존도 함께 제거한다.
-    private get db() {
-        return this.databaseService.db
-    }
 
     // 프론트가 폴더 색상 선택 UI를 그릴 수 있도록 백엔드 팔레트를 그대로 내려준다.
     listColors() {
@@ -53,16 +44,7 @@ export class FolderService {
                 this.linkService.getSystemFolderCounts(userId),
                 this.linkService.countActiveByFolder(userId),
                 this.linkService.lastSavedAtByFolder(userId),
-                this.db
-                    .select({
-                        id: folders.id,
-                        name: folders.name,
-                        color: folders.color,
-                        createdAt: folders.createdAt,
-                        updatedAt: folders.updatedAt,
-                    })
-                    .from(folders)
-                    .where(eq(folders.userId, userId)),
+                this.folderRepository.listByUser(userId),
             ])
 
         const folderList = folderRows.map((folder) => ({

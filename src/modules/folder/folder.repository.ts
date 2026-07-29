@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { and, desc, eq, isNull, ne } from 'drizzle-orm'
+import { and, eq, isNull, ne } from 'drizzle-orm'
 
 import { BaseException } from '../../common/exception/base.exception'
 import { DatabaseService } from '../../config/database/database.service'
@@ -31,17 +31,18 @@ export class FolderRepository {
         return row
     }
 
-    // 유저 폴더 목록을 최근 수정순으로 조회한다 (요약 필드만).
+    // 유저 폴더 목록을 조회한다. (정렬은 lastSavedAt 등 집계와 함께 서비스가 메모리에서 처리)
     listByUser(userId: number) {
         return this.db
             .select({
                 id: folders.id,
                 name: folders.name,
                 color: folders.color,
+                createdAt: folders.createdAt,
+                updatedAt: folders.updatedAt,
             })
             .from(folders)
             .where(eq(folders.userId, userId))
-            .orderBy(desc(folders.updatedAt))
     }
 
     // 소유권 확인용 단건 조회 (없으면 undefined, 도메인 예외는 서비스가 담당).
