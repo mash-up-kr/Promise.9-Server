@@ -70,11 +70,10 @@ const LIST_LINKS_DESCRIPTION = `
 
 ### 현재 구현 상태
 
-- **현재 동작:** \`q\`, \`folderId\`, \`unassigned\`, \`deleted\`, \`limit\`
-- **계약만 제공:** \`favorite\`, \`sortBy\`, \`order\`, \`cursor\`, 대표 태그
-- 현재 링크는 저장 최신순으로 고정되며 \`nextCursor=null\`, \`hasNext=false\`를 반환합니다.
+- **현재 동작:** \`q\`, \`folderId\`, \`unassigned\`, \`deleted\`, \`favorite\`, \`sortBy\`, \`order\`, \`cursor\`, \`limit\`
+- **계약만 제공:** 대표 태그(\`representativeTag\`)
+- \`sortBy\`/\`order\`에 따라 정렬되며, cursor 페이지네이션으로 \`nextCursor\`·\`hasNext\`를 실제 계산해 반환합니다.
 - \`representativeTag\`는 대표 태그 선정 로직 구현 전까지 \`null\`을 반환합니다.
-- 응답 Example은 정렬과 cursor 페이지네이션까지 연결된 **목표 계약**을 보여줍니다.
 `
 
 const CREATE_LINK_DESCRIPTION = `
@@ -180,8 +179,7 @@ const LIST_LINKS_RESPONSE_EXAMPLE = {
         },
     ],
     pagination: {
-        nextCursor:
-            'eyJzb3J0VmFsdWUiOiIyMDI2LTA3LTEyVDAzOjIwOjAwLjAwMFoiLCJpZCI6NDF9',
+        nextCursor: 'eyJ2IjoiMjAyNi0wNy0xMlQwMzoyMDowMC4wMDBaIiwiaWQiOjQxfQ',
         hasNext: true,
         limit: 9,
     },
@@ -324,7 +322,8 @@ export const ApiListLinks = () =>
                 enum: ['savedAt', 'viewedAt', 'deletedAt'],
                 default: 'savedAt',
             },
-            description: '[선택, 기본값: savedAt] 정렬 기준',
+            description:
+                '[선택, 기본값: savedAt] 정렬 기준. `viewedAt`은 조회 이력이 있는 링크만 대상으로 하며 `viewedAt=null` 링크는 결과에서 제외한다.',
         }),
         ApiQuery({
             name: 'order',
