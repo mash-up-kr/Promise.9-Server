@@ -42,13 +42,7 @@ export class LinkContentService {
     async collect(url: string): Promise<CollectedLinkContent | null> {
         try {
             const { html } = await this.fetchHtml(url, {
-                beforeRequest: async (requestUrl) => {
-                    if (!(await this.isCrawlingAllowed(requestUrl))) {
-                        throw new Error(
-                            'robots.txt에서 크롤링을 허용하지 않았습니다.',
-                        )
-                    }
-                },
+                beforeRequest: this.validateCrawlingAllowed,
             })
             const information = parseLinkInformation(html)
             const collected = {
@@ -69,6 +63,14 @@ export class LinkContentService {
             return this.hasCollectedContent(collected) ? collected : null
         } catch {
             return null
+        }
+    }
+
+    private readonly validateCrawlingAllowed = async (
+        requestUrl: URL,
+    ): Promise<void> => {
+        if (!(await this.isCrawlingAllowed(requestUrl))) {
+            throw new Error('robots.txt에서 크롤링을 허용하지 않았습니다.')
         }
     }
 
