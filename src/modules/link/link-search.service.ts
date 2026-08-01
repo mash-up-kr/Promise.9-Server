@@ -1,12 +1,24 @@
 import { Injectable, Logger } from '@nestjs/common'
 
+import { BaseException } from '../../common/exception/base.exception'
+
 import { ListLinksQueryInput } from './dto/link.dto'
 import { LinkRepository } from './link.repository'
 import { LinkRow } from './link.schema'
 import { LinkEmbeddingService } from './link-embedding.service'
-import { scoreSearchCandidates } from './link-search.util'
+import { LINK_ERROR } from './link-error.constant'
+import {
+    parseSearchCursor,
+    scoreSearchCandidates,
+    SearchCursor,
+    takeSearchPage,
+} from './link-search.util'
 
-export type ScoredLink = { row: LinkRow; score: number | null }
+export type ScoredLink = { row: LinkRow; score: number }
+
+// 검색 결과 한 페이지. rows는 다음 페이지 판단을 위해 limit + 1개까지 담긴다.
+// totalCount는 커서와 무관한 후보 풀 전체 크기다.
+export type SearchPage = { rows: ScoredLink[]; totalCount: number }
 
 @Injectable()
 export class LinkSearchService {
@@ -20,41 +32,57 @@ export class LinkSearchService {
     async search(
         userId: number,
         input: ListLinksQueryInput,
-    ): Promise<ScoredLink[]> {
+    ): Promise<SearchPage> {
+        const cursor = this.resolveCursor(input.cursor)
         const queryEmbedding = await this.tryEmbedQuery(input.q ?? '')
 
-        if (!queryEmbedding) {
-            const { rows } = await this.linkRepository.list(userId, input)
-
-            return rows
-                .slice(0, input.limit)
-                .map((row) => ({ row, score: null }))
-        }
-
+        // 임베딩이 없으면 벡터 후보만 비워 키워드 검색으로 폴백한다.
+        // 점수·정렬·커서 형식은 그대로 유지돼 페이지네이션이 끊기지 않는다.
         const [vectorCandidates, keywordCandidateIds] = await Promise.all([
-            this.linkRepository.findVectorCandidates(
-                userId,
-                input,
-                queryEmbedding,
-            ),
+            queryEmbedding
+                ? this.linkRepository.findVectorCandidates(
+                      userId,
+                      input,
+                      queryEmbedding,
+                  )
+                : [],
             this.linkRepository.findKeywordCandidateIds(userId, input),
         ])
+
         const candidates = scoreSearchCandidates(
             vectorCandidates,
             keywordCandidateIds,
-            input.limit,
         )
+        const page = takeSearchPage(candidates, cursor, input.limit)
         const rows = await this.linkRepository.findByIdsInOrder(
-            candidates.map((candidate) => candidate.id),
+            page.map((candidate) => candidate.id),
         )
         const scoreById = new Map(
-            candidates.map((candidate) => [candidate.id, candidate.score]),
+            page.map((candidate) => [candidate.id, candidate.score]),
         )
 
-        return rows.map((row) => ({
-            row,
-            score: scoreById.get(row.id) ?? null,
-        }))
+        return {
+            rows: rows.map((row) => ({
+                row,
+                score: scoreById.get(row.id) ?? 0,
+            })),
+            totalCount: candidates.length,
+        }
+    }
+
+    // 검색 커서는 (점수, id) 형식이다. 목록 커서(타임스탬프)를 넘기면 400.
+    private resolveCursor(cursor?: string): SearchCursor | undefined {
+        if (!cursor) {
+            return undefined
+        }
+
+        const parsed = parseSearchCursor(cursor)
+
+        if (!parsed) {
+            throw new BaseException(LINK_ERROR.INVALID_CURSOR)
+        }
+
+        return parsed
     }
 
     private async tryEmbedQuery(q: string): Promise<number[] | null> {

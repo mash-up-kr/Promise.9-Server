@@ -166,21 +166,14 @@ export class LinkRepository {
         return row
     }
 
-    // 목록 조회. 검색·폴더·미분류·삭제·즐겨찾기 필터와 커서 페이지네이션을 적용한다.
+    // 검색(q)이 없는 목록 조회. 폴더·미분류·삭제·즐겨찾기 필터와 커서 페이지네이션을 적용한다.
+    // 검색은 점수 순 정렬이라 별도 경로(findVectorCandidates·findKeywordCandidateIds)로 처리한다.
     // 다음 페이지 판단을 위해 rows는 limit + 1개, totalCount는 커서와 무관한 전체 수다.
     async list(
         userId: number,
         input: ListLinksQueryInput,
     ): Promise<{ rows: LinkRow[]; totalCount: number }> {
         const conditions = this.buildScopeConditions(userId, input)
-
-        if (input.q) {
-            const keyword = this.buildKeywordCondition(input.q)
-
-            if (keyword) {
-                conditions.push(keyword)
-            }
-        }
 
         // sortBy → 실제 정렬 컬럼. 위 조건들로 정렬 컬럼은 항상 not-null이 보장돼
         // (savedAt=createdAt, deletedAt은 deleted 필터, viewedAt은 위 제외 조건)

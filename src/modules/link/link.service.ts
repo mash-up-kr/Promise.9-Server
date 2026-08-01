@@ -16,6 +16,7 @@ import { extractDomain, normalizeUrl, pickThumbnailUrl } from './link.util'
 import { LinkEmbeddingService } from './link-embedding.service'
 import { LINK_ERROR } from './link-error.constant'
 import { LinkSearchService } from './link-search.service'
+import { toSearchCursorPayload } from './link-search.util'
 
 @Injectable()
 export class LinkService {
@@ -193,16 +194,22 @@ export class LinkService {
 
     async list(userId: number, input: ListLinksQueryInput) {
         if (input.q) {
-            const results = await this.linkSearchService.search(userId, input)
+            // 검색은 점수 순 정렬이라 커서도 (점수, id) 기준이다.
+            const { rows, totalCount } = await this.linkSearchService.search(
+                userId,
+                input,
+            )
+            const { rows: pageRows, pagination } = buildCursorPage(
+                rows,
+                input.limit,
+                ({ row, score }) =>
+                    toSearchCursorPayload({ id: row.id, score }),
+            )
 
             return {
-                links: this.toListItems(results),
-                pagination: {
-                    nextCursor: null,
-                    hasNext: false,
-                    limit: input.limit,
-                },
-                totalCount: results.length,
+                links: this.toListItems(pageRows),
+                pagination,
+                totalCount,
             }
         }
 
@@ -240,7 +247,8 @@ export class LinkService {
             representativeTag: null,
             thumbnailUrl: pickThumbnailUrl(row.metadata),
             savedAt: row.createdAt,
-            score: score === null ? null : Math.round(score * 1e5) / 1e5,
+            // 점수 반올림은 커서 비교와 값을 맞추기 위해 link-search.util이 담당한다.
+            score,
         }))
     }
 
