@@ -17,7 +17,16 @@ CDK는 명령에 지정한 `promise9` profile의 단기 자격 증명을 사용�
 bun install
 bun run infra:typecheck
 bun run infra:synth --profile promise9
+```
+
+변경한 리소스에 해당하는 Stack만 `diff`한다.
+
+```bash
+# 팀 AWS 접근 권한 변경
 bun run infra:diff Promise9AccessStack --profile promise9
+
+# Lightsail 변경
+bun run infra:diff Promise9LightsailStack --profile promise9
 ```
 
 - `synth`가 실패하지 않는지 확인한다.
@@ -33,11 +42,17 @@ infra/ 수정 → synth/diff → PR → 팀 리뷰 → main → diff 재확인 �
 GitHub Actions는 `main` 대상 PR에서 `typecheck`, `synth`만 실행하고 AWS를 변경하지 않는다.
 `diff`와 `deploy`는 자동 실행하지 않는다.
 
-`main` 반영 후 동일한 profile로 diff를 다시 확인하고 대상 Stack을 배포한다.
+`main` 반영 후 동일한 profile로 변경한 Stack의 diff를 다시 확인하고 같은 Stack을
+배포한다.
 
 ```bash
+# 팀 AWS 접근 권한 변경
 bun run infra:diff Promise9AccessStack --profile promise9
 bun run infra:deploy Promise9AccessStack --profile promise9
+
+# Lightsail 변경
+bun run infra:diff Promise9LightsailStack --profile promise9
+bun run infra:deploy Promise9LightsailStack --profile promise9
 ```
 
 관리 범위와 정책은 [AWS CDK](../cdk.md)를 참고한다.

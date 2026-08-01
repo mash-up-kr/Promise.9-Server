@@ -22,7 +22,16 @@ CDK는 서버 내부의 Docker, Nginx, 파일과 환경변수를 관리하거나
 - `Promise9LightsailStack`의 termination protection을 유지한다.
 - `InstanceName`, `BlueprintId`, `BundleId`, `AvailabilityZone`과 `StaticIpName`은 생성
   전용 속성이므로 변경하지 않는다.
-- `cdk diff`에 Lightsail 생성·교체·삭제가 표시되면 배포하지 않는다.
 - 운영과 Stage가 같은 Instance를 사용하므로 Instance 교체는 두 환경을 모두 중단시킨다.
 - 현재 SSH `22/tcp`는 IPv4·IPv6 전체에 공개되어 있다. 제한하려면 GitHub Actions의 SSH
   배포 경로를 함께 변경한다.
+
+## 변경 확인
+
+```bash
+bun run infra:typecheck
+bun run infra:synth --profile promise9
+bun run infra:diff Promise9LightsailStack --profile promise9
+```
+
+`diff`에 Lightsail 생성·교체·삭제가 표시되면 배포하지 않는다.
