@@ -1,6 +1,11 @@
 #!/usr/bin/env bun
 
-import { App, DefaultStackSynthesizer, Environment, Tags } from 'aws-cdk-lib'
+import {
+    App,
+    CliCredentialsStackSynthesizer,
+    Environment,
+    Tags,
+} from 'aws-cdk-lib'
 
 import { AccessStack } from '../lib/access-stack'
 import { AWS_ACCOUNT_ID, AWS_REGION, PROJECT_NAME } from '../lib/constants'
@@ -18,9 +23,7 @@ const env: Environment = {
     account: AWS_ACCOUNT_ID,
     region: AWS_REGION,
 }
-const synthesizer = new DefaultStackSynthesizer({
-    useLookupRoleForStackOperations: false,
-})
+const synthesizer = new CliCredentialsStackSynthesizer()
 
 const accessStack = new AccessStack(app, 'Promise9AccessStack', {
     env,
