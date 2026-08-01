@@ -27,6 +27,4 @@ export const AI_LINK_ANALYSIS = {
     summaryMaxLength: 300,
     tagMaxCount: 5,
     tagMaxLength: 20,
-    summaryPromptKey: 'link_summary_v1',
-    tagPromptKey: 'link_tags_v1',
 } as const
