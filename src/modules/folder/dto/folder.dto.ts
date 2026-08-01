@@ -48,15 +48,41 @@ export const updateFolderSchema = z
     )
 export type UpdateFolderInput = z.infer<typeof updateFolderSchema>
 
-export const listFoldersQuerySchema = z.object({
-    sortBy: z
-        .enum(['createdAt', 'updatedAt', 'lastSavedAt'])
-        .optional()
-        .default('updatedAt'),
-    order: z.enum(['asc', 'desc']).optional().default('desc'),
-    limit: z.coerce.number().int().min(1).max(MAX_PAGINATION_LIMIT).optional(),
-})
+// 쿼리스트링은 문자열이라 'true'/'false'를 boolean으로 변환한다.
+const booleanQuerySchema = z.preprocess((value) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+}, z.boolean())
+
+// strict: 제거된 이전 정렬 파라미터(sortBy/order 등)를 조용히 무시하지 않고 400으로
+// 막는다. (구 계약을 쓰는 클라이언트가 편집순 상위 3개를 최근 저장 폴더로 오인하는 걸 방지)
+export const listFoldersQuerySchema = z
+    .object({
+        // 홈 화면 '최근 저장 폴더'용. true면 마지막 저장 시각(lastSavedAt) 최신순으로 정렬한다.
+        // (미지정 시 false — 사용자가 편집한 순서, 편집 전이면 생성순)
+        lastSavedAt: booleanQuerySchema.optional().default(false),
+        limit: z.coerce
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_PAGINATION_LIMIT)
+            .optional(),
+    })
+    .strict()
 export type ListFoldersQueryInput = z.infer<typeof listFoldersQuerySchema>
+
+// 폴더 순서 편집: 원하는 최종 순서대로 나열한 folderId 전체 배열을 받는다.
+// (사용자 폴더 수가 적어 전체를 통째로 다시 쓰는 방식으로 순서를 확정한다)
+export const reorderFoldersSchema = z.object({
+    folderIds: z
+        .array(z.number().int().positive())
+        .min(1)
+        .refine((ids) => new Set(ids).size === ids.length, {
+            message: '중복된 folderId가 있습니다.',
+        }),
+})
+export type ReorderFoldersInput = z.infer<typeof reorderFoldersSchema>
 
 // Swagger 문서용 (런타임 검증은 위의 zod 스키마가 담당)
 export class CreateFolderDto {
@@ -87,4 +113,14 @@ export class UpdateFolderDto {
         description: '변경할 폴더 색상 hex. GET /folders/colors 목록 중 하나',
     })
     color?: string
+}
+
+export class ReorderFoldersDto {
+    @ApiProperty({
+        type: [Number],
+        example: [4, 2, 3, 1],
+        description:
+            '[필수] 원하는 최종 순서대로 나열한 folderId 전체 배열. 사용자의 현재 폴더 전체(중복 없이)와 정확히 일치해야 한다.',
+    })
+    folderIds!: number[]
 }

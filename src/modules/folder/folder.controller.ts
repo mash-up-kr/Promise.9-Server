@@ -8,6 +8,7 @@ import {
     ParseIntPipe,
     Patch,
     Post,
+    Put,
     Query,
     UseGuards,
 } from '@nestjs/common'
@@ -22,6 +23,8 @@ import {
     createFolderSchema,
     ListFoldersQueryInput,
     listFoldersQuerySchema,
+    ReorderFoldersInput,
+    reorderFoldersSchema,
     UpdateFolderInput,
     updateFolderSchema,
 } from './dto/folder.dto'
@@ -32,6 +35,7 @@ import {
     ApiListFolderColors,
     ApiListFolders,
     ApiRemoveFolder,
+    ApiReorderFolders,
     ApiUpdateFolder,
 } from './folder.swagger'
 
@@ -57,6 +61,17 @@ export class FolderController {
     @ApiListFolderColors()
     listColors() {
         return this.folderService.listColors()
+    }
+
+    @Put('order')
+    @HttpCode(204)
+    @ApiReorderFolders()
+    reorder(
+        @CurrentUser() user: AuthUser,
+        @Body(new ZodValidationPipe(reorderFoldersSchema))
+        body: ReorderFoldersInput,
+    ) {
+        return this.folderService.reorder(user.userId, body)
     }
 
     @Get(':folderId')

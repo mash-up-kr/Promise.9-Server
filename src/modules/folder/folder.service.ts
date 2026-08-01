@@ -6,6 +6,7 @@ import { LinkService } from '../link/link.service'
 import {
     CreateFolderInput,
     ListFoldersQueryInput,
+    ReorderFoldersInput,
     UpdateFolderInput,
 } from './dto/folder.dto'
 import { FOLDER_COLORS } from './folder.constants'
@@ -47,68 +48,46 @@ export class FolderService {
                 this.folderRepository.listByUser(userId),
             ])
 
+        // folderRows는 repository에서 저장된 순서(sortOrder, 편집 전이면 생성순)대로
+        // 정렬돼 온다. lastSavedAt=true(홈 화면)면 최근 저장순으로만 다시 정렬한다.
         const folderList = folderRows.map((folder) => ({
             ...this.toFolderSummary(folder),
             linkCount: linkCounts.get(folder.id) ?? 0,
             lastSavedAt: lastSavedAtByFolder.get(folder.id) ?? null,
-            // 정렬 기준용 원본 값. 응답 계약에는 포함하지 않는다.
-            createdAt: folder.createdAt,
-            updatedAt: folder.updatedAt,
         }))
 
-        // 폴더 수는 사용자당 소수라 정렬은 메모리에서 처리한다. (lastSavedAt은
-        // 집계값이라 컬럼 orderBy로는 못 걸어 세 기준을 일관되게 다루려는 목적)
-        const sorted = this.sortFolders(folderList, input.sortBy, input.order)
+        const ordered = input.lastSavedAt
+            ? this.sortByLastSavedAt(folderList)
+            : folderList
 
         // limit은 페이지네이션이 아니라 홈 화면 등에서 결과 개수만 제한하는 용도다.
         const limited =
-            input.limit === undefined ? sorted : sorted.slice(0, input.limit)
+            input.limit === undefined ? ordered : ordered.slice(0, input.limit)
 
-        return {
-            systemFolders,
-            // 정렬 전용 필드(createdAt·updatedAt)는 응답에서 제외한다.
-            folders: limited.map(
-                ({ createdAt: _createdAt, updatedAt: _updatedAt, ...rest }) =>
-                    rest,
-            ),
-        }
+        return { systemFolders, folders: limited }
     }
 
-    // sortBy/order로 폴더 목록을 정렬한다. 저장 이력이 없는 폴더(lastSavedAt=null)는
-    // 정렬 방향과 무관하게 항상 뒤로 보내고, 동률은 folderId로 안정 정렬한다.
-    private sortFolders<
-        T extends {
-            folderId: number
-            createdAt: Date
-            updatedAt: Date
-            lastSavedAt: Date | null
-        },
-    >(
-        items: T[],
-        sortBy: ListFoldersQueryInput['sortBy'],
-        order: 'asc' | 'desc',
-    ) {
-        const valueOf = (item: T): number | null => {
-            const value =
-                sortBy === 'createdAt'
-                    ? item.createdAt
-                    : sortBy === 'updatedAt'
-                      ? item.updatedAt
-                      : item.lastSavedAt
-            return value ? value.getTime() : null
-        }
-        const direction = order === 'asc' ? 1 : -1
-
+    // 홈 화면 '최근 저장 폴더'용 정렬. 마지막 저장 시각 최신순이며, 저장 이력이 없는
+    // 폴더(lastSavedAt=null)는 항상 뒤로, 동률은 folderId로 안정 정렬한다.
+    private sortByLastSavedAt<
+        T extends { folderId: number; lastSavedAt: Date | null },
+    >(items: T[]) {
         return [...items].sort((a, b) => {
-            const av = valueOf(a)
-            const bv = valueOf(b)
+            const av = a.lastSavedAt?.getTime() ?? null
+            const bv = b.lastSavedAt?.getTime() ?? null
             if (av !== bv) {
                 if (av === null) return 1
                 if (bv === null) return -1
-                return (av - bv) * direction
+                return bv - av
             }
             return a.folderId - b.folderId
         })
+    }
+
+    // 폴더 순서 편집: 넘어온 folderIds 순서대로 저장한다. 유효성(사용자 폴더 전체와
+    // 일치하는지)과 갱신은 repository가 트랜잭션으로 처리한다.
+    async reorder(userId: number, input: ReorderFoldersInput) {
+        await this.folderRepository.reorder(userId, input.folderIds)
     }
 
     // 폴더 상세 조회 (색상 포함). 소유권 확인은 getOwnedFolder가 담당.
