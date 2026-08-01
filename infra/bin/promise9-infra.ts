@@ -34,9 +34,9 @@ const accessStack = new AccessStack(app, 'Promise9AccessStack', {
 Tags.of(accessStack).add('Project', PROJECT_NAME)
 Tags.of(accessStack).add('ManagedBy', 'AWS-CDK')
 
+// 기존 Lightsail 리소스의 현재 상태를 유지하기 위해 Tag를 별도로 적용하지 않는다.
 new LightsailStack(app, 'Promise9LightsailStack', {
     env,
     synthesizer: new CliCredentialsStackSynthesizer(),
     terminationProtection: true,
-    description: 'Promise9 existing Lightsail resources',
 })
