@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotImplementedException } from '@nestjs/common'
 
 import { BaseException } from '../../common/exception/base.exception'
+import { buildCursorPage } from '../../common/pagination/cursor'
 import { FOLDER_ERROR } from '../folder/folder-error.constant'
 
 import { LinkAnalysisService } from './analysis/link-analysis.service'
@@ -188,18 +189,23 @@ export class LinkService {
     }
 
     async list(userId: number, input: ListLinksQueryInput) {
-        // TODO: favorite=true일 때 isFavorite 조건을 목록 쿼리에 적용한다.
-        // TODO: sortBy/order와 cursor 기반 페이지네이션을 공통 로직으로 적용한다.
-        // 계약을 먼저 제공하는 단계이므로 현재는 기존과 동일하게 저장 최신순 전체 결과를 반환한다.
-        void input.favorite
-        void input.sortBy
-        void input.order
-        void input.cursor
+        // 필터·정렬·커서 조회는 repository가 담당하고, 여기서는 페이지 봉투와 응답 매핑만 처리한다.
+        const { rows, totalCount } = await this.linkRepository.list(
+            userId,
+            input,
+        )
 
-        const rows = await this.linkRepository.list(userId, input)
+        const { rows: pageRows, pagination } = buildCursorPage(
+            rows,
+            input.limit,
+            (row) => ({
+                v: this.cursorValueOf(row, input.sortBy),
+                id: row.id,
+            }),
+        )
 
         return {
-            links: rows.slice(0, input.limit).map((row) => ({
+            links: pageRows.map((row) => ({
                 linkId: row.id,
                 title: row.title,
                 source: row.domain,
@@ -208,25 +214,53 @@ export class LinkService {
                 thumbnailUrl: pickThumbnailUrl(row.metadata),
                 savedAt: row.createdAt,
             })),
-            pagination: {
-                nextCursor: null,
-                hasNext: false,
-                limit: input.limit,
-            },
-            totalCount: rows.length,
+            pagination,
+            totalCount,
         }
     }
 
-    // 화면의 전체/미분류/최근삭제 링크 목록에 표시할 수를 한 번에 계산한다.
+    // 다음 커서에 담을 정렬 기준 값. 타임스탬프는 ISO 문자열, null이면 null.
+    private cursorValueOf(
+        row: LinkRow,
+        sortBy: ListLinksQueryInput['sortBy'],
+    ): string | null {
+        const value = {
+            savedAt: row.createdAt,
+            viewedAt: row.viewedAt,
+            deletedAt: row.deletedAt,
+        }[sortBy]
+
+        return value ? value.toISOString() : null
+    }
+
+    // 화면의 전체/미분류/즐겨찾기/최근삭제 링크 목록에 표시할 수를 한 번에 계산한다.
     async getSystemFolderCounts(userId: number) {
-        const { all, uncategorized, recentlyDeleted } =
+        const { all, uncategorized, favorite, recentlyDeleted } =
             await this.linkRepository.countSystemFolders(userId)
 
         return {
             all: { linkCount: all },
             uncategorized: { linkCount: uncategorized },
+            favorite: { linkCount: favorite },
             recentlyDeleted: { linkCount: recentlyDeleted },
         }
+    }
+
+    // 사용자의 폴더별 마지막 활성 링크 저장 시각을 folderId → Date 맵으로 반환한다. (미분류 제외)
+    async lastSavedAtByFolder(userId: number): Promise<Map<number, Date>> {
+        const rows =
+            await this.linkRepository.lastSavedAtGroupedByFolder(userId)
+
+        return new Map(
+            rows
+                .filter(
+                    (row) => row.folderId !== null && row.lastSavedAt !== null,
+                )
+                .map((row) => [
+                    row.folderId as number,
+                    new Date(row.lastSavedAt as string | Date),
+                ]),
+        )
     }
 
     // 사용자의 폴더별 활성 링크 수를 folderId → count 맵으로 반환한다. (미분류는 제외)

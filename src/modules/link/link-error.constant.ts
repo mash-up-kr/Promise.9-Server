@@ -16,6 +16,11 @@ export const LINK_ERROR = {
         errorCode: 930003,
         message: '이미 저장한 링크입니다.',
     },
+    INVALID_CURSOR: {
+        code: HttpStatus.BAD_REQUEST,
+        errorCode: 930008,
+        message: '유효하지 않은 cursor입니다.',
+    },
     // 네트워크·연결 오류 등 원문 요청 자체가 실패한 경우
     PREVIEW_FETCH_FAILED: {
         code: HttpStatus.BAD_GATEWAY,
