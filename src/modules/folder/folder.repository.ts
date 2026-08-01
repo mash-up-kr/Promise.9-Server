@@ -32,7 +32,9 @@ export class FolderRepository {
     }
 
     // 유저 폴더 목록을 저장된 순서(sortOrder)대로 조회한다. 순서를 편집한 적이 없으면
-    // sortOrder가 전부 null이라 NULLS LAST + id 오름차순으로 생성순이 된다.
+    // sortOrder가 전부 null이라 NULLS LAST + createdAt 오름차순으로 생성순이 된다.
+    // (id는 auto-key라 생성순과 일치하지만, 의미가 명확한 createdAt을 기준으로 삼고
+    // createdAt 동률일 때만 id로 결정성을 보강한다.)
     listByUser(userId: number) {
         return this.db
             .select({
@@ -42,7 +44,11 @@ export class FolderRepository {
             })
             .from(folders)
             .where(eq(folders.userId, userId))
-            .orderBy(sql`${folders.sortOrder} asc nulls last`, folders.id)
+            .orderBy(
+                sql`${folders.sortOrder} asc nulls last`,
+                folders.createdAt,
+                folders.id,
+            )
     }
 
     // 폴더 순서를 통째로 다시 쓴다. 넘어온 orderedIds가 사용자 폴더 전체와 정확히
