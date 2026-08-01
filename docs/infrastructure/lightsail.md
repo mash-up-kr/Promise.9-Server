@@ -24,4 +24,5 @@ CDK는 서버 내부의 Docker, Nginx, 파일과 환경변수를 관리하거나
   전용 속성이므로 변경하지 않는다.
 - `cdk diff`에 Lightsail 생성·교체·삭제가 표시되면 배포하지 않는다.
 - 운영과 Stage가 같은 Instance를 사용하므로 Instance 교체는 두 환경을 모두 중단시킨다.
-- Firewall 변경은 GitHub Actions의 SSH 배포 경로에 미치는 영향을 함께 검토한다.
+- 현재 SSH `22/tcp`는 IPv4·IPv6 전체에 공개되어 있다. 제한하려면 GitHub Actions의 SSH
+  배포 경로를 함께 변경한다.
