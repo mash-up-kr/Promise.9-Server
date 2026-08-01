@@ -1,9 +1,8 @@
-import { CursorPayload, decodeCursor } from '../../common/pagination/cursor'
-
+import { CursorPayload, decodeCursor } from '../../../common/pagination/cursor'
 import {
     LINK_SEARCH_KEYWORD_BOOST,
     LINK_SEARCH_SCORE_PRECISION,
-} from './link.constants'
+} from '../link.constants'
 
 export type VectorCandidate = { id: number; score: number }
 export type ScoredCandidate = { id: number; score: number }

@@ -1,11 +1,11 @@
-import { encodeCursor } from '../../common/pagination/cursor'
+import { encodeCursor } from '../../../common/pagination/cursor'
 
 import {
     parseSearchCursor,
     scoreSearchCandidates,
     takeSearchPage,
     toSearchCursorPayload,
-} from './link-search.util'
+} from './search.util'
 
 describe('scoreSearchCandidates', () => {
     it('벡터 유사도와 키워드 가산점을 합쳐 내림차순으로 정렬한다', () => {

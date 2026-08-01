@@ -5,11 +5,12 @@
 
 관련 코드
 
-| 파일                       | 역할                                        |
-| -------------------------- | ------------------------------------------- |
-| `link-search.service.ts`   | 후보 수집 조율, 커서 해석, 폴백             |
-| `link-search.util.ts`      | 점수 계산·정렬·커서 슬라이싱 (DB 비의존)    |
-| `link.repository.ts`       | 벡터 후보(`findVectorCandidates`)·키워드 후보(`findKeywordCandidateIds`) 쿼리 |
+| 파일                                | 역할                                        |
+| ----------------------------------- | ------------------------------------------- |
+| `link/search/search.service.ts`     | 후보 수집 조율, 커서 해석, 폴백             |
+| `link/search/search.util.ts`        | 점수 계산·정렬·커서 슬라이싱 (DB 비의존)    |
+| `link/link.repository.ts`           | 벡터 후보(`findVectorCandidates`)·키워드 후보(`findKeywordCandidateIds`) 쿼리 |
+| `link/link.constants.ts`            | `LINK_SEARCH_*` 상수 (repository도 쓰므로 link/에 둔다) |
 
 <br>
 

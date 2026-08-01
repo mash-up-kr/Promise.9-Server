@@ -1,17 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common'
 
-import { AiService } from '../ai/ai.service'
+import { AiService } from '../../ai/ai.service'
+import { LinkRepository } from '../link.repository'
+import { LinkRow } from '../link.schema'
+import { buildEmbeddingText } from '../link.util'
 
-import { LinkRepository } from './link.repository'
-import { LinkRow } from './link.schema'
-import { buildEmbeddingText } from './link.util'
-
-// 링크 임베딩 생성·저장과 검색 쿼리 임베딩을 담당한다.
+// 링크 임베딩 생성·저장과 검색 쿼리 임베딩을 담당한다. 벡터를 소비하는 건 검색뿐이라
+// search/ 아래에 두고, 쓰기 경로(LinkService.create/update)는 검색 인덱스를 갱신하는
+// 의미로 embedLinkSafe를 호출한다.
 // 텍스트 조립(link.util)·임베딩(AiService)·저장(LinkRepository)을 조율만 하며,
 // provider나 저장 방식의 세부는 각 의존성이 감춘다.
 @Injectable()
-export class LinkEmbeddingService {
-    private readonly logger = new Logger(LinkEmbeddingService.name)
+export class EmbeddingService {
+    private readonly logger = new Logger(EmbeddingService.name)
 
     constructor(
         private readonly aiService: AiService,

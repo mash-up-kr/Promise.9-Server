@@ -1,18 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common'
 
-import { BaseException } from '../../common/exception/base.exception'
+import { BaseException } from '../../../common/exception/base.exception'
+import { ListLinksQueryInput } from '../dto/link.dto'
+import { LinkRepository } from '../link.repository'
+import { LinkRow } from '../link.schema'
+import { LINK_ERROR } from '../link-error.constant'
 
-import { ListLinksQueryInput } from './dto/link.dto'
-import { LinkRepository } from './link.repository'
-import { LinkRow } from './link.schema'
-import { LinkEmbeddingService } from './link-embedding.service'
-import { LINK_ERROR } from './link-error.constant'
+import { EmbeddingService } from './embedding.service'
 import {
     parseSearchCursor,
     scoreSearchCandidates,
     SearchCursor,
     takeSearchPage,
-} from './link-search.util'
+} from './search.util'
 
 export type ScoredLink = { row: LinkRow; score: number }
 
@@ -21,11 +21,11 @@ export type ScoredLink = { row: LinkRow; score: number }
 export type SearchPage = { rows: ScoredLink[]; totalCount: number }
 
 @Injectable()
-export class LinkSearchService {
-    private readonly logger = new Logger(LinkSearchService.name)
+export class SearchService {
+    private readonly logger = new Logger(SearchService.name)
 
     constructor(
-        private readonly linkEmbeddingService: LinkEmbeddingService,
+        private readonly embeddingService: EmbeddingService,
         private readonly linkRepository: LinkRepository,
     ) {}
 
@@ -87,7 +87,7 @@ export class LinkSearchService {
 
     private async tryEmbedQuery(q: string): Promise<number[] | null> {
         try {
-            return await this.linkEmbeddingService.embedQuery(q)
+            return await this.embeddingService.embedQuery(q)
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : String(error)
