@@ -29,7 +29,7 @@ const accessStack = new AccessStack(app, 'Promise9AccessStack', {
     env,
     synthesizer,
     terminationProtection: true,
-    description: 'Promise9 team access group and temporary deploy role',
+    description: 'Promise9 team access group for AWS infrastructure management',
 })
 
 Tags.of(accessStack).add('Project', PROJECT_NAME)
