@@ -55,12 +55,21 @@ const booleanQuerySchema = z.preprocess((value) => {
     return value
 }, z.boolean())
 
-export const listFoldersQuerySchema = z.object({
-    // 홈 화면 '최근 저장 폴더'용. true면 마지막 저장 시각(lastSavedAt) 최신순으로 정렬한다.
-    // (미지정 시 false — 사용자가 편집한 순서, 편집 전이면 생성순)
-    recent: booleanQuerySchema.optional().default(false),
-    limit: z.coerce.number().int().min(1).max(MAX_PAGINATION_LIMIT).optional(),
-})
+// strict: 제거된 이전 정렬 파라미터(sortBy/order 등)를 조용히 무시하지 않고 400으로
+// 막는다. (구 계약을 쓰는 클라이언트가 편집순 상위 3개를 최근 저장 폴더로 오인하는 걸 방지)
+export const listFoldersQuerySchema = z
+    .object({
+        // 홈 화면 '최근 저장 폴더'용. true면 마지막 저장 시각(lastSavedAt) 최신순으로 정렬한다.
+        // (미지정 시 false — 사용자가 편집한 순서, 편집 전이면 생성순)
+        recent: booleanQuerySchema.optional().default(false),
+        limit: z.coerce
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_PAGINATION_LIMIT)
+            .optional(),
+    })
+    .strict()
 export type ListFoldersQueryInput = z.infer<typeof listFoldersQuerySchema>
 
 // 폴더 순서 편집: 원하는 최종 순서대로 나열한 folderId 전체 배열을 받는다.
