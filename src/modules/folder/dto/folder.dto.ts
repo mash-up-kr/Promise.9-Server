@@ -61,7 +61,7 @@ export const listFoldersQuerySchema = z
     .object({
         // 홈 화면 '최근 저장 폴더'용. true면 마지막 저장 시각(lastSavedAt) 최신순으로 정렬한다.
         // (미지정 시 false — 사용자가 편집한 순서, 편집 전이면 생성순)
-        recent: booleanQuerySchema.optional().default(false),
+        lastSavedAt: booleanQuerySchema.optional().default(false),
         limit: z.coerce
             .number()
             .int()

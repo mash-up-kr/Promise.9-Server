@@ -50,7 +50,7 @@ const LIST_FOLDERS_DESCRIPTION = `
 
 - 폴더는 사용자가 편집한 순서(\`PUT /folders/order\`)대로 반환됩니다. 순서를 편집한 적이 없으면 **생성순**입니다.
 - 별도의 정렬 기준(\`sortBy\`/\`order\`) 파라미터는 없습니다.
-- 홈 화면의 최근 저장 폴더 3개는 \`GET /folders?recent=true&limit=3\`으로 요청합니다. \`recent=true\`면 마지막 저장 시각(\`lastSavedAt\`) 최신순으로 정렬하며, 저장 이력이 없는 폴더는 항상 뒤로 갑니다.
+- 홈 화면의 최근 저장 폴더 3개는 \`GET /folders?lastSavedAt=true&limit=3\`으로 요청합니다. \`lastSavedAt=true\`면 마지막 저장 시각(\`lastSavedAt\`) 최신순으로 정렬하며, 저장 이력이 없는 폴더는 항상 뒤로 갑니다.
 - 폴더 목록에는 cursor 페이지네이션을 적용하지 않으며 \`pagination\`, \`totalCount\`도 반환하지 않습니다.
 
 ${LINK_LIST_ITEMS_DESCRIPTION}
@@ -124,11 +124,11 @@ export const ApiListFolders = () =>
             description: LIST_FOLDERS_DESCRIPTION,
         }),
         ApiQuery({
-            name: 'recent',
+            name: 'lastSavedAt',
             required: false,
             schema: { type: 'boolean', default: false },
             description:
-                '[선택, 기본값: false] true면 최근 저장(lastSavedAt) 최신순 정렬. 홈 화면 최근 저장 폴더용',
+                '[선택, 기본값: false] true면 마지막 저장 시각(lastSavedAt) 최신순 정렬. 홈 화면 최근 저장 폴더용',
         }),
         ApiQuery({
             name: 'limit',

@@ -49,14 +49,14 @@ export class FolderService {
             ])
 
         // folderRows는 repository에서 저장된 순서(sortOrder, 편집 전이면 생성순)대로
-        // 정렬돼 온다. recent=true(홈 화면)면 최근 저장순으로만 다시 정렬한다.
+        // 정렬돼 온다. lastSavedAt=true(홈 화면)면 최근 저장순으로만 다시 정렬한다.
         const folderList = folderRows.map((folder) => ({
             ...this.toFolderSummary(folder),
             linkCount: linkCounts.get(folder.id) ?? 0,
             lastSavedAt: lastSavedAtByFolder.get(folder.id) ?? null,
         }))
 
-        const ordered = input.recent
+        const ordered = input.lastSavedAt
             ? this.sortByLastSavedAt(folderList)
             : folderList
 
