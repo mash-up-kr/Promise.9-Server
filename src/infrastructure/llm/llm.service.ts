@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
+import {
+    EMBEDDING_DIMENSIONS,
+    EMBEDDING_MODEL,
+} from '../../common/constants/llm'
 import { ValidatedEnvironment } from '../../config/environment'
 
 import { GeminiProvider } from './providers/gemini/gemini.provider'
@@ -21,7 +25,7 @@ export class LlmService {
 
     constructor(
         private readonly config: ConfigService<ValidatedEnvironment, true>,
-        openAiProvider: OpenAiProvider,
+        private readonly openAiProvider: OpenAiProvider,
         geminiProvider: GeminiProvider,
     ) {
         this.providers = {
@@ -149,6 +153,15 @@ export class LlmService {
             usage: result.usage,
             ttlbMs: this.getElapsedMs(startedAt),
         }
+    }
+
+    // 임베딩은 provider·모델 교체 시 벡터가 호환되지 않아 OpenAI 모델로 고정해 직접 처리한다.
+    async embed(texts: string[]): Promise<Llm.LlmEmbedResult> {
+        return this.openAiProvider.embed({
+            model: EMBEDDING_MODEL.OPENAI_3_LARGE,
+            input: texts,
+            dimensions: EMBEDDING_DIMENSIONS,
+        })
     }
 
     private getElapsedMs(startedAt: number) {

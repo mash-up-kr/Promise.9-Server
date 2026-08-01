@@ -35,6 +35,20 @@ export class AiService {
         private readonly aiMetricService: AiMetricService,
     ) {}
 
+    // 텍스트 한 건을 임베딩 벡터로 변환한다. 검색 쿼리·단건 임베딩에 사용.
+    async embedText(text: string): Promise<number[]> {
+        const [embedding] = await this.embedTexts([text])
+
+        return embedding
+    }
+
+    // 여러 텍스트를 한 번에 임베딩한다. 링크 백필처럼 배치 처리에 사용.
+    async embedTexts(texts: string[]): Promise<number[][]> {
+        const { embeddings } = await this.llmService.embed(texts)
+
+        return embeddings
+    }
+
     generateSummary(): Promise<never> {
         // TODO: 요약 prompt 조립, text/object 방식 선택, 결과 품질과 반환 정책을 구현한다.
         return Promise.reject(

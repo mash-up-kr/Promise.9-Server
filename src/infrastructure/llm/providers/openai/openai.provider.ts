@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import OpenAI, { APIError } from 'openai'
+import type { CreateEmbeddingResponse } from 'openai/resources/embeddings'
 import type {
     Response as OpenAiResponse,
     ResponseCreateParamsNonStreaming,
@@ -10,6 +11,8 @@ import { ValidatedEnvironment } from '../../../../config/environment'
 import { LLM_PROVIDER } from '../../llm.constants'
 import { LlmConfigurationError, LlmProviderError } from '../../llm.exception'
 import {
+    LlmEmbedInput,
+    LlmEmbedResult,
     LlmGenerationOptions,
     LlmProvider,
     LlmProviderGenerateInput,
@@ -24,7 +27,7 @@ import {
     OPENAI_RESPONSE_STATUS,
 } from './openai.constants'
 
-type OpenAiClient = Pick<OpenAI, 'responses'>
+type OpenAiClient = Pick<OpenAI, 'responses' | 'embeddings'>
 
 @Injectable()
 export class OpenAiProvider implements LlmProvider {
@@ -37,15 +40,7 @@ export class OpenAiProvider implements LlmProvider {
     async generate(
         input: LlmProviderGenerateInput,
     ): Promise<LlmProviderGenerateResult> {
-        const apiKey = this.config.get('OPENAI_API_KEY', { infer: true })
-
-        if (!apiKey) {
-            throw new LlmConfigurationError(
-                'OPENAI_API_KEY 환경변수가 필요합니다.',
-            )
-        }
-
-        const client = this.createClient(apiKey)
+        const client = this.createClient(this.resolveApiKey())
         const response = await this.createResponse(client, input)
 
         return {
@@ -56,6 +51,63 @@ export class OpenAiProvider implements LlmProvider {
                 outputTokens: response.usage?.output_tokens,
             },
         }
+    }
+
+    // dimensions 축소 결과도 OpenAI가 정규화해 반환하므로 별도 정규화가 필요 없다.
+    async embed(input: LlmEmbedInput): Promise<LlmEmbedResult> {
+        const client = this.createClient(this.resolveApiKey())
+        const response = await this.createEmbedding(client, input)
+
+        return {
+            model: response.model ?? input.model,
+            embeddings: this.extractEmbeddings(response),
+            usage: { inputTokens: response.usage?.prompt_tokens },
+        }
+    }
+
+    private async createEmbedding(client: OpenAiClient, input: LlmEmbedInput) {
+        try {
+            return await client.embeddings.create(
+                {
+                    model: input.model,
+                    input: input.input,
+                    dimensions: input.dimensions,
+                },
+                {
+                    maxRetries: OPENAI_MAX_RETRIES,
+                    timeout: this.getTimeoutMs(),
+                },
+            )
+        } catch (error) {
+            this.throwProviderError(error)
+        }
+    }
+
+    // 응답 data 순서가 입력 순서와 어긋날 수 있어 index로 정렬해 반환한다.
+    private extractEmbeddings(response: CreateEmbeddingResponse): number[][] {
+        if (!response.data || response.data.length === 0) {
+            throw new LlmProviderError(
+                this.name,
+                OPENAI_ERROR_CODE.EMPTY_EMBEDDING,
+                'OpenAI 응답에서 임베딩을 찾을 수 없습니다.',
+            )
+        }
+
+        return [...response.data]
+            .sort((a, b) => a.index - b.index)
+            .map((item) => item.embedding)
+    }
+
+    private resolveApiKey(): string {
+        const apiKey = this.config.get('OPENAI_API_KEY', { infer: true })
+
+        if (!apiKey) {
+            throw new LlmConfigurationError(
+                'OPENAI_API_KEY 환경변수가 필요합니다.',
+            )
+        }
+
+        return apiKey
     }
 
     protected createClient(apiKey: string): OpenAiClient {

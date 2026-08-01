@@ -2,6 +2,10 @@ import { ConfigService } from '@nestjs/config'
 import type OpenAI from 'openai'
 import { APIError } from 'openai'
 import type {
+    CreateEmbeddingResponse,
+    EmbeddingCreateParams,
+} from 'openai/resources/embeddings'
+import type {
     Response as OpenAiResponse,
     ResponseCreateParamsNonStreaming,
 } from 'openai/resources/responses/responses'
@@ -13,11 +17,21 @@ import { LlmProviderError } from '../../llm.exception'
 import { OPENAI_RESPONSE_STATUS } from './openai.constants'
 import { OpenAiProvider } from './openai.provider'
 
-type OpenAiClientMock = Pick<OpenAI, 'responses'>
+type OpenAiClientMock = Pick<OpenAI, 'responses' | 'embeddings'>
 type OpenAiCreateMock = jest.Mock<
     Promise<OpenAiResponse>,
     [
         body: ResponseCreateParamsNonStreaming,
+        options?: {
+            maxRetries?: number
+            timeout?: number
+        },
+    ]
+>
+type OpenAiEmbeddingCreateMock = jest.Mock<
+    Promise<CreateEmbeddingResponse>,
+    [
+        body: EmbeddingCreateParams,
         options?: {
             maxRetries?: number
             timeout?: number
@@ -41,6 +55,7 @@ class TestOpenAiProvider extends OpenAiProvider {
 describe('OpenAiProvider', () => {
     let provider: OpenAiProvider
     let responseCreateMock: OpenAiCreateMock
+    let embeddingCreateMock: OpenAiEmbeddingCreateMock
 
     beforeEach(() => {
         const config = {
@@ -58,11 +73,15 @@ describe('OpenAiProvider', () => {
         }
 
         responseCreateMock = jest.fn() as OpenAiCreateMock
+        embeddingCreateMock = jest.fn() as OpenAiEmbeddingCreateMock
         provider = new TestOpenAiProvider(
             config as unknown as ConfigService<ValidatedEnvironment, true>,
             {
                 responses: {
                     create: responseCreateMock,
+                },
+                embeddings: {
+                    create: embeddingCreateMock,
                 },
             } as unknown as OpenAiClientMock,
         )
@@ -189,7 +208,63 @@ describe('OpenAiProvider', () => {
             },
         })
     })
+
+    it('embed는 dimensions·timeout을 전달하고 index 순서로 벡터를 반환한다', async () => {
+        embeddingCreateMock.mockResolvedValueOnce(
+            createEmbeddingResponse([
+                { index: 1, embedding: [0.3, 0.4] },
+                { index: 0, embedding: [0.1, 0.2] },
+            ]),
+        )
+
+        const result = await provider.embed({
+            model: 'text-embedding-3-large',
+            input: ['첫 번째', '두 번째'],
+            dimensions: 768,
+        })
+
+        const body = embeddingCreateMock.mock.calls[0]?.[0]
+        const options = embeddingCreateMock.mock.calls[0]?.[1]
+
+        expect(body).toMatchObject({
+            model: 'text-embedding-3-large',
+            input: ['첫 번째', '두 번째'],
+            dimensions: 768,
+        })
+        expect(options).toMatchObject({ maxRetries: 1, timeout: 1000 })
+        expect(result.embeddings).toEqual([
+            [0.1, 0.2],
+            [0.3, 0.4],
+        ])
+    })
+
+    it('embed 응답에 임베딩이 없으면 LlmProviderError를 던진다', async () => {
+        embeddingCreateMock.mockResolvedValueOnce(createEmbeddingResponse([]))
+
+        await expect(
+            provider.embed({
+                model: 'text-embedding-3-large',
+                input: ['텍스트'],
+                dimensions: 768,
+            }),
+        ).rejects.toBeInstanceOf(LlmProviderError)
+    })
 })
+
+function createEmbeddingResponse(
+    data: Array<{ index: number; embedding: number[] }>,
+): CreateEmbeddingResponse {
+    return {
+        object: 'list',
+        model: 'text-embedding-3-large',
+        data: data.map((item) => ({
+            object: 'embedding',
+            index: item.index,
+            embedding: item.embedding,
+        })),
+        usage: { prompt_tokens: 3, total_tokens: 3 },
+    }
+}
 
 function createOpenAiResponse(body: Partial<OpenAiResponse>) {
     return {

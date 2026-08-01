@@ -45,6 +45,7 @@ const appEnvSchema = z
         MASTER_ACCESS_TOKEN: z.string().optional(),
         MASTER_USER_ID: z.coerce.number().int().positive().optional(),
         LLM_DEFAULT_MODEL: z.enum(LLM_MODEL).default(LLM_MODEL.GPT_5_4_MINI),
+        // 임베딩 모델은 EMBEDDING_MODEL 상수로 고정한다(벡터 호환이 없어 env 교체 여지를 두지 않음).
         LLM_REQUEST_TIMEOUT_MS: z.coerce
             .number()
             .int()

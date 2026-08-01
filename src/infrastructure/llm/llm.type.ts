@@ -97,6 +97,20 @@ export type LlmGenerateObjectResult<T> = LlmGeneratedModel & {
     ttlbMs: number
 }
 
+export type LlmEmbedInput = {
+    model: string
+    // 배치 임베딩을 지원하기 위해 항상 배열로 받는다.
+    input: string[]
+    dimensions?: number
+}
+
+export type LlmEmbedResult = {
+    model: string
+    embeddings: number[][]
+    usage?: LlmUsage
+}
+
+// 텍스트 생성 능력. 모든 provider가 구현한다.
 export interface LlmProvider {
     readonly name: LlmProviderName
     generate(

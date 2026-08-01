@@ -51,6 +51,13 @@ export class CreateLinkResponseDto {
         description: '저장 시각 (ISO 8601)',
     })
     savedAt!: string
+
+    @ApiProperty({
+        example: 0.87342,
+        nullable: true,
+        description: '검색 결과 점수. 검색하지 않은 일반 목록에서는 null',
+    })
+    score!: number | null
 }
 
 export class LinkFolderRefDto {

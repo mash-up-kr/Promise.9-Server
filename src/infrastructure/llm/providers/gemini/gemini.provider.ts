@@ -36,15 +36,7 @@ export class GeminiProvider implements LlmProvider {
     async generate(
         input: LlmProviderGenerateInput,
     ): Promise<LlmProviderGenerateResult> {
-        const apiKey = this.config.get('GEMINI_API_KEY', { infer: true })
-
-        if (!apiKey) {
-            throw new LlmConfigurationError(
-                'GEMINI_API_KEY 환경변수가 필요합니다.',
-            )
-        }
-
-        const client = this.createClient(apiKey)
+        const client = this.createClient(this.resolveApiKey())
         const response = await this.generateContent(client, input)
 
         if (response.promptFeedback?.blockReason) {
@@ -64,6 +56,18 @@ export class GeminiProvider implements LlmProvider {
                 outputTokens: response.usageMetadata?.candidatesTokenCount,
             },
         }
+    }
+
+    private resolveApiKey(): string {
+        const apiKey = this.config.get('GEMINI_API_KEY', { infer: true })
+
+        if (!apiKey) {
+            throw new LlmConfigurationError(
+                'GEMINI_API_KEY 환경변수가 필요합니다.',
+            )
+        }
+
+        return apiKey
     }
 
     protected createClient(apiKey: string): GeminiClient {

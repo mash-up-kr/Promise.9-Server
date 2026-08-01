@@ -10,8 +10,10 @@ import {
     unique,
     uniqueIndex,
     varchar,
+    vector,
 } from 'drizzle-orm/pg-core'
 
+import { EMBEDDING_DIMENSIONS } from '../../common/constants/llm'
 import { folders } from '../folder/folder.schema'
 
 // links.metadata(jsonb) 구조. 최상위에 version을 두고 버전별 처리기가 파싱한다.
@@ -53,6 +55,8 @@ export const links = pgTable(
         aiSummary: text(),
         // 저장 링크 단위 대표 상태: PENDING | SUCCESS | NEEDS_REVIEW | FAILED
         aiSummaryStatus: varchar({ length: 20 }).notNull().default('PENDING'),
+        // 의미 검색용 임베딩 벡터. 제목·요약·메모 등으로 생성하며 미생성 시 null.
+        embedding: vector({ dimensions: EMBEDDING_DIMENSIONS }),
         memo: text(),
         isFavorite: boolean().notNull().default(false),
         // 상세 화면이 실제 노출됐을 때 POST /links/:linkId/view로 갱신한다.
@@ -83,6 +87,11 @@ export const links = pgTable(
         index('links_deleted_at_idx')
             .on(table.deletedAt)
             .where(sql`${table.deletedAt} is not null`),
+        // 의미 검색용 코사인 거리 근사 최근접 인덱스(HNSW)
+        index('links_embedding_idx').using(
+            'hnsw',
+            table.embedding.op('vector_cosine_ops'),
+        ),
     ],
 )
 

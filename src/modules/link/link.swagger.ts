@@ -168,6 +168,7 @@ const LIST_LINKS_RESPONSE_EXAMPLE = {
             representativeTag: null,
             thumbnailUrl: THUMBNAIL_EXAMPLE,
             savedAt: TIMESTAMP_EXAMPLE,
+            score: 0.87342,
         },
         {
             linkId: 41,
@@ -176,6 +177,7 @@ const LIST_LINKS_RESPONSE_EXAMPLE = {
             representativeTag: null,
             thumbnailUrl: null,
             savedAt: '2026-07-12T03:20:00.000Z',
+            score: 0.64125,
         },
     ],
     pagination: {
