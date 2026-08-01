@@ -784,22 +784,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "links_embedding_idx": {
-          "name": "links_embedding_idx",
-          "columns": [
-            {
-              "expression": "embedding",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last",
-              "opclass": "vector_cosine_ops"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "hnsw",
-          "with": {}
         }
       },
       "foreignKeys": {

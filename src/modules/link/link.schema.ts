@@ -87,11 +87,12 @@ export const links = pgTable(
         index('links_deleted_at_idx')
             .on(table.deletedAt)
             .where(sql`${table.deletedAt} is not null`),
-        // 의미 검색용 코사인 거리 근사 최근접 인덱스(HNSW)
-        index('links_embedding_idx').using(
-            'hnsw',
-            table.embedding.op('vector_cosine_ops'),
-        ),
+        // embedding에는 벡터 인덱스(HNSW)를 걸지 않는다.
+        // HNSW는 embedding 단일 컬럼에만 걸려 user_id·폴더 필터보다 먼저 근사 후보를
+        // 뽑으므로, 사용자별 데이터가 전체의 일부인 상황에서 후보가 필터에 걸려 사라진다.
+        // 현재 규모(사용자당 수백~수천 건)에선 필터 통과분만 정확 스캔하는 편이
+        // 빠르고 recall이 100%다. 사용자당 링크가 만 건대로 늘면 인덱스를 재도입한다.
+        // (docs/search/link-vector-search.md 참조)
     ],
 )
 
