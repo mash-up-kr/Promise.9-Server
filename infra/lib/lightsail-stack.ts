@@ -8,6 +8,7 @@ import { Construct } from 'constructs'
 
 const INSTANCE_NAME = 'Ubuntu-1'
 const STATIC_IP_NAME = 'StaticIp-1'
+// 기존 firewall 규칙 순서를 유지해 import 이후 불필요한 diff를 방지한다.
 const PUBLIC_TCP_PORTS = [443, 22, 80] as const
 
 export class LightsailStack extends Stack {
