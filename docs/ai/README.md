@@ -8,3 +8,5 @@ AI 기능을 사용하거나 내부 생성 흐름을 수정할 때 참고하는 
 | [생성 흐름 상세](./generation-detail.md) | LLM provider 호출, 오류 변환, metrics 저장 흐름           |
 
 현재 `generateSummary`, `generateTags`는 도메인별 public AI 유스케이스 자리만 있고 실제 정책은 아직 구현되지 않았다.
+
+임베딩을 링크 검색에 어떻게 쓰는지는 [Search](../search/README.md) 문서를 참고한다.

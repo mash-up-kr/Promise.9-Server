@@ -17,6 +17,27 @@
 
 <br>
 
+## pgvector 확장
+
+`links.embedding`이 `vector(768)` 타입이라 **pgvector 확장이 설치된 Postgres가 필요하다.** 확장을 켜는 것은 마이그레이션 `0005`가 하지만(`CREATE EXTENSION IF NOT EXISTS vector`), 확장 파일이 서버에 없으면 이 문장부터 실패한다.
+
+| 증상 | 원인 |
+| --- | --- |
+| `could not open extension control file ... vector.control` | 서버에 pgvector가 설치되지 않음 |
+| `type "vector" does not exist` | 확장이 켜지지 않음 |
+
+로컬은 확장이 포함된 이미지로 컨테이너를 띄운다.
+
+```bash
+docker run -d --name promise9-db \
+  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=promise9 \
+  -p 5432:5432 pgvector/pgvector:pg18
+```
+
+기본 `postgres` 이미지로 이미 만들어 뒀다면 컨테이너를 교체해야 한다. 벡터 컬럼과 코사인 계산을 검색이 어떻게 쓰는지는 [벡터 검색 구조](../search/link-vector-search.md)를 참고한다.
+
+<br>
+
 ## Schema
 
 도메인별 schema를 정의하고, `src/config/database/schema.ts`에서 모아서 export한다.
