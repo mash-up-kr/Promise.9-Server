@@ -14,7 +14,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
-import { type AuthUser, JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
+import { AuthUser, JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ZodValidationPipe } from '../../common/pipe/zod-validation.pipe'
 
 import {

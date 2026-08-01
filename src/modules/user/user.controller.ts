@@ -2,7 +2,7 @@ import { Controller, Get, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
-import { type AuthUser, JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
+import { AuthUser, JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 
 import { UserService } from './user.service'
 import { ApiGetMe } from './user.swagger'
