@@ -244,10 +244,13 @@ export class LinkService {
     // 링크 저장 응답과 분석 작업을 분리하고, 현재 프로세스의 예상 밖 실패를 안전하게 기록한다.
     private startLinkAnalysis(input: LinkAnalysisInput): void {
         this.linkAnalysisService.analyze(input).catch((error: unknown) => {
-            const errorType = error instanceof Error ? error.name : typeof error
+            const errorMessage =
+                error instanceof Error ? error.message : String(error)
+            const errorStack = error instanceof Error ? error.stack : undefined
 
             this.logger.error(
-                `링크 분석 작업이 중단되었습니다. linkId=${input.linkId}, errorType=${errorType}`,
+                `링크 분석 작업이 중단되었습니다. linkId=${input.linkId}: ${errorMessage}`,
+                errorStack,
             )
         })
     }

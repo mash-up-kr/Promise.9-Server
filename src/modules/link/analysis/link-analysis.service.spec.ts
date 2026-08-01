@@ -123,10 +123,10 @@ describe('LinkAnalysisService', () => {
     })
 
     it('요약 실패만 FAILED로 기록하고 빈 태그에는 별도 처리를 하지 않는다', async () => {
+        const summaryError = new Error('summary failed')
+
         linkContentService.collect.mockResolvedValueOnce(null)
-        aiService.generateSummary.mockRejectedValueOnce(
-            new Error('summary failed'),
-        )
+        aiService.generateSummary.mockRejectedValueOnce(summaryError)
         aiService.generateTags.mockResolvedValueOnce({
             tags: [],
         })
@@ -143,6 +143,10 @@ describe('LinkAnalysisService', () => {
             }),
         ])
         expect(linkRepository.replaceAiTags).not.toHaveBeenCalled()
+        expect(loggerErrorSpy).toHaveBeenCalledWith(
+            'AI 요약 생성에 실패했습니다. linkId=1: summary failed',
+            summaryError.stack,
+        )
     })
 
     it('태그 생성 실패는 성공한 요약 상태에 영향을 주지 않는다', async () => {

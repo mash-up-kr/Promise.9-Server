@@ -26,9 +26,13 @@ export class LinkAnalysisService {
         try {
             await this.updateCollectedInformation(input, information)
         } catch (error) {
-            this.logFailure(
-                `수집한 링크 정보 저장에 실패했습니다. linkId=${input.linkId}`,
-                error,
+            const errorMessage =
+                error instanceof Error ? error.message : String(error)
+            const errorStack = error instanceof Error ? error.stack : undefined
+
+            this.logger.error(
+                `수집한 링크 정보 저장에 실패했습니다. linkId=${input.linkId}: ${errorMessage}`,
+                errorStack,
             )
         }
 
@@ -96,17 +100,30 @@ export class LinkAnalysisService {
                 updatedAt: new Date(),
             })
         } catch (error) {
-            this.logFailure(
-                `AI 요약 생성에 실패했습니다. linkId=${input.linkId}`,
-                error,
+            const errorMessage =
+                error instanceof Error ? error.message : String(error)
+            const errorStack = error instanceof Error ? error.stack : undefined
+
+            this.logger.error(
+                `AI 요약 생성에 실패했습니다. linkId=${input.linkId}: ${errorMessage}`,
+                errorStack,
             )
 
             try {
                 await this.markSummaryFailed(input)
             } catch (statusUpdateError) {
-                this.logFailure(
-                    `AI 요약 실패 상태 저장에 실패했습니다. linkId=${input.linkId}`,
-                    statusUpdateError,
+                const statusUpdateErrorMessage =
+                    statusUpdateError instanceof Error
+                        ? statusUpdateError.message
+                        : String(statusUpdateError)
+                const statusUpdateErrorStack =
+                    statusUpdateError instanceof Error
+                        ? statusUpdateError.stack
+                        : undefined
+
+                this.logger.error(
+                    `AI 요약 실패 상태 저장에 실패했습니다. linkId=${input.linkId}: ${statusUpdateErrorMessage}`,
+                    statusUpdateErrorStack,
                 )
             }
         }
@@ -124,9 +141,13 @@ export class LinkAnalysisService {
 
             await this.replaceAiTags(input, result.tags)
         } catch (error) {
-            this.logFailure(
-                `AI 태그 생성에 실패했습니다. linkId=${input.linkId}`,
-                error,
+            const errorMessage =
+                error instanceof Error ? error.message : String(error)
+            const errorStack = error instanceof Error ? error.stack : undefined
+
+            this.logger.error(
+                `AI 태그 생성에 실패했습니다. linkId=${input.linkId}: ${errorMessage}`,
+                errorStack,
             )
         }
     }
@@ -170,12 +191,5 @@ export class LinkAnalysisService {
     // 태그 중복 판단용으로 양끝·연속 공백과 영문 대소문자를 정규화한다.
     private normalizeTagName(name: string): string {
         return name.trim().replace(/\s+/g, ' ').toLowerCase()
-    }
-
-    // URL·본문·모델 응답을 노출하지 않고 작업 종류와 오류 타입만 기록한다.
-    private logFailure(message: string, error: unknown): void {
-        const errorType = error instanceof Error ? error.name : typeof error
-
-        this.logger.error(`${message}, errorType=${errorType}`)
     }
 }
