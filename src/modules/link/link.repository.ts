@@ -24,9 +24,15 @@ import { FolderRow, folders } from '../folder/folder.schema'
 import { ListLinksQueryInput } from './dto/link.dto'
 import { LinkRow, links } from './link.schema'
 import { LINK_ERROR } from './link-error.constant'
+import { TagRow, tags } from './tag.schema'
 
 // 링크 부분 수정 시 반영할 컬럼 집합 (undefined 필드는 호출부에서 제외한다)
 export type LinkUpdatePatch = Partial<typeof links.$inferInsert>
+
+export type LinkAiTagValue = Pick<
+    typeof tags.$inferInsert,
+    'name' | 'normalizedName' | 'sortOrder'
+>
 
 // 목록 sortBy 값 → 실제 정렬 컬럼 매핑. viewedAt만 null 허용.
 const LINK_SORT_COLUMNS: Record<ListLinksQueryInput['sortBy'], Column> = {
@@ -140,6 +146,98 @@ export class LinkRepository {
             .returning()
 
         return row
+    }
+
+    // 삭제되지 않은 링크의 분석 결과만 갱신한다.
+    async updateActive(
+        userId: number,
+        linkId: number,
+        patch: LinkUpdatePatch,
+    ): Promise<void> {
+        await this.db
+            .update(links)
+            .set(patch)
+            .where(
+                and(
+                    eq(links.id, linkId),
+                    eq(links.userId, userId),
+                    isNull(links.deletedAt),
+                ),
+            )
+    }
+
+    // 수집한 description을 기존 metadata와 병합하기 위해 현재 metadata만 조회한다.
+    async findAnalysisMetadata(
+        userId: number,
+        linkId: number,
+    ): Promise<Pick<LinkRow, 'metadata'> | undefined> {
+        const [row] = await this.db
+            .select({ metadata: links.metadata })
+            .from(links)
+            .where(
+                and(
+                    eq(links.id, linkId),
+                    eq(links.userId, userId),
+                    isNull(links.deletedAt),
+                ),
+            )
+            .limit(1)
+
+        return row
+    }
+
+    // 링크에 연결된 전체 태그를 표시 순서와 생성 순서대로 조회한다.
+    findTags(userId: number, linkId: number): Promise<TagRow[]> {
+        return this.db
+            .select()
+            .from(tags)
+            .where(and(eq(tags.userId, userId), eq(tags.linkId, linkId)))
+            .orderBy(asc(tags.sortOrder), asc(tags.id))
+    }
+
+    // 사용자·규칙 태그는 보존하고 AI 태그만 transaction 안에서 교체한다.
+    async replaceAiTags(
+        userId: number,
+        linkId: number,
+        generatedTags: LinkAiTagValue[],
+    ): Promise<void> {
+        await this.db.transaction(async (tx) => {
+            const [link] = await tx
+                .select({ id: links.id })
+                .from(links)
+                .where(
+                    and(
+                        eq(links.id, linkId),
+                        eq(links.userId, userId),
+                        isNull(links.deletedAt),
+                    ),
+                )
+                .limit(1)
+
+            if (!link) return
+
+            await tx
+                .delete(tags)
+                .where(
+                    and(
+                        eq(tags.linkId, linkId),
+                        eq(tags.userId, userId),
+                        eq(tags.sourceType, 'ai'),
+                    ),
+                )
+
+            await tx
+                .insert(tags)
+                .values(
+                    generatedTags.map((tag) => ({
+                        userId,
+                        linkId,
+                        ...tag,
+                        sourceType: 'ai',
+                    })),
+                )
+                .onConflictDoNothing()
+        })
     }
 
     // 같은 사용자가 저장한(삭제되지 않은) 동일 정규화 URL이 있는지 조회한다.

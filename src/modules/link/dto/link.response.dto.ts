@@ -142,7 +142,7 @@ export class LinkDetailResponseDto {
     @ApiProperty({
         enum: ['PENDING', 'SUCCESS', 'NEEDS_REVIEW', 'FAILED'],
         example: 'PENDING',
-        description: '요약·태그·연관 링크 비동기 처리 상태',
+        description: 'AI 요약 비동기 처리 상태',
     })
     processingStatus!: 'PENDING' | 'SUCCESS' | 'NEEDS_REVIEW' | 'FAILED'
 
@@ -156,11 +156,9 @@ export class LinkDetailResponseDto {
 
     @ApiProperty({
         type: [LinkTagResponseDto],
-        nullable: true,
-        description:
-            '태그 목록. 처리 중이면 null, 처리 완료 후 결과가 없으면 빈 배열',
+        description: '현재 저장된 태그 목록. 태그가 없으면 빈 배열',
     })
-    tags!: LinkTagResponseDto[] | null
+    tags!: LinkTagResponseDto[]
 
     @ApiProperty({
         example: '나중에 꼭 읽기',
@@ -171,11 +169,9 @@ export class LinkDetailResponseDto {
 
     @ApiProperty({
         type: [RelatedLinkDto],
-        nullable: true,
-        description:
-            '연관 링크. 처리 중이면 null, 처리 완료 후 결과가 없으면 빈 배열',
+        description: '연관 링크. 결과가 없으면 빈 배열',
     })
-    relatedLinks!: RelatedLinkDto[] | null
+    relatedLinks!: RelatedLinkDto[]
 }
 
 export class UpdateLinkResponseDto {

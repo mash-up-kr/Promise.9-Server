@@ -2,18 +2,24 @@ import { Module } from '@nestjs/common'
 
 import { UrlSecurityModule } from '../../common/security/url-security/url-security.module'
 import { DatabaseModule } from '../../config/database/database.module'
+import { AiModule } from '../ai/ai.module'
 import { AuthModule } from '../auth/auth.module'
 
-import { OgService } from './og/og.service'
-import { OgFetcherService } from './og/og-fetcher.service'
+import { LinkAnalysisService } from './analysis/link-analysis.service'
+import { LinkContentService } from './content/link-content.service'
 import { LinkController } from './link.controller'
 import { LinkRepository } from './link.repository'
 import { LinkService } from './link.service'
 
 @Module({
-    imports: [DatabaseModule, AuthModule, UrlSecurityModule],
+    imports: [DatabaseModule, AiModule, AuthModule, UrlSecurityModule],
     controllers: [LinkController],
-    providers: [LinkService, LinkRepository, OgService, OgFetcherService],
+    providers: [
+        LinkService,
+        LinkRepository,
+        LinkAnalysisService,
+        LinkContentService,
+    ],
     exports: [LinkService],
 })
 export class LinkModule {}
