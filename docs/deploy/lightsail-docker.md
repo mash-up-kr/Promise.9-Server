@@ -54,13 +54,8 @@ PR 단위 공유 Stage 배포는 [PR Stage Deployment](./stage-pr-deployment.md)
 
 ## 네트워크
 
-Lightsail firewall은 다음 포트만 연다.
-
-| 포트      | 용도  | Source           |
-| --------- | ----- | ---------------- |
-| `22/tcp`  | SSH   | 가능한 경우 제한 |
-| `80/tcp`  | HTTP  | Anywhere         |
-| `443/tcp` | HTTPS | Anywhere         |
+Lightsail public firewall은 CDK의 `Promise9LightsailStack`에서 관리한다. 현재 포트와 변경
+규칙은 [Lightsail Infrastructure](../infrastructure/lightsail.md)를 따른다.
 
 `3000`, `5432`, `6379`는 외부에 열지 않는다.
 
