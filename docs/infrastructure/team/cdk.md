@@ -19,14 +19,17 @@ bun run infra:typecheck
 bun run infra:synth --profile promise9
 ```
 
-변경한 리소스에 해당하는 Stack만 `diff`한다.
+변경한 리소스에 해당하는 Stack ID를 선택한다.
+
+| 변경 대상       | Stack ID                    |
+| --------------- | --------------------------- |
+| 팀 AWS 접근 권한 | `Promise9AccessStack`        |
+| Lightsail       | `Promise9LightsailStack`     |
+
+아래 명령의 `STACK_ID`를 선택한 값으로 바꾸고 실행한다.
 
 ```bash
-# 팀 AWS 접근 권한 변경
-bun run infra:diff Promise9AccessStack --profile promise9
-
-# Lightsail 변경
-bun run infra:diff Promise9LightsailStack --profile promise9
+bun run infra:diff STACK_ID --profile promise9
 ```
 
 - `synth`가 실패하지 않는지 확인한다.
@@ -46,13 +49,8 @@ GitHub Actions는 `main` 대상 PR에서 `typecheck`, `synth`만 실행하고 AW
 배포한다.
 
 ```bash
-# 팀 AWS 접근 권한 변경
-bun run infra:diff Promise9AccessStack --profile promise9
-bun run infra:deploy Promise9AccessStack --profile promise9
-
-# Lightsail 변경
-bun run infra:diff Promise9LightsailStack --profile promise9
-bun run infra:deploy Promise9LightsailStack --profile promise9
+bun run infra:diff STACK_ID --profile promise9
+bun run infra:deploy STACK_ID --profile promise9
 ```
 
 관리 범위와 정책은 [AWS CDK](../cdk.md)를 참고한다.

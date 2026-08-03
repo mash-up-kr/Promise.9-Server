@@ -20,8 +20,10 @@ CDK는 서버 내부의 Docker, Nginx, 파일과 환경변수를 관리하거나
 
 - Instance와 Static IP에는 `RemovalPolicy.RETAIN`을 적용한다.
 - `Promise9LightsailStack`의 termination protection을 유지한다.
+- `RETAIN`은 삭제·교체 대상인 기존 리소스를 보존하고 termination protection은 Stack
+  삭제만 차단한다. 둘 다 Stack 업데이트나 리소스 교체 자체를 막지는 않는다.
 - `InstanceName`, `BlueprintId`, `BundleId`, `AvailabilityZone`과 `StaticIpName`은 생성
-  전용 속성이므로 변경하지 않는다.
+  후 업데이트가 지원되지 않거나 리소스 교체가 필요하므로 변경하지 않는다.
 - 운영과 Stage가 같은 Instance를 사용하므로 Instance 교체는 두 환경을 모두 중단시킨다.
 - 현재 SSH `22/tcp`는 IPv4·IPv6 전체에 공개되어 있다. 제한하려면 GitHub Actions의 SSH
   배포 경로를 함께 변경한다.
