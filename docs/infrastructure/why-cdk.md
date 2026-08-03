@@ -16,8 +16,8 @@ TypeScript CDK 코드 → cdk synth → CloudFormation Template → AWS 리소�
 
 ## 도입 이유
 
-Promise9는 팀 IAM 권한과 앞으로 추가할 SQS, DLQ, SNS 등의 AWS 리소스를 코드로
-관리한다.
+Promise9는 팀 IAM 권한, 기존 Lightsail Instance와 Static IP, 앞으로 추가할 SQS, DLQ,
+SNS 등의 AWS 리소스를 코드로 관리한다.
 
 Console에서 직접 관리하면 변경 이력과 리뷰가 남지 않고, 같은 구성을 다시 만들기
 어렵다. 리소스가 연결될수록 문서와 실제 AWS 상태가 달라질 가능성도 커진다.
@@ -60,7 +60,8 @@ infra/
 ├── bin/promise9-infra.ts
 └── lib/
     ├── access-stack.ts
-    └── constants.ts
+    ├── constants.ts
+    └── lightsail-stack.ts
 ```
 
 리소스가 늘어나면 기능별 Stack과 공통 Construct로 분리한다.
