@@ -27,5 +27,10 @@ jobs:
       - name: Test
         run: bun run test -- --runInBand
 
+      - name: Infrastructure check
+        run: |
+          bun run infra:typecheck
+          bun run infra:synth --quiet --no-notices
+
       - name: Type check and build
         run: bun run build
