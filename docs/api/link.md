@@ -63,7 +63,8 @@ GET /links?folderId=3&favorite=true&q=피그마&limit=9
                 "source": "toss.tech",
                 "representativeTag": null,
                 "thumbnailUrl": "https://static.example.com/thumbnail.png",
-                "savedAt": "2026-07-13T00:00:00.000Z"
+                "savedAt": "2026-07-13T00:00:00.000Z",
+                "score": null
             }
         ],
         "pagination": {
@@ -77,6 +78,15 @@ GET /links?folderId=3&favorite=true&q=피그마&limit=9
 ```
 
 `representativeTag`는 목록 카드에 표시할 대표 태그다. 현재는 대표 태그 선정 정책과 조회 로직이 구현되지 않아 항상 `null`을 반환하며, 추후 `LinkTagResponseDto` 형식의 태그 객체를 반환한다.
+
+### 검색(`q`) 응답의 차이
+
+`q`를 넘기면 벡터(의미)+키워드 하이브리드 검색으로 동작한다. 점수 공식과 후보 수집 방식은 [검색 점수 산정](../search/link-search-scoring.md)에 있다.
+
+- `score`: 0~1 사이 검색 점수(소수점 5자리). `q` 없는 일반 목록에서는 항상 `null`이다.
+- **정렬**: `score` 내림차순으로 고정되며 `sortBy`·`order`는 적용되지 않는다.
+- **`nextCursor`**: 검색 커서는 `(score, id)` 기준이라 일반 목록 커서와 **호환되지 않는다.** 검색 요청에 일반 목록의 커서를 넘기면(또는 반대) `400 Bad Request`(`INVALID_CURSOR`)다. `q`를 바꾸면 커서도 버리고 첫 페이지부터 다시 요청한다.
+- **`totalCount`**: 검색 후보 풀 전체 크기로, 최대 100으로 제한된다.
 
 > 기존 `GET /links/search`, `GET /folders/{folderId}/links`는 이 API로 통합하여 제거한다.
 

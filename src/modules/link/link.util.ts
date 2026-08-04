@@ -1,4 +1,4 @@
-import { LinkMetadata } from './link.schema'
+import { LinkMetadata, LinkRow } from './link.schema'
 
 // 사용자별 중복 저장 판단 키로 쓸 URL 정규화. 처음에는 단순하게:
 // - 프로토콜/호스트 소문자, fragment(#) 제거, 끝의 '/' 제거
@@ -34,4 +34,20 @@ export function extractDomain(raw: string): string | null {
 // metadata의 첫 이미지 URL을 썸네일로 사용. 없으면 null.
 export function pickThumbnailUrl(metadata: LinkMetadata | null): string | null {
     return metadata?.images?.[0]?.url ?? null
+}
+
+// 임베딩 대상 텍스트를 조립한다. 의미가 담긴 필드를 우선 결합하며, 빈 값은 제외한다.
+export function buildEmbeddingText(
+    link: Pick<LinkRow, 'title' | 'aiSummary' | 'memo' | 'domain' | 'metadata'>,
+): string {
+    return [
+        link.title,
+        link.aiSummary,
+        link.memo,
+        link.domain,
+        link.metadata?.description ?? null,
+    ]
+        .map((part) => part?.trim())
+        .filter((part): part is string => Boolean(part))
+        .join('\n')
 }

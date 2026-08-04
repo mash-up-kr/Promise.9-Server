@@ -1,19 +1,22 @@
 import { Injectable } from '@nestjs/common'
 import {
     and,
+    AnyColumn,
     asc,
     Column,
+    cosineDistance,
     count,
     desc,
     eq,
     gt,
-    ilike,
+    inArray,
     isNotNull,
     isNull,
     lt,
     max,
     or,
     SQL,
+    sql,
 } from 'drizzle-orm'
 
 import { BaseException } from '../../common/exception/base.exception'
@@ -22,6 +25,7 @@ import { DatabaseService } from '../../config/database/database.service'
 import { FolderRow, folders } from '../folder/folder.schema'
 
 import { ListLinksQueryInput } from './dto/link.dto'
+import { LINK_SEARCH_CANDIDATE_LIMIT } from './link.constants'
 import { LinkRow, links } from './link.schema'
 import { LINK_ERROR } from './link-error.constant'
 import { TagRow, tags } from './tag.schema'
@@ -260,53 +264,14 @@ export class LinkRepository {
         return row
     }
 
-    // 목록 조회. 검색·폴더·미분류·삭제·즐겨찾기 필터와 커서 페이지네이션을 적용한다.
+    // 검색(q)이 없는 목록 조회. 폴더·미분류·삭제·즐겨찾기 필터와 커서 페이지네이션을 적용한다.
+    // 검색은 점수 순 정렬이라 별도 경로(findVectorCandidates·findKeywordCandidateIds)로 처리한다.
     // 다음 페이지 판단을 위해 rows는 limit + 1개, totalCount는 커서와 무관한 전체 수다.
     async list(
         userId: number,
         input: ListLinksQueryInput,
     ): Promise<{ rows: LinkRow[]; totalCount: number }> {
-        const conditions = [
-            eq(links.userId, userId),
-            input.deleted
-                ? isNotNull(links.deletedAt)
-                : isNull(links.deletedAt),
-        ]
-
-        if (input.q) {
-            const keyword = `%${input.q}%`
-            // 검색 대상: title, domain, original_url, final_url, ai_summary, memo
-            const searchCondition = or(
-                ilike(links.title, keyword),
-                ilike(links.domain, keyword),
-                ilike(links.originalUrl, keyword),
-                ilike(links.finalUrl, keyword),
-                ilike(links.aiSummary, keyword),
-                ilike(links.memo, keyword),
-            )
-
-            if (searchCondition) {
-                conditions.push(searchCondition)
-            }
-        }
-
-        if (input.folderId) {
-            conditions.push(eq(links.folderId, input.folderId))
-        }
-
-        if (input.unassigned) {
-            conditions.push(isNull(links.folderId))
-        }
-
-        if (input.favorite) {
-            conditions.push(eq(links.isFavorite, true))
-        }
-
-        // "최근 본" 정렬은 조회 이력이 있는 링크만 대상으로 한다.
-        // (계약: sortBy=viewedAt일 때 viewedAt=null 링크는 결과에서 제외)
-        if (input.sortBy === 'viewedAt') {
-            conditions.push(isNotNull(links.viewedAt))
-        }
+        const conditions = this.buildScopeConditions(userId, input)
 
         // sortBy → 실제 정렬 컬럼. 위 조건들로 정렬 컬럼은 항상 not-null이 보장돼
         // (savedAt=createdAt, deletedAt은 deleted 필터, viewedAt은 위 제외 조건)
@@ -337,6 +302,145 @@ export class LinkRepository {
         ])
 
         return { rows, totalCount }
+    }
+
+    // 코사인 유사도 상위 벡터 후보를 조회한다.
+    async findVectorCandidates(
+        userId: number,
+        input: ListLinksQueryInput,
+        queryEmbedding: number[],
+    ): Promise<Array<{ id: number; score: number }>> {
+        const scope = this.buildScopeConditions(userId, input)
+        const distance = cosineDistance(links.embedding, queryEmbedding)
+        const similarity = sql<number>`1 - (${distance})`
+
+        return this.db
+            .select({ id: links.id, score: similarity })
+            .from(links)
+            .where(and(...scope, isNotNull(links.embedding)))
+            .orderBy(distance)
+            .limit(LINK_SEARCH_CANDIDATE_LIMIT)
+    }
+
+    // 키워드 일치 후보를 최신 저장순으로 조회한다.
+    async findKeywordCandidateIds(
+        userId: number,
+        input: ListLinksQueryInput,
+    ): Promise<number[]> {
+        const keyword = this.buildKeywordCondition(input.q ?? '')
+
+        if (!keyword) {
+            return []
+        }
+
+        const rows = await this.db
+            .select({ id: links.id })
+            .from(links)
+            .where(and(...this.buildScopeConditions(userId, input), keyword))
+            .orderBy(desc(links.createdAt))
+            .limit(LINK_SEARCH_CANDIDATE_LIMIT)
+
+        return rows.map((row) => row.id)
+    }
+
+    // 임베딩 벡터를 저장한다.
+    async updateEmbedding(
+        source: Pick<
+            LinkRow,
+            'id' | 'title' | 'aiSummary' | 'memo' | 'domain' | 'metadata'
+        >,
+        embedding: number[],
+    ): Promise<void> {
+        await this.db
+            .update(links)
+            .set({ embedding })
+            .where(
+                and(
+                    eq(links.id, source.id),
+                    sql`${links.title} is not distinct from ${source.title}`,
+                    sql`${links.aiSummary} is not distinct from ${source.aiSummary}`,
+                    sql`${links.memo} is not distinct from ${source.memo}`,
+                    sql`${links.domain} is not distinct from ${source.domain}`,
+                    sql`${links.metadata} is not distinct from ${source.metadata}`,
+                ),
+            )
+    }
+
+    // 사용자 범위와 목록 필터의 공통 조건을 만든다.
+    private buildScopeConditions(
+        userId: number,
+        input: ListLinksQueryInput,
+    ): SQL[] {
+        const conditions: SQL[] = [
+            eq(links.userId, userId),
+            input.deleted
+                ? isNotNull(links.deletedAt)
+                : isNull(links.deletedAt),
+        ]
+
+        if (input.folderId) {
+            conditions.push(eq(links.folderId, input.folderId))
+        }
+
+        if (input.unassigned) {
+            conditions.push(isNull(links.folderId))
+        }
+
+        if (input.favorite) {
+            conditions.push(eq(links.isFavorite, true))
+        }
+
+        if (input.sortBy === 'viewedAt') {
+            conditions.push(isNotNull(links.viewedAt))
+        }
+
+        return conditions
+    }
+
+    // 키워드 부분일치 조건(title·domain·url·요약·메모). 빈 검색어면 undefined.
+    // 한글 띄어쓰기/대소문자 불일치를 흡수하기 위해 양쪽을 공백 제거·소문자로 정규화 후 비교한다.
+    private buildKeywordCondition(q: string): SQL | undefined {
+        const normalized = q.toLowerCase().replace(/\s/g, '')
+
+        if (!normalized) {
+            return undefined
+        }
+
+        const keyword = `%${normalized}%`
+        const columns = [
+            links.title,
+            links.domain,
+            links.originalUrl,
+            links.finalUrl,
+            links.aiSummary,
+            links.memo,
+        ]
+
+        return or(
+            ...columns.map((column) => this.normalizedLike(column, keyword)),
+        )
+    }
+
+    // 컬럼값을 공백 제거·소문자로 정규화한 뒤 부분일치시킨다(인덱스 미사용, 후보 스코프 내 스캔).
+    private normalizedLike(column: AnyColumn, keyword: string): SQL {
+        return sql`regexp_replace(lower(${column}), ${'\\s'}, '', 'g') like ${keyword}`
+    }
+
+    // 주어진 id 순서를 유지해 링크 행을 조회한다.
+    async findByIdsInOrder(ids: number[]): Promise<LinkRow[]> {
+        if (ids.length === 0) {
+            return []
+        }
+
+        const rows = await this.db
+            .select()
+            .from(links)
+            .where(inArray(links.id, ids))
+        const rowById = new Map(rows.map((row) => [row.id, row]))
+
+        return ids
+            .map((id) => rowById.get(id))
+            .filter((row): row is LinkRow => row !== undefined)
     }
 
     // 요청 cursor를 목록 쿼리 조건으로 변환한다. 형식이 어긋나면 400.

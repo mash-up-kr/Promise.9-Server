@@ -68,6 +68,15 @@ const LIST_LINKS_DESCRIPTION = `
 
 기본값은 \`sortBy=savedAt\`, \`order=desc\`, \`limit=9\`입니다. 첫 요청은 \`cursor\`를 생략하고, 다음 요청부터 직전 응답의 \`nextCursor\`를 그대로 전달합니다. 필터나 정렬을 바꾸면 기존 cursor를 폐기하고 첫 페이지부터 다시 요청해야 합니다.
 
+### 검색(\`q\`) 응답의 차이
+
+\`q\`를 넘기면 의미(벡터)+키워드 하이브리드 검색으로 동작합니다.
+
+- \`score\`: 0~1 사이 검색 점수(소수점 5자리). \`q\` 없는 일반 목록에서는 항상 \`null\`입니다.
+- 정렬은 \`score\` 내림차순으로 고정되며 \`sortBy\`·\`order\`는 적용되지 않습니다.
+- 검색 cursor는 \`(score, id)\` 기준이라 일반 목록 cursor와 호환되지 않습니다. 서로 바꿔 넘기면 \`400 Bad Request\`입니다. \`q\`를 바꿀 때도 cursor를 폐기하고 첫 페이지부터 다시 요청합니다.
+- \`totalCount\`는 검색 후보 풀 전체 크기로 최대 100으로 제한됩니다.
+
 ### 현재 구현 상태
 
 - **현재 동작:** \`q\`, \`folderId\`, \`unassigned\`, \`deleted\`, \`favorite\`, \`sortBy\`, \`order\`, \`cursor\`, \`limit\`
@@ -168,6 +177,7 @@ const LIST_LINKS_RESPONSE_EXAMPLE = {
             representativeTag: null,
             thumbnailUrl: THUMBNAIL_EXAMPLE,
             savedAt: TIMESTAMP_EXAMPLE,
+            score: 0.87342,
         },
         {
             linkId: 41,
@@ -176,10 +186,12 @@ const LIST_LINKS_RESPONSE_EXAMPLE = {
             representativeTag: null,
             thumbnailUrl: null,
             savedAt: '2026-07-12T03:20:00.000Z',
+            score: 0.64125,
         },
     ],
     pagination: {
-        nextCursor: 'eyJ2IjoiMjAyNi0wNy0xMlQwMzoyMDowMC4wMDBaIiwiaWQiOjQxfQ',
+        // 검색(q) 응답 예시라 cursor도 (score, id) 기준이다. {"v":"0.64125","id":41}
+        nextCursor: 'eyJ2IjoiMC42NDEyNSIsImlkIjo0MX0',
         hasNext: true,
         limit: 9,
     },

@@ -12,6 +12,9 @@ import {
     UpdateLinkInput,
 } from './dto/link.dto'
 import { CreateLinkTagInput } from './dto/tag.dto'
+import { EmbeddingService } from './search/embedding.service'
+import { SearchService } from './search/search.service'
+import { toSearchCursorPayload } from './search/search.util'
 import { LinkRepository, LinkUpdatePatch } from './link.repository'
 import { LinkRow } from './link.schema'
 import { extractDomain, normalizeUrl, pickThumbnailUrl } from './link.util'
@@ -23,6 +26,8 @@ export class LinkService {
 
     constructor(
         private readonly linkRepository: LinkRepository,
+        private readonly embeddingService: EmbeddingService,
+        private readonly searchService: SearchService,
         private readonly linkAnalysisService: LinkAnalysisService,
     ) {}
 
@@ -44,6 +49,11 @@ export class LinkService {
             aiSummaryStatus: 'PENDING',
             memo: input.memo ?? null,
         })
+
+        // 임베딩은 외부 호출이라 저장 응답을 막지 않도록 best-effort로 처리한다.
+        // 저장 시점엔 title·aiSummary·metadata가 아직 비어 domain(+memo) 위주로만 임베딩된다.
+        // TODO: 메타데이터/요약 수집 파이프라인 완료 시 embedLinkSafe(row)를 다시 호출해 재임베딩한다.
+        void this.embeddingService.embedLinkSafe(row)
 
         this.startLinkAnalysis({
             linkId: row.id,
@@ -109,6 +119,11 @@ export class LinkService {
         }
 
         const row = await this.linkRepository.update(userId, linkId, patch)
+
+        // 메모가 바뀌면 임베딩 대상 텍스트가 달라지므로 best-effort로 재생성한다.
+        if (input.memo !== undefined) {
+            void this.embeddingService.embedLinkSafe(row)
+        }
 
         return {
             linkId: row.id,
@@ -189,12 +204,31 @@ export class LinkService {
     }
 
     async list(userId: number, input: ListLinksQueryInput) {
-        // 필터·정렬·커서 조회는 repository가 담당하고, 여기서는 페이지 봉투와 응답 매핑만 처리한다.
+        if (input.q) {
+            // 검색은 점수 순 정렬이라 커서도 (점수, id) 기준이다.
+            const { rows, totalCount } = await this.searchService.search(
+                userId,
+                input,
+            )
+            const { rows: pageRows, pagination } = buildCursorPage(
+                rows,
+                input.limit,
+                ({ row, score }) =>
+                    toSearchCursorPayload({ id: row.id, score }),
+            )
+
+            return {
+                links: this.toListItems(pageRows),
+                pagination,
+                totalCount,
+            }
+        }
+
+        // 일반 목록의 필터·정렬·커서 조회는 repository가 담당한다.
         const { rows, totalCount } = await this.linkRepository.list(
             userId,
             input,
         )
-
         const { rows: pageRows, pagination } = buildCursorPage(
             rows,
             input.limit,
@@ -205,18 +239,28 @@ export class LinkService {
         )
 
         return {
-            links: pageRows.map((row) => ({
-                linkId: row.id,
-                title: row.title,
-                source: row.domain,
-                // TODO: 태그 선정 정책에 따라 목록 카드용 대표 태그를 연결한다.
-                representativeTag: null,
-                thumbnailUrl: pickThumbnailUrl(row.metadata),
-                savedAt: row.createdAt,
-            })),
+            links: this.toListItems(
+                pageRows.map((row) => ({ row, score: null })),
+            ),
             pagination,
             totalCount,
         }
+    }
+
+    private toListItems(
+        results: Array<{ row: LinkRow; score: number | null }>,
+    ) {
+        return results.map(({ row, score }) => ({
+            linkId: row.id,
+            title: row.title,
+            source: row.domain,
+            // TODO: 태그 선정 정책에 따라 목록 카드용 대표 태그를 연결한다.
+            representativeTag: null,
+            thumbnailUrl: pickThumbnailUrl(row.metadata),
+            savedAt: row.createdAt,
+            // 점수 반올림은 커서 비교와 값을 맞추기 위해 search/search.util이 담당한다.
+            score,
+        }))
     }
 
     // 다음 커서에 담을 정렬 기준 값. 타임스탬프는 ISO 문자열, null이면 null.
