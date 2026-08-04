@@ -53,7 +53,7 @@ export const links = pgTable(
         // OG/favicon/description/이미지/색상 등 확장 메타데이터
         metadata: jsonb().$type<LinkMetadata>(),
         aiSummary: text(),
-        // 저장 링크 단위 대표 상태: PENDING | SUCCESS | NEEDS_REVIEW | FAILED
+        // AI 요약 상태: PENDING | SUCCESS | NEEDS_REVIEW | FAILED
         aiSummaryStatus: varchar({ length: 20 }).notNull().default('PENDING'),
         // 의미 검색용 임베딩 벡터. 제목·요약·메모 등으로 생성하며 미생성 시 null.
         embedding: vector({ dimensions: EMBEDDING_DIMENSIONS }),

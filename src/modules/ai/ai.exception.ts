@@ -22,13 +22,3 @@ export class AiGenerationError extends Error {
         this.taskType = input.taskType
     }
 }
-
-/**
- * 아직 구현되지 않은 AI use case를 호출했을 때 던지는 에러.
- */
-export class AiUseCaseNotImplementedError extends Error {
-    constructor(readonly useCase: string) {
-        super(`AI 유스케이스가 아직 구현되지 않았습니다: ${useCase}`)
-        this.name = AiUseCaseNotImplementedError.name
-    }
-}

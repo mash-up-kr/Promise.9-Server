@@ -20,8 +20,8 @@ API 명세, Swagger, controller endpoint, 실제 비즈니스 로직의 진행 �
 | ------------------------------------- | :--: | :-----: | :------: | :--: | ------------------------------------------------------------- |
 | `GET /links`                          |  O   |    O    |    O     |  △   | 즐겨찾기, 대표 태그, 최근 조회 정렬, cursor 페이지네이션 연결 |
 | `GET /links/preview`                  |  O   |    X    |    X     |  X   | URL 메타데이터 미리보기 구현                                  |
-| `POST /links`                         |  O   |    O    |    O     |  △   | 메타데이터·요약·태그 비동기 작업 연결                         |
-| `GET /links/{linkId}`                 |  O   |    O    |    O     |  △   | 발행일·태그·연관 링크 실제 값 연결                            |
+| `POST /links`                         |  O   |    O    |    O     |  O   | 큐·재시도 정책은 후속 적용                                    |
+| `GET /links/{linkId}`                 |  O   |    O    |    O     |  △   | 발행일·연관 링크 실제 값 연결                                 |
 | `PATCH /links/{linkId}`               |  O   |    O    |    O     |  O   | -                                                             |
 | `DELETE /links/{linkId}`              |  O   |    O    |    O     |  O   | -                                                             |
 | `POST /links/{linkId}/restore`        |  O   |    O    |    O     |  O   | -                                                             |

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { and, eq, isNull, ne } from 'drizzle-orm'
+import { and, eq, isNull, ne, sql } from 'drizzle-orm'
 
 import { BaseException } from '../../common/exception/base.exception'
 import { DatabaseService } from '../../config/database/database.service'
@@ -31,18 +31,53 @@ export class FolderRepository {
         return row
     }
 
-    // 유저 폴더 목록을 조회한다. (정렬은 lastSavedAt 등 집계와 함께 서비스가 메모리에서 처리)
+    // 유저 폴더 목록을 저장된 순서(sortOrder)대로 조회한다. 순서를 편집한 적이 없으면
+    // sortOrder가 전부 null이라 NULLS LAST + createdAt 오름차순으로 생성순이 된다.
+    // (id는 auto-key라 생성순과 일치하지만, 의미가 명확한 createdAt을 기준으로 삼고
+    // createdAt 동률일 때만 id로 결정성을 보강한다.)
     listByUser(userId: number) {
         return this.db
             .select({
                 id: folders.id,
                 name: folders.name,
                 color: folders.color,
-                createdAt: folders.createdAt,
-                updatedAt: folders.updatedAt,
             })
             .from(folders)
             .where(eq(folders.userId, userId))
+            .orderBy(
+                sql`${folders.sortOrder} asc nulls last`,
+                folders.createdAt,
+                folders.id,
+            )
+    }
+
+    // 폴더 순서를 통째로 다시 쓴다. 넘어온 orderedIds가 사용자 폴더 전체와 정확히
+    // 일치할 때만 index 순서대로 sortOrder(0..n-1)를 부여한다. 조회·검증·갱신을 한
+    // 트랜잭션으로 묶고 폴더 row를 FOR UPDATE로 잠가 동시 편집/생성 경합을 막는다.
+    async reorder(userId: number, orderedIds: number[]) {
+        await this.db.transaction(async (tx) => {
+            const rows = await tx
+                .select({ id: folders.id })
+                .from(folders)
+                .where(eq(folders.userId, userId))
+                .for('update')
+
+            const ownedIds = new Set(rows.map((row) => row.id))
+
+            if (
+                orderedIds.length !== ownedIds.size ||
+                orderedIds.some((id) => !ownedIds.has(id))
+            ) {
+                throw new BaseException(FOLDER_ERROR.REORDER_MISMATCH)
+            }
+
+            for (const [index, id] of orderedIds.entries()) {
+                await tx
+                    .update(folders)
+                    .set({ sortOrder: index })
+                    .where(and(eq(folders.id, id), eq(folders.userId, userId)))
+            }
+        })
     }
 
     // 소유권 확인용 단건 조회 (없으면 undefined, 도메인 예외는 서비스가 담당).

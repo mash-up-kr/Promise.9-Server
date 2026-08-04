@@ -13,8 +13,9 @@ import {
     AI_FAILURE_ERROR_CODE,
     AI_METRIC_STATUS,
     AI_TASK_RESPONSE_SCHEMA_NAME,
+    AI_TASK_TYPE,
 } from './ai.constants'
-import { AiGenerationError, AiUseCaseNotImplementedError } from './ai.exception'
+import { AiGenerationError } from './ai.exception'
 import {
     AiCreateGenerationErrorInput,
     AiGenerateObjectInput,
@@ -22,9 +23,17 @@ import {
     AiGenerateTextInput,
     AiGenerateTextResult,
     AiGenerationFailure,
+    AiLinkAnalysisInput,
     AiRecordMetricInput,
     AiResolveTargetInput,
+    AiSummaryResult,
+    AiTagsResult,
 } from './ai.type'
+import { AI_LINK_ANALYSIS_PROMPT } from './ai-link-analysis.prompt'
+import {
+    aiSummaryResultSchema,
+    aiTagsResultSchema,
+} from './ai-link-analysis.schema'
 
 @Injectable()
 export class AiService {
@@ -49,16 +58,40 @@ export class AiService {
         return embeddings
     }
 
-    generateSummary(): Promise<never> {
-        // TODO: 요약 prompt 조립, text/object 방식 선택, 결과 품질과 반환 정책을 구현한다.
-        return Promise.reject(
-            new AiUseCaseNotImplementedError('generateSummary'),
-        )
+    // 수집한 링크 정보를 기반으로 최대 300자의 한국어 요약을 생성한다.
+    async generateSummary(
+        input: AiLinkAnalysisInput,
+    ): Promise<AiSummaryResult> {
+        const prompt = AI_LINK_ANALYSIS_PROMPT.summary.current
+        const result = await this.generateObject({
+            userLinkId: input.userLinkId,
+            taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+            promptKey: prompt.promptKey,
+            llm: input.llm,
+            system: prompt.system,
+            prompt: prompt.buildPrompt(input),
+            schema: aiSummaryResultSchema,
+        })
+
+        return {
+            summary: result.data.summary.trim(),
+        }
     }
 
-    generateTags(): Promise<never> {
-        // TODO: 태그 prompt 조립, text/object 방식 선택, parsing과 결과 품질 및 반환 정책을 구현한다.
-        return Promise.reject(new AiUseCaseNotImplementedError('generateTags'))
+    // 수집한 링크 정보를 기반으로 대분류 구분 없이 내용 태그를 최대 5개 생성한다.
+    async generateTags(input: AiLinkAnalysisInput): Promise<AiTagsResult> {
+        const prompt = AI_LINK_ANALYSIS_PROMPT.tags.current
+        const result = await this.generateObject({
+            userLinkId: input.userLinkId,
+            taskType: AI_TASK_TYPE.TAG_GENERATE,
+            promptKey: prompt.promptKey,
+            llm: input.llm,
+            system: prompt.system,
+            prompt: prompt.buildPrompt(input),
+            schema: aiTagsResultSchema,
+        })
+
+        return result.data
     }
 
     private async generateText(

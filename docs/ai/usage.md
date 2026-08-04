@@ -50,7 +50,13 @@ export class ExampleModule {}
 ```ts
 constructor(private readonly aiService: AiService) {}
 
-const summary = await this.aiService.generateSummary(/* 확정된 input */)
+const summary = await this.aiService.generateSummary({
+    userLinkId: 1,
+    url: 'https://example.com/article',
+    title: '링크 제목',
+    description: '링크 설명',
+    content: '수집한 링크 본문',
+})
 ```
 
 호출하는 도메인 모듈은 권한 확인, 대상 데이터 조회, 결과 저장을 담당한다.
@@ -64,34 +70,15 @@ LLM 응답 형태에 따라 private `generateText` 또는 `generateObject` 중 �
 - `generateText`: 자유 형식 문자열이 필요하거나 유스케이스가 직접 parsing할 때 사용한다.
 - `generateObject`: JSON 형태와 Zod schema 검증이 필요할 때 사용한다.
 
-```ts
-async generateSummary(input: SummaryInput) {
-    const result = await this.generateText({
-        userLinkId: input.userLinkId,
-        taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
-        promptKey: 'summary_v1',
-        system: '링크 내용을 짧고 정확하게 요약한다.',
-        prompt: input.content,
-    })
-
-    return result.text
-}
-```
+`generateSummary`와 `generateTags`는 링크 URL과 수집한 제목·설명·본문을 받아
+각각 structured output으로 결과를 생성한다. 요약은 최대 300자이며, 태그는
+대분류 없이 최대 5개를 반환한다.
 
 ```ts
-const tagResultSchema = z.object({
-    tags: z.array(z.string()),
-})
-
-const result = await this.generateObject({
-    userLinkId,
-    taskType: AI_TASK_TYPE.TAG_GENERATE,
-    promptKey: 'tags_v1',
-    prompt,
-    schema: tagResultSchema,
-})
-
-return result.data.tags
+const [summary, tags] = await Promise.all([
+    this.aiService.generateSummary(linkInput),
+    this.aiService.generateTags(linkInput),
+])
 ```
 
 generic 실행기를 public으로 노출하거나 다른 모듈에서 `LlmModule`을 직접 import하지 않는다.
@@ -177,7 +164,6 @@ metrics 저장에 실패해도 생성 결과는 정상 반환한다.
 
 현재 AI 생성 실행 경로는 다음 공통 오류를 외부 호출자에게 전달한다.
 
-- 구현되지 않은 도메인별 public AI 유스케이스: `AiUseCaseNotImplementedError`
 - LLM 호출, JSON parse, 결과 검증 실패: `AiGenerationError`
 
 내부 `LlmConfigurationError`도 `AiGenerationError`로 변환된다.

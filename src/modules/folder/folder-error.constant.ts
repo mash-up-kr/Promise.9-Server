@@ -11,4 +11,9 @@ export const FOLDER_ERROR = {
         errorCode: 920002,
         message: '이미 존재하는 폴더 이름입니다.',
     },
+    REORDER_MISMATCH: {
+        code: HttpStatus.BAD_REQUEST,
+        errorCode: 920003,
+        message: '폴더 순서 목록이 현재 폴더 전체와 일치하지 않습니다.',
+    },
 } as const

@@ -1,9 +1,11 @@
-import { Injectable, NotImplementedException } from '@nestjs/common'
+import { Injectable, Logger, NotImplementedException } from '@nestjs/common'
 
 import { BaseException } from '../../common/exception/base.exception'
 import { buildCursorPage } from '../../common/pagination/cursor'
 import { FOLDER_ERROR } from '../folder/folder-error.constant'
 
+import { LinkAnalysisService } from './analysis/link-analysis.service'
+import { LinkAnalysisInput } from './analysis/link-analysis.type'
 import {
     CreateLinkInput,
     ListLinksQueryInput,
@@ -20,10 +22,13 @@ import { LINK_ERROR } from './link-error.constant'
 
 @Injectable()
 export class LinkService {
+    private readonly logger = new Logger(LinkService.name)
+
     constructor(
         private readonly linkRepository: LinkRepository,
         private readonly embeddingService: EmbeddingService,
         private readonly searchService: SearchService,
+        private readonly linkAnalysisService: LinkAnalysisService,
     ) {}
 
     async create(userId: number, input: CreateLinkInput) {
@@ -40,7 +45,7 @@ export class LinkService {
             originalUrl: input.url,
             normalizedUrl,
             domain: extractDomain(input.url),
-            // 메타데이터/요약 수집은 후속 작업 — 저장 시점엔 대기 상태로 둔다.
+            // 링크 정보와 AI 요약은 저장 이후 비동기로 생성하므로 대기 상태로 둔다.
             aiSummaryStatus: 'PENDING',
             memo: input.memo ?? null,
         })
@@ -49,6 +54,12 @@ export class LinkService {
         // 저장 시점엔 title·aiSummary·metadata가 아직 비어 domain(+memo) 위주로만 임베딩된다.
         // TODO: 메타데이터/요약 수집 파이프라인 완료 시 embedLinkSafe(row)를 다시 호출해 재임베딩한다.
         void this.embeddingService.embedLinkSafe(row)
+
+        this.startLinkAnalysis({
+            linkId: row.id,
+            userId,
+            url: row.originalUrl,
+        })
 
         return {
             linkId: row.id,
@@ -59,8 +70,10 @@ export class LinkService {
 
     async detail(userId: number, linkId: number) {
         const link = await this.getOwnedLink(userId, linkId)
-        const folder = await this.findFolderRef(link.folderId)
-        const isProcessing = link.aiSummaryStatus === 'PENDING'
+        const [folder, linkTags] = await Promise.all([
+            this.findFolderRef(link.folderId),
+            this.findTags(userId, linkId),
+        ])
 
         return {
             linkId: link.id,
@@ -76,11 +89,9 @@ export class LinkService {
             viewedAt: link.viewedAt,
             processingStatus: link.aiSummaryStatus,
             aiSummary: link.aiSummary,
-            // 처리 중 null과 처리 완료 후 빈 결과를 구분한다.
-            // TODO: 태그·연관 링크 조회 로직을 연결한다.
-            tags: isProcessing ? null : [],
+            tags: linkTags,
             memo: link.memo,
-            relatedLinks: isProcessing ? null : [],
+            relatedLinks: [],
         }
     }
 
@@ -308,6 +319,20 @@ export class LinkService {
         )
     }
 
+    // 링크 저장 응답과 분석 작업을 분리하고, 현재 프로세스의 예상 밖 실패를 안전하게 기록한다.
+    private startLinkAnalysis(input: LinkAnalysisInput): void {
+        this.linkAnalysisService.analyze(input).catch((error: unknown) => {
+            const errorMessage =
+                error instanceof Error ? error.message : String(error)
+            const errorStack = error instanceof Error ? error.stack : undefined
+
+            this.logger.error(
+                `링크 분석 작업이 중단되었습니다. linkId=${input.linkId}: ${errorMessage}`,
+                errorStack,
+            )
+        })
+    }
+
     // 링크에 연결된 폴더 참조를 조회한다. 폴더가 없으면 null.
     private async findFolderRef(folderId: number | null) {
         if (!folderId) {
@@ -317,6 +342,18 @@ export class LinkService {
         const folder = await this.linkRepository.findFolder(folderId)
 
         return folder ? { folderId: folder.id, folderName: folder.name } : null
+    }
+
+    // 링크에 저장된 사용자·규칙·AI 태그를 표시 순서와 생성 순서대로 반환한다.
+    private async findTags(userId: number, linkId: number) {
+        const rows = await this.linkRepository.findTags(userId, linkId)
+
+        return rows.map((row) => ({
+            tagId: row.id,
+            name: row.name,
+            sourceType: row.sourceType,
+            sortOrder: row.sortOrder,
+        }))
     }
 
     // 링크 소유권을 확인하고, 없거나 타 사용자 소유면 404로 처리한다.

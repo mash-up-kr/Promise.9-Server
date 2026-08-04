@@ -15,7 +15,11 @@ import {
 } from '../../common/swagger/api-response.decorator'
 import { AUTH_ERROR } from '../auth/auth-error.constant'
 
-import { CreateFolderDto, UpdateFolderDto } from './dto/folder.dto'
+import {
+    CreateFolderDto,
+    ReorderFoldersDto,
+    UpdateFolderDto,
+} from './dto/folder.dto'
 import {
     CreateFolderResponseDto,
     FolderColorsResponseDto,
@@ -42,12 +46,11 @@ const LIST_FOLDERS_DESCRIPTION = `
 - \`systemFolders\`: 전체·미분류·즐겨찾기·최근 삭제 링크 수입니다. 실제 폴더 row 목록이 아닙니다.
 - \`folders\`: 사용자가 생성한 \`folders\` row 목록이며 각 항목에 \`folderId\`가 있습니다.
 
-홈 화면의 최근 저장 폴더 3개는 \`GET /folders?sortBy=lastSavedAt&order=desc&limit=3\`으로 요청합니다.
+### 폴더 순서
 
-### 현재 구현 상태
-
-- **현재 동작:** 전체·미분류·즐겨찾기·최근 삭제 링크 수, 사용자 폴더 목록, 폴더별 링크 수, \`lastSavedAt\`, \`sortBy\`/\`order\` 정렬, 선택적 \`limit\`
-- \`sortBy\`는 \`createdAt\`·\`updatedAt\`·\`lastSavedAt\` 기준이며, 저장 이력이 없는 폴더(\`lastSavedAt=null\`)는 정렬 방향과 무관하게 항상 뒤로 정렬됩니다.
+- 폴더는 사용자가 편집한 순서(\`PUT /folders/order\`)대로 반환됩니다. 순서를 편집한 적이 없으면 **생성순**입니다.
+- 별도의 정렬 기준(\`sortBy\`/\`order\`) 파라미터는 없습니다.
+- 홈 화면의 최근 저장 폴더 3개는 \`GET /folders?lastSavedAt=true&limit=3\`으로 요청합니다. \`lastSavedAt=true\`면 마지막 저장 시각(\`lastSavedAt\`) 최신순으로 정렬하며, 저장 이력이 없는 폴더는 항상 뒤로 갑니다.
 - 폴더 목록에는 cursor 페이지네이션을 적용하지 않으며 \`pagination\`, \`totalCount\`도 반환하지 않습니다.
 
 ${LINK_LIST_ITEMS_DESCRIPTION}
@@ -121,24 +124,11 @@ export const ApiListFolders = () =>
             description: LIST_FOLDERS_DESCRIPTION,
         }),
         ApiQuery({
-            name: 'sortBy',
+            name: 'lastSavedAt',
             required: false,
-            schema: {
-                type: 'string',
-                enum: ['createdAt', 'updatedAt', 'lastSavedAt'],
-                default: 'updatedAt',
-            },
-            description: '[선택, 기본값: updatedAt] 사용자 폴더 정렬 기준',
-        }),
-        ApiQuery({
-            name: 'order',
-            required: false,
-            schema: {
-                type: 'string',
-                enum: ['asc', 'desc'],
-                default: 'desc',
-            },
-            description: '[선택, 기본값: desc] 정렬 방향',
+            schema: { type: 'boolean', default: false },
+            description:
+                '[선택, 기본값: false] true면 마지막 저장 시각(lastSavedAt) 최신순 정렬. 홈 화면 최근 저장 폴더용',
         }),
         ApiQuery({
             name: 'limit',
@@ -166,6 +156,34 @@ export const ApiListFolderColors = () =>
         ApiCommonResponse(FolderColorsResponseDto, {
             description: '조회 성공',
         }),
+    )
+
+const REORDER_FOLDERS_DESCRIPTION = `
+사용자가 편집한 폴더 순서를 저장합니다. 원하는 최종 순서대로 나열한 \`folderIds\` 전체 배열을 보내면, 배열 순서대로 폴더 순서를 확정합니다.
+
+- \`folderIds\`는 사용자의 현재 폴더 **전체**(중복 없이)와 정확히 일치해야 합니다. 누락·미소유·중복 id가 있으면 거부합니다.
+- 저장된 순서는 \`GET /folders\`의 \`folders\` 정렬에 반영됩니다.
+`
+
+export const ApiReorderFolders = () =>
+    applyDecorators(
+        ApiOperation({
+            summary: '폴더 순서 편집',
+            description: REORDER_FOLDERS_DESCRIPTION,
+        }),
+        ApiBody({
+            type: ReorderFoldersDto,
+            description:
+                '- `folderIds` (필수): 원하는 최종 순서대로 나열한 folderId 전체 배열',
+        }),
+        ApiNoContentResponse({
+            description: '순서 저장 성공 (응답 본문 없음)',
+        }),
+        ApiCommonErrorResponses(
+            COMMON_ERROR.VALIDATION,
+            AUTH_ERROR.INVALID_TOKEN,
+            FOLDER_ERROR.REORDER_MISMATCH,
+        ),
     )
 
 export const ApiGetFolder = () =>

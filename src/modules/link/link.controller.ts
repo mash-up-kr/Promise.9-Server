@@ -17,6 +17,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { AuthUser, JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ZodValidationPipe } from '../../common/pipe/zod-validation.pipe'
 
+import { LinkContentService } from './content/link-content.service'
 import {
     CreateLinkInput,
     createLinkSchema,
@@ -28,7 +29,6 @@ import {
     updateLinkSchema,
 } from './dto/link.dto'
 import { CreateLinkTagInput, createLinkTagSchema } from './dto/tag.dto'
-import { OgService } from './og/og.service'
 import { LinkService } from './link.service'
 import {
     ApiCreateLink,
@@ -50,7 +50,7 @@ import {
 export class LinkController {
     constructor(
         private readonly linkService: LinkService,
-        private readonly ogService: OgService,
+        private readonly linkContentService: LinkContentService,
     ) {}
 
     @Post()
@@ -80,7 +80,7 @@ export class LinkController {
         @Query(new ZodValidationPipe(linkPreviewQuerySchema))
         query: LinkPreviewQueryInput,
     ) {
-        return this.ogService.preview(query.url)
+        return this.linkContentService.preview(query.url)
     }
 
     @Get(':linkId')
