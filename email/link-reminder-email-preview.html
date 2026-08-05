@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Promise.9 링크 리마인드 — 세 모션 최종본</title>
+</head>
+<body style="margin:0; background:#050507;">
+  <script>
+    const motions = Object.freeze({
+      normal: {
+        label: "기본",
+        gifUrl: "./assets/link-reminder-motion.gif?v=1",
+      },
+      gentle: {
+        label: "Gentle",
+        gifUrl: "./assets/link-reminder-motion-gentle.gif?v=1",
+      },
+      playful: {
+        label: "Playful",
+        gifUrl: "./assets/link-reminder-motion-playful.gif?v=1",
+      },
+    });
+
+    const requestedMotion = new URLSearchParams(window.location.search).get("motion");
+    const selectedMotion = Object.prototype.hasOwnProperty.call(motions, requestedMotion)
+      ? requestedMotion
+      : "normal";
+
+    fetch("./link-reminder-email.html")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`이메일 템플릿을 불러오지 못했습니다: ${response.status}`);
+        }
+        return response.text();
+      })
+      .then((template) => {
+        const preview = template
+          .replaceAll("{{linkTitle}}", "{{링크 제목}}")
+          .replaceAll("{{linkUrl}}", "#")
+          .replaceAll("{{motionGifUrl}}", motions[selectedMotion].gifUrl)
+          .replaceAll("cid:link-reminder-poster", "./assets/link-reminder-motion-poster.png");
+
+        document.open();
+        document.write(preview);
+        document.close();
+        document.title = `Promise.9 링크 리마인드 — ${motions[selectedMotion].label} 모션 최종본`;
+
+        const selector = document.createElement("nav");
+        selector.setAttribute("aria-label", "모션 미리보기 선택");
+        selector.style.cssText = [
+          "position:fixed",
+          "z-index:9999",
+          "left:50%",
+          "bottom:18px",
+          "transform:translateX(-50%)",
+          "display:flex",
+          "gap:4px",
+          "padding:5px",
+          "border:1px solid rgba(236,233,218,.24)",
+          "border-radius:999px",
+          "background:rgba(15,15,18,.88)",
+          "box-shadow:0 12px 36px rgba(0,0,0,.34)",
+          "backdrop-filter:blur(14px)",
+          "font-family:Pretendard,sans-serif",
+        ].join(";");
+
+        Object.entries(motions).forEach(([key, motion]) => {
+          const link = document.createElement("a");
+          const isSelected = key === selectedMotion;
+          link.href = `?motion=${encodeURIComponent(key)}`;
+          link.textContent = motion.label;
+          link.style.cssText = [
+            "display:block",
+            "padding:8px 13px",
+            "border-radius:999px",
+            `background:${isSelected ? "#ece9da" : "transparent"}`,
+            `color:${isSelected ? "#171714" : "#b8b5a8"}`,
+            "font-size:12px",
+            "line-height:16px",
+            "font-weight:700",
+            "text-decoration:none",
+            "white-space:nowrap",
+          ].join(";");
+          if (isSelected) {
+            link.setAttribute("aria-current", "page");
+          }
+          selector.appendChild(link);
+        });
+
+        document.body.appendChild(selector);
+      })
+      .catch((error) => {
+        const message = document.createElement("p");
+        message.style.cssText = "padding:24px;color:#f5f2e8;font-family:sans-serif;";
+        message.textContent = error instanceof Error
+          ? error.message
+          : "이메일 미리보기를 불러오지 못했습니다.";
+        document.body.replaceChildren(message);
+      });
+  </script>
+</body>
+</html>
