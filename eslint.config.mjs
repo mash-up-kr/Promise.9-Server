@@ -13,6 +13,8 @@ export default tseslint.config(
             '**/*.json',
             'docs/*',
             'node_modules/*',
+            // Bun 런타임 기반 로컬 개발용 스크립트(프로덕션 빌드·타입체크 대상 아님)
+            'script/*',
         ],
     },
     eslint.configs.recommended,
