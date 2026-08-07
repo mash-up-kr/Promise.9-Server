@@ -19,6 +19,7 @@ import {
     LinkPreview,
 } from './link-content.type'
 import { isRobotsPathAllowed } from './robots.parser'
+import { resolveSiteRule } from './site-rules'
 
 @Injectable()
 export class LinkContentService {
@@ -27,15 +28,45 @@ export class LinkContentService {
     constructor(private readonly urlSecurity: UrlSecurityService) {}
 
     // 저장 전 화면에 사용할 링크 제목, 대표 이미지, 출처를 수집한다.
+    // 도메인별 특수 규칙(site rule)이 있으면 URL 변형·결과 후처리·완전 대체를 적용한다.
     async preview(url: string): Promise<LinkPreview> {
-        const { html, finalUrl } = await this.fetchHtml(url)
-        const { title, image } = parseLinkPreview(html)
+        const parsed = this.urlSecurity.parseHttpUrl(url)
+        const rule = resolveSiteRule(parsed)
 
-        return {
-            title,
-            thumbnailUrl: this.toAbsoluteImage(image, finalUrl),
-            source: this.toSource(finalUrl),
+        // 파이프라인을 통째로 대체하는 규칙이면 그 결과를 그대로 쓴다 (예: API 호출형).
+        if (rule?.fetchPreview) {
+            return rule.fetchPreview(parsed)
         }
+
+        // fetch 전 URL 변형(예: PC→모바일). 없으면 원본 그대로 요청한다.
+        const target = rule?.rewriteUrl?.(parsed) ?? parsed
+        let fetched = await this.fetchHtml(target.toString())
+
+        // 단축링크(예: naver.me)는 최초 URL엔 규칙이 안 걸리고 리다이렉트로 도착한
+        // 최종 URL(map.naver.com/.../place/{id})에 걸린다. 최종 URL에도 rewrite 규칙을
+        // 한 번 더 적용해 재요청한다. (naver.me → map.naver.com/place → m.place)
+        let activeRule = rule
+        const finalRule = resolveSiteRule(fetched.finalUrl)
+        const rewrittenFinal = finalRule?.rewriteUrl?.(fetched.finalUrl)
+        if (
+            rewrittenFinal &&
+            rewrittenFinal.toString() !== fetched.finalUrl.toString()
+        ) {
+            fetched = await this.fetchHtml(rewrittenFinal.toString())
+            activeRule = finalRule
+        }
+
+        const { title, image } = parseLinkPreview(fetched.html)
+        const preview: LinkPreview = {
+            title,
+            thumbnailUrl: this.toAbsoluteImage(image, fetched.finalUrl),
+            source: this.toSource(fetched.finalUrl),
+        }
+
+        // 파싱 결과 후처리(예: 제네릭 og 무효화). 없으면 그대로 반환한다.
+        return (
+            activeRule?.transformPreview?.(preview, fetched.finalUrl) ?? preview
+        )
     }
 
     // robots.txt가 허용한 링크에서 요약과 태그 생성에 필요한 정보를 수집한다.
