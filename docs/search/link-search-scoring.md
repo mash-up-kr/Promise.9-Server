@@ -75,4 +75,4 @@ nextCursor = base64url({ "v": "0.87342", "id": 42 })
 
 ## 관련 링크와의 관계
 
-검색과 관련 링크는 문자열·태그·cosine 유사도 계산만 `link-similarity.util.ts`에서 공유한다. 후보 쿼리와 점수 정책은 각각 `search/`, `related/` 내부에서 독립적으로 관리한다.
+검색과 관련 링크는 문자열·태그·cosine 유사도 계산만 `link-similarity.util.ts`에서 공유한다. 후보 쿼리는 `SearchRepository`와 `RelatedLinkRepository`, 점수 정책은 각각 `search/`, `related/` 내부에서 독립적으로 관리한다.

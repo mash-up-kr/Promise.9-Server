@@ -64,7 +64,7 @@ pgvector의 `<=>` 연산자가 코사인 **거리**를 준다. 유사도는 거�
 코사인 유사도 = 1 - (embedding <=> :queryEmbedding)  -- 1에 가까울수록 유사
 ```
 
-`SearchRepository`의 `findVectorCandidateIds`가 이 계산을 담당한다. drizzle의 `cosineDistance()`가 `<=>`로 컴파일된다.
+검색은 `SearchRepository`, 관련 링크는 `RelatedLinkRepository`의 `findVectorCandidateIds`가 이 계산을 담당한다. drizzle의 `cosineDistance()`가 `<=>`로 컴파일된다.
 
 ```
 SELECT id, 1 - (embedding <=> :query) AS score

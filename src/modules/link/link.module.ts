@@ -8,6 +8,8 @@ import { AuthModule } from '../auth/auth.module'
 import { LinkAnalysisService } from './analysis/link-analysis.service'
 import { LinkContentService } from './content/link-content.service'
 import { EmbeddingService } from './embedding/embedding.service'
+import { RelatedLinkRepository } from './related/related-link.repository'
+import { RelatedLinkService } from './related/related-link.service'
 import { SearchRepository } from './search/search.repository'
 import { SearchService } from './search/search.service'
 import { LinkController } from './link.controller'
@@ -25,6 +27,8 @@ import { LinkService } from './link.service'
         SearchService,
         LinkAnalysisService,
         LinkContentService,
+        RelatedLinkRepository,
+        RelatedLinkService,
     ],
     exports: [LinkService],
 })
