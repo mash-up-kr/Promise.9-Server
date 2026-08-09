@@ -233,7 +233,7 @@ export class LinkService {
             rows,
             input.limit,
             (row) => ({
-                v: this.cursorValueOf(row, input.sortBy),
+                v: row.cursorValue,
                 id: row.id,
             }),
         )
@@ -261,20 +261,6 @@ export class LinkService {
             // 점수 반올림은 커서 비교와 값을 맞추기 위해 search/search.util이 담당한다.
             score,
         }))
-    }
-
-    // 다음 커서에 담을 정렬 기준 값. 타임스탬프는 ISO 문자열, null이면 null.
-    private cursorValueOf(
-        row: LinkRow,
-        sortBy: ListLinksQueryInput['sortBy'],
-    ): string | null {
-        const value = {
-            savedAt: row.createdAt,
-            viewedAt: row.viewedAt,
-            deletedAt: row.deletedAt,
-        }[sortBy]
-
-        return value ? value.toISOString() : null
     }
 
     // 화면의 전체/미분류/즐겨찾기/최근삭제 링크 목록에 표시할 수를 한 번에 계산한다.
