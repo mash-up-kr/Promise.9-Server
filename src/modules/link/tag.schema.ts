@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import {
     bigint,
     foreignKey,
@@ -9,7 +10,7 @@ import {
     varchar,
 } from 'drizzle-orm/pg-core'
 
-import { links } from './link.schema'
+import { links, normalizedSearchText } from './link.schema'
 
 // 사용자 저장 링크에 붙는 태그. 전역 태그 사전을 두지 않고 링크별로 저장한다.
 // user_id는 links에서 파생 가능하지만 사용자 내부 검색/추천 쿼리를 위해 중복 저장한다.
@@ -46,8 +47,11 @@ export const tags = pgTable(
             table.userId,
             table.normalizedName,
         ),
-        // NOTE: 유사 태그 추천용 gin(normalized_name gin_trgm_ops) 인덱스는
-        //       pg_trgm 확장이 필요해 검색/추천 구현 시점에 추가한다. (단순화)
+        // 검색어의 태그 부분일치 후보 회수용. 완전 일치는 위 B-tree를 계속 사용한다.
+        index('tags_normalized_name_trgm_idx').using(
+            'gin',
+            sql`${normalizedSearchText([table.normalizedName])} gin_trgm_ops`,
+        ),
     ],
 )
 

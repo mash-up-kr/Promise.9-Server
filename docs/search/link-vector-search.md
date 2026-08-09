@@ -64,10 +64,10 @@ pgvector의 `<=>` 연산자가 코사인 **거리**를 준다. 유사도는 거�
 코사인 유사도 = 1 - (embedding <=> :queryEmbedding)  -- 1에 가까울수록 유사
 ```
 
-`findVectorCandidates`(`link.repository.ts`)가 이 계산을 담당한다. drizzle의 `cosineDistance()`가 `<=>`로 컴파일된다.
+`SearchRepository.findVectorCandidateIds()`는 drizzle의 `cosineDistance()`가 컴파일한 `<=>`로 후보를 정렬해 id만 반환한다. 실제 `1 - cosineDistance` 유사도 값은 후보 합집합을 hydrate하는 `findCandidates()`에서 계산한다.
 
 ```
-SELECT id, 1 - (embedding <=> :query) AS score
+SELECT id
 FROM links
 WHERE user_id = :userId
   AND deleted_at IS NULL          -- deleted=true면 IS NOT NULL
@@ -76,9 +76,8 @@ WHERE user_id = :userId
   [AND folder_id = :folderId]     -- folderId
   [AND folder_id IS NULL]         -- unassigned=true
   [AND is_favorite = true]        -- favorite=true
-  [AND viewed_at IS NOT NULL]     -- sortBy=viewedAt
 ORDER BY embedding <=> :query
-LIMIT 50                          -- LINK_SEARCH_CANDIDATE_LIMIT
+LIMIT 30                          -- 검색 후보 상한
 ```
 
 정렬은 `score DESC`가 아니라 `거리 ASC`로 한다. 결과 순서는 같지만 거리 계산을 한 번만 하고, 나중에 벡터 인덱스를 도입하면 인덱스가 쓸 수 있는 형태이기도 하다.
@@ -108,3 +107,7 @@ HNSW는 근사 최근접(ANN) 인덱스로, 벡터를 다층 그래프로 연결
 | 저장 공간 | 벡터당 3KB(768 × 4바이트) + 그래프 | 없음 |
 
 **재도입 기준:** 사용자당 활성 링크가 만 건대에 접근하면 다시 검토한다. 그때는 pgvector 0.8.0+의 `hnsw.iterative_scan`(필터 통과분이 부족하면 인덱스를 더 훑는 옵션)을 함께 켜야 위 후보 누락이 재발하지 않는다.
+
+`deleted=true` 검색은 활성 링크(`deleted_at IS NULL`) 전용 trigram partial index의 대상이 아니므로 사용자별 삭제 링크 범위를 스캔한다. 삭제 링크가 장기간 누적되면 별도 보관·정리 정책이나 삭제 링크용 인덱스를 다시 검토한다.
+
+텍스트 GIN 인덱스는 일반 `CREATE INDEX`로 생성되므로 배포 전 운영 행 수와 예상 생성 시간을 확인한다. 현재 규모를 넘어 쓰기 중단이 문제가 되면 transaction 밖의 `CREATE INDEX CONCURRENTLY`를 사용하는 별도 배포 절차로 전환한다.

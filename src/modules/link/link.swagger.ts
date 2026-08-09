@@ -75,13 +75,13 @@ const LIST_LINKS_DESCRIPTION = `
 - \`score\`: 0~1 사이 검색 점수(소수점 5자리). \`q\` 없는 일반 목록에서는 항상 \`null\`입니다.
 - 정렬은 \`score\` 내림차순으로 고정되며 \`sortBy\`·\`order\`는 적용되지 않습니다.
 - 검색 cursor는 \`(score, id)\` 기준이라 일반 목록 cursor와 호환되지 않습니다. 서로 바꿔 넘기면 \`400 Bad Request\`입니다. \`q\`를 바꿀 때도 cursor를 폐기하고 첫 페이지부터 다시 요청합니다.
-- \`totalCount\`는 검색 후보 풀 전체 크기로 최대 100으로 제한됩니다.
+- \`totalCount\`는 관련도 상위 검색 결과 크기로 최대 30입니다.
 
 ### 현재 구현 상태
 
 - **현재 동작:** \`q\`, \`folderId\`, \`unassigned\`, \`deleted\`, \`favorite\`, \`sortBy\`, \`order\`, \`cursor\`, \`limit\`
 - **계약만 제공:** 대표 태그(\`representativeTag\`)
-- \`sortBy\`/\`order\`에 따라 정렬되며, cursor 페이지네이션으로 \`nextCursor\`·\`hasNext\`를 실제 계산해 반환합니다.
+- \`q\`가 없는 일반 목록은 \`sortBy\`/\`order\`에 따라 정렬되며, 검색은 위 설명처럼 \`score\` 내림차순으로 고정됩니다. 두 경로 모두 cursor 페이지네이션으로 \`nextCursor\`·\`hasNext\`를 실제 계산해 반환합니다.
 - \`representativeTag\`는 대표 태그 선정 로직 구현 전까지 \`null\`을 반환합니다.
 `
 
@@ -195,7 +195,7 @@ const LIST_LINKS_RESPONSE_EXAMPLE = {
         hasNext: true,
         limit: 9,
     },
-    totalCount: 42,
+    totalCount: 30,
 }
 
 const LINK_DETAIL_RESPONSE_EXAMPLE = {

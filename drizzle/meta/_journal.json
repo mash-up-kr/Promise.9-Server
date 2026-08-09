@@ -43,6 +43,13 @@
       "when": 1785146613948,
       "tag": "0005_jazzy_golden_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786174199321,
+      "tag": "0006_link_text_search",
+      "breakpoints": true
     }
   ]
 }

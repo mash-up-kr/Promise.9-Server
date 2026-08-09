@@ -86,7 +86,7 @@ GET /links?folderId=3&favorite=true&q=피그마&limit=9
 - `score`: 0~1 사이 검색 점수(소수점 5자리). `q` 없는 일반 목록에서는 항상 `null`이다.
 - **정렬**: `score` 내림차순으로 고정되며 `sortBy`·`order`는 적용되지 않는다.
 - **`nextCursor`**: 검색 커서는 `(score, id)` 기준이라 일반 목록 커서와 **호환되지 않는다.** 검색 요청에 일반 목록의 커서를 넘기면(또는 반대) `400 Bad Request`(`INVALID_CURSOR`)다. `q`를 바꾸면 커서도 버리고 첫 페이지부터 다시 요청한다.
-- **`totalCount`**: 검색 후보 풀 전체 크기로, 최대 100으로 제한된다.
+- **`totalCount`**: 관련도 상위 검색 결과 크기로, 최대 30이다.
 
 > 기존 `GET /links/search`, `GET /folders/{folderId}/links`는 이 API로 통합하여 제거한다.
 
