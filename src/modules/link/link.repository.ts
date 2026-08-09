@@ -8,6 +8,7 @@ import {
     count,
     desc,
     eq,
+    getTableColumns,
     gt,
     inArray,
     isNotNull,
@@ -37,6 +38,10 @@ export type LinkAiTagValue = Pick<
     typeof tags.$inferInsert,
     'name' | 'normalizedName' | 'sortOrder'
 >
+
+export type LinkListRow = LinkRow & {
+    cursorValue: string | null
+}
 
 // 목록 sortBy 값 → 실제 정렬 컬럼 매핑. viewedAt만 null 허용.
 const LINK_SORT_COLUMNS: Record<ListLinksQueryInput['sortBy'], Column> = {
@@ -99,6 +104,29 @@ function buildCursorOrderBy(
 ): SQL[] {
     const direction = order === 'desc' ? desc : asc
     return [direction(sortColumn), direction(idColumn)]
+}
+
+function parseCursorTimestamp(raw: string): SQL {
+    const match = raw.match(
+        /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d{3,6})Z$/,
+    )
+
+    if (!match || match[1] === '0000') {
+        throw new BaseException(LINK_ERROR.INVALID_CURSOR)
+    }
+
+    const [, year, month, day, hour, minute, second, fraction] = match
+    const millisecondTimestamp = `${year}-${month}-${day}T${hour}:${minute}:${second}.${fraction.slice(0, 3)}Z`
+    const date = new Date(millisecondTimestamp)
+
+    if (
+        Number.isNaN(date.getTime()) ||
+        date.toISOString() !== millisecondTimestamp
+    ) {
+        throw new BaseException(LINK_ERROR.INVALID_CURSOR)
+    }
+
+    return sql`${raw}::timestamptz`
 }
 
 @Injectable()
@@ -265,12 +293,12 @@ export class LinkRepository {
     }
 
     // 검색(q)이 없는 목록 조회. 폴더·미분류·삭제·즐겨찾기 필터와 커서 페이지네이션을 적용한다.
-    // 검색은 점수 순 정렬이라 별도 경로(findVectorCandidates·findKeywordCandidateIds)로 처리한다.
+    // 검색은 점수 순 정렬이라 search/SearchService의 다중 신호 경로로 처리한다.
     // 다음 페이지 판단을 위해 rows는 limit + 1개, totalCount는 커서와 무관한 전체 수다.
     async list(
         userId: number,
         input: ListLinksQueryInput,
-    ): Promise<{ rows: LinkRow[]; totalCount: number }> {
+    ): Promise<{ rows: LinkListRow[]; totalCount: number }> {
         const conditions = this.buildScopeConditions(userId, input)
 
         // sortBy → 실제 정렬 컬럼. 위 조건들로 정렬 컬럼은 항상 not-null이 보장돼
@@ -286,7 +314,16 @@ export class LinkRepository {
         const [totalCount, rows] = await Promise.all([
             this.countLinks(...conditions),
             this.db
-                .select()
+                .select({
+                    ...getTableColumns(links),
+                    // JS Date는 PostgreSQL microsecond를 millisecond로 잘라 같은 1ms 안의
+                    // 행이 다음 페이지에서 누락될 수 있다. DB가 만든 정밀 시각 문자열을
+                    // 커서에 그대로 사용해 정렬 조건과 값을 일치시킨다.
+                    cursorValue: sql<string | null>`to_char(
+                        ${sortColumn} at time zone 'UTC',
+                        'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+                    )`,
+                })
                 .from(links)
                 .where(
                     and(
@@ -459,13 +496,7 @@ export class LinkRepository {
             links.id,
             order,
             decoded,
-            (raw) => {
-                const date = new Date(raw)
-                if (Number.isNaN(date.getTime())) {
-                    throw new BaseException(LINK_ERROR.INVALID_CURSOR)
-                }
-                return date
-            },
+            parseCursorTimestamp,
         )
     }
 

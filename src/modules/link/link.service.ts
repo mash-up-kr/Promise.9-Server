@@ -15,7 +15,7 @@ import { CreateLinkTagInput } from './dto/tag.dto'
 import { EmbeddingService } from './search/embedding.service'
 import { SearchService } from './search/search.service'
 import { toSearchCursorPayload } from './search/search.util'
-import { LinkRepository, LinkUpdatePatch } from './link.repository'
+import { LinkListRow, LinkRepository, LinkUpdatePatch } from './link.repository'
 import { LinkRow } from './link.schema'
 import { extractDomain, normalizeUrl, pickThumbnailUrl } from './link.util'
 import { LINK_ERROR } from './link-error.constant'
@@ -265,16 +265,11 @@ export class LinkService {
 
     // 다음 커서에 담을 정렬 기준 값. 타임스탬프는 ISO 문자열, null이면 null.
     private cursorValueOf(
-        row: LinkRow,
+        row: LinkListRow,
         sortBy: ListLinksQueryInput['sortBy'],
     ): string | null {
-        const value = {
-            savedAt: row.createdAt,
-            viewedAt: row.viewedAt,
-            deletedAt: row.deletedAt,
-        }[sortBy]
-
-        return value ? value.toISOString() : null
+        void sortBy
+        return row.cursorValue
     }
 
     // 화면의 전체/미분류/즐겨찾기/최근삭제 링크 목록에 표시할 수를 한 번에 계산한다.
