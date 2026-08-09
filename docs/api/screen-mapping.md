@@ -11,12 +11,22 @@
 ## 홈
 
 <img src="./screens/home.png" alt="홈 화면" width="240" />
+<img src="./screens/home-frequent-keywords.png" alt="홈 화면의 자주 저장한 키워드 섹션" width="240" />
 
-| 화면 영역            | API                                                  | 상태 | 남은 작업                                 |
-| -------------------- | ---------------------------------------------------- | :--: | ----------------------------------------- |
-| 최근 저장            | `GET /links?sortBy=savedAt&order=desc&limit=9`       |  △   | 정렬·cursor 페이지네이션 연결             |
-| 최근 저장한 폴더     | `GET /folders?lastSavedAt=true&limit=3`              |  △   | `lastSavedAt` 집계·정렬 연결              |
-| 폴더별 링크 미리보기 | 현재 정책 결정 필요                                  |  X   | 폴더별 호출 또는 홈 전용 집계 API 중 선택 |
+| 화면 영역            | API                                            | 상태 | 남은 작업                                 |
+| -------------------- | ---------------------------------------------- | :--: | ----------------------------------------- |
+| 최근 저장            | `GET /links?sortBy=savedAt&order=desc&limit=9` |  △   | 정렬·cursor 페이지네이션 연결             |
+| 자주 저장한 키워드   | `GET /recommendations`                         |  O   | `data=null`이면 섹션 전체 미노출          |
+| 최근 저장한 폴더     | `GET /folders?lastSavedAt=true&limit=3`        |  △   | `lastSavedAt` 집계·정렬 연결              |
+| 폴더별 링크 미리보기 | 현재 정책 결정 필요                            |  X   | 폴더별 호출 또는 홈 전용 집계 API 중 선택 |
+
+### 자주 저장한 키워드 노출 조건
+
+홈에서는 `GET /recommendations`를 query 없이 호출해 기본 최대 12개를 요청합니다. 폴더와 태그는 `items`의 한 목록에 섞여 있으며 `label`을 키워드 칩에 표시합니다.
+
+- 전체 폴더·태그 후보가 4개 이상: `data.items`로 섹션을 구성합니다.
+- 전체 후보가 3개 이하: API가 `data: null`을 반환하며 섹션 제목과 칩을 모두 렌더링하지 않습니다.
+- 후보 수 판정은 `limit`을 적용하기 전에 수행하므로, 홈 화면의 노출 여부가 요청 개수에 따라 달라지지 않습니다.
 
 ## 보관함과 폴더별 링크
 
@@ -59,9 +69,3 @@
 | 사용자 태그 추가       | `POST /links/{linkId}/tags`           |  △   | Endpoint·계약만 존재, 현재 501·DB 저장 TODO           |
 | 사용자 태그 삭제       | `DELETE /links/{linkId}/tags/{tagId}` |  △   | Endpoint·계약만 존재, 현재 501·DB 삭제 TODO           |
 | 폴더 선택 목록         | `GET /folders`                        |  O   | 전체 사용자 폴더 반환                                 |
-
-## 카테고리 둘러보기
-
-<img src="./screens/category-browse.png" alt="카테고리 둘러보기 화면" width="240" />
-
-현재는 API와 데이터 정책이 정해지지 않았습니다. AI 태그를 카테고리로 사용할지, 별도 카테고리 사전을 둘지 결정한 후 목록 Query 또는 전용 카테고리 API를 확정해야 합니다.
