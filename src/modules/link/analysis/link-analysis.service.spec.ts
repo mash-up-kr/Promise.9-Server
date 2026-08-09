@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common'
 
 import { AiService } from '../../ai/ai.service'
 import { LinkContentService } from '../content/link-content.service'
+import { EmbeddingService } from '../embedding/embedding.service'
 import { LinkRepository } from '../link.repository'
 
 import { LinkAnalysisService } from './link-analysis.service'
@@ -18,6 +19,7 @@ describe('LinkAnalysisService', () => {
     let aiService: jest.Mocked<
         Pick<AiService, 'generateSummary' | 'generateTags'>
     >
+    let embeddingService: jest.Mocked<Pick<EmbeddingService, 'embedLink'>>
     let updatePatches: Array<Record<string, unknown>>
     let loggerErrorSpy: jest.SpyInstance
 
@@ -46,6 +48,9 @@ describe('LinkAnalysisService', () => {
             generateSummary: jest.fn(),
             generateTags: jest.fn(),
         }
+        embeddingService = {
+            embedLink: jest.fn().mockResolvedValue(true),
+        }
         loggerErrorSpy = jest
             .spyOn(Logger.prototype, 'error')
             .mockImplementation()
@@ -54,6 +59,7 @@ describe('LinkAnalysisService', () => {
             linkRepository as unknown as LinkRepository,
             linkContentService as unknown as LinkContentService,
             aiService as unknown as AiService,
+            embeddingService as unknown as EmbeddingService,
         )
     })
 
@@ -104,6 +110,8 @@ describe('LinkAnalysisService', () => {
                 }),
                 expect.objectContaining({
                     aiSummary: '생성된 요약이에요.',
+                }),
+                expect.objectContaining({
                     aiSummaryStatus: 'SUCCESS',
                 }),
             ]),
@@ -120,9 +128,23 @@ describe('LinkAnalysisService', () => {
                 sortOrder: 2,
             },
         ])
+        expect(embeddingService.embedLink).toHaveBeenCalledWith(2, 1)
+
+        const embeddingCallOrder =
+            embeddingService.embedLink.mock.invocationCallOrder[0]
+        const updateCallOrders =
+            linkRepository.updateActive.mock.invocationCallOrder
+        expect(embeddingCallOrder).toBeGreaterThan(
+            Math.max(
+                ...updateCallOrders.slice(0, -1),
+                ...linkRepository.replaceAiTags.mock.invocationCallOrder,
+            ),
+        )
+        const successStatusCallOrder = updateCallOrders.at(-1)!
+        expect(successStatusCallOrder).toBeGreaterThan(embeddingCallOrder)
     })
 
-    it('요약 실패만 FAILED로 기록하고 빈 태그에는 별도 처리를 하지 않는다', async () => {
+    it('요약이 실패하면 부분 embedding을 시도한 뒤 전체 분석을 FAILED로 기록한다', async () => {
         const summaryError = new Error('summary failed')
 
         linkContentService.collect.mockResolvedValueOnce(null)
@@ -147,9 +169,10 @@ describe('LinkAnalysisService', () => {
             'AI 요약 생성에 실패했습니다. linkId=1: summary failed',
             summaryError.stack,
         )
+        expect(embeddingService.embedLink).toHaveBeenCalledWith(2, 1)
     })
 
-    it('태그 생성 실패는 성공한 요약 상태에 영향을 주지 않는다', async () => {
+    it('태그 생성이 실패하면 요약과 embedding을 보존하고 전체 분석을 FAILED로 기록한다', async () => {
         linkContentService.collect.mockResolvedValueOnce({
             title: '링크 제목',
             description: null,
@@ -170,17 +193,70 @@ describe('LinkAnalysisService', () => {
             expect.arrayContaining([
                 expect.objectContaining({
                     aiSummary: '생성된 요약이에요.',
-                    aiSummaryStatus: 'SUCCESS',
                 }),
-            ]),
-        )
-        expect(updatePatches).not.toEqual(
-            expect.arrayContaining([
                 expect.objectContaining({
                     aiSummaryStatus: 'FAILED',
                 }),
             ]),
         )
         expect(linkRepository.replaceAiTags).not.toHaveBeenCalled()
+        expect(embeddingService.embedLink).toHaveBeenCalledWith(2, 1)
+    })
+
+    it('요약과 태그가 성공해도 embedding 저장이 실패하면 전체 분석을 FAILED로 기록한다', async () => {
+        linkContentService.collect.mockResolvedValueOnce({
+            title: '링크 제목',
+            description: null,
+            content: '링크 본문',
+        })
+        aiService.generateSummary.mockResolvedValueOnce({
+            summary: '생성된 요약이에요.',
+        })
+        aiService.generateTags.mockResolvedValueOnce({ tags: ['AI'] })
+        embeddingService.embedLink.mockResolvedValueOnce(false)
+
+        await service.analyze({
+            linkId: 1,
+            userId: 2,
+            url: 'https://example.com/article',
+        })
+
+        expect(updatePatches).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    aiSummary: '생성된 요약이에요.',
+                }),
+                expect.objectContaining({
+                    aiSummaryStatus: 'FAILED',
+                }),
+            ]),
+        )
+    })
+
+    it('embedding 생성 예외를 기록하고 전체 분석을 FAILED로 기록한다', async () => {
+        const embeddingError = new Error('embedding failed')
+
+        linkContentService.collect.mockResolvedValueOnce(null)
+        aiService.generateSummary.mockResolvedValueOnce({ summary: '요약' })
+        aiService.generateTags.mockResolvedValueOnce({ tags: [] })
+        embeddingService.embedLink.mockRejectedValueOnce(embeddingError)
+
+        await service.analyze({
+            linkId: 1,
+            userId: 2,
+            url: 'https://example.com/article',
+        })
+
+        expect(updatePatches).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    aiSummaryStatus: 'FAILED',
+                }),
+            ]),
+        )
+        expect(loggerErrorSpy).toHaveBeenCalledWith(
+            '링크 임베딩 생성에 실패했습니다. linkId=1: embedding failed',
+            embeddingError.stack,
+        )
     })
 })

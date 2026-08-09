@@ -12,7 +12,6 @@ import {
     UpdateLinkInput,
 } from './dto/link.dto'
 import { CreateLinkTagInput } from './dto/tag.dto'
-import { EmbeddingService } from './search/embedding.service'
 import { SearchService } from './search/search.service'
 import { toSearchCursorPayload } from './search/search.util'
 import { LinkRepository, LinkUpdatePatch } from './link.repository'
@@ -26,7 +25,6 @@ export class LinkService {
 
     constructor(
         private readonly linkRepository: LinkRepository,
-        private readonly embeddingService: EmbeddingService,
         private readonly searchService: SearchService,
         private readonly linkAnalysisService: LinkAnalysisService,
     ) {}
@@ -49,11 +47,6 @@ export class LinkService {
             aiSummaryStatus: 'PENDING',
             memo: input.memo ?? null,
         })
-
-        // 임베딩은 외부 호출이라 저장 응답을 막지 않도록 best-effort로 처리한다.
-        // 저장 시점엔 title·aiSummary·metadata가 아직 비어 domain(+memo) 위주로만 임베딩된다.
-        // TODO: 메타데이터/요약 수집 파이프라인 완료 시 embedLinkSafe(row)를 다시 호출해 재임베딩한다.
-        void this.embeddingService.embedLinkSafe(row)
 
         this.startLinkAnalysis({
             linkId: row.id,
@@ -119,11 +112,6 @@ export class LinkService {
         }
 
         const row = await this.linkRepository.update(userId, linkId, patch)
-
-        // 메모가 바뀌면 임베딩 대상 텍스트가 달라지므로 best-effort로 재생성한다.
-        if (input.memo !== undefined) {
-            void this.embeddingService.embedLinkSafe(row)
-        }
 
         return {
             linkId: row.id,

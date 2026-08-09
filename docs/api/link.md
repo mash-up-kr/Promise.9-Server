@@ -131,7 +131,7 @@ GET /links/preview?url=https%3A%2F%2Ftoss.tech%2Farticle%2F50893
 POST /links
 ```
 
-URL을 먼저 저장하고 링크 정보 수집, AI 요약, AI 태그 생성을 현재 프로세스에서 비동기로 처리한다.
+URL을 먼저 저장하고 링크 정보 수집, AI 요약, AI 태그, 임베딩 생성을 현재 프로세스에서 비동기로 처리한다.
 
 **Request Body**
 
@@ -207,7 +207,7 @@ GET /links/{linkId}
 
 ### 비동기 처리 중 응답
 
-`processingStatus`는 AI 요약 상태이며 `PENDING`, `SUCCESS`, `NEEDS_REVIEW`, `FAILED` 중 하나다.
+`processingStatus`는 AI 요약·태그·임베딩 전체 처리 상태이며 `PENDING`, `SUCCESS`, `NEEDS_REVIEW`, `FAILED` 중 하나다. 세 단계가 모두 성공해야 `SUCCESS`가 된다.
 
 ```json
 {
@@ -218,9 +218,9 @@ GET /links/{linkId}
 }
 ```
 
-- 요약 처리 중에는 `aiSummary=null`로 반환한다.
+- 처리 중에는 `aiSummary=null`일 수 있다.
 - `tags`, `relatedLinks`는 현재 저장된 결과가 없으면 `[]`로 반환한다.
-- `aiSummary=null`의 원인은 `processingStatus`로 구분한다.
+- 일부 단계가 실패해도 성공한 단계의 `aiSummary`, `tags`, `relatedLinks`는 부분 결과로 반환될 수 있다.
 - 폴더가 없으면 `folder=null`, 발행일을 수집하지 못하면 `publishedAt=null`이다.
 
 ## 링크 수정

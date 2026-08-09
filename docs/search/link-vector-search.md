@@ -40,19 +40,18 @@ ALTER TABLE "links" ADD COLUMN "embedding" vector(768);
 
 ```
 title
+tags (sortOrder 순)
 aiSummary
-memo
-domain
-metadata.description
 ```
 
-생성 시점은 세 곳이다.
+생성 시점은 요약·태그 처리가 끝난 뒤다.
 
-- **링크 저장 직후** — 저장 응답을 막지 않도록 `embedLinkSafe`로 best-effort 처리한다. 이 시점엔 아직 제목·요약·메타데이터가 비어 있어 `domain`(+`memo`) 위주로만 임베딩된다.
-- **메모 수정 시** — 임베딩 대상 텍스트가 바뀌므로 재생성한다.
-- **백필 스크립트** — `bun run db:backfill:embeddings`로 기존 링크를 채운다.
+- **요약·태그 처리 후** — 두 작업의 성공 여부와 관계없이 최신 DB 값을 다시 읽어 가능한 부분 결과로 임베딩을 시도한다.
+- **전체 상태 확정 전** — 요약·태그 처리와 임베딩 저장이 모두 성공해야 `processingStatus=SUCCESS`로 변경한다. 하나라도 실패하면 부분 결과는 보존하고 `FAILED`로 기록한다.
 
-`updateEmbedding`은 `UPDATE ... WHERE` 절에 임베딩 대상 컬럼들의 `is not distinct from` 비교를 함께 걸어, 임베딩을 생성하는 동안 링크가 수정됐다면 오래된 텍스트의 벡터를 저장하지 않는다.
+기존 링크는 `bun run db:backfill:embeddings`로 채우며, 실행 전에 사용자 범위와 예상 API 호출 수를 확인한다.
+
+`LinkRepository.updateEmbedding`은 요청 사용자의 활성 링크에만 벡터를 저장한다. 임베딩 생성 중 링크가 삭제돼 갱신된 행이 없으면 임베딩 실패로 처리한다.
 
 <br>
 
