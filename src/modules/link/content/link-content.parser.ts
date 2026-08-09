@@ -1,5 +1,8 @@
 import { ParsedLinkInformation, ParsedLinkPreview } from './link-content.type'
 
+const HTML_MARKUP_PATTERN =
+    /<(script|style|noscript)(?=[\t\n\f\r />])(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?(?:<\/\1(?=[\t\n\f\r />])(?:[^>"']|"[^"]*"|'[^']*')*>|$)|<!--[\s\S]*?(?:-->|$)|<(?:[^>"']|"[^"]*"|'[^']*')+>/gi
+
 // 요약과 태그 생성에 필요한 제목, 설명, 읽을 수 있는 본문을 HTML에서 추출한다.
 export function parseLinkInformation(html: string): ParsedLinkInformation {
     const content = extractReadableContent(html)
@@ -56,17 +59,10 @@ function extractTitle(html: string): string | null {
     return decodeHtml(match[1]) || null
 }
 
-// HTML 주석과 실행 요소, 태그를 제거해 사람이 읽을 수 있는 본문으로 만든다.
+// HTML 주석, script/style/noscript 내용과 나머지 태그를 제거해 AI 입력용 본문을 만든다.
 function extractReadableContent(html: string): string {
     return decodeHtml(
-        html
-            .replace(/<!--[\s\S]*?(?:-->|$)/g, ' ')
-            .replace(/<script\b[^>]*>[\s\S]*?(?:<\/script\s*>|$)/gi, ' ')
-            .replace(/<style\b[^>]*>[\s\S]*?(?:<\/style\s*>|$)/gi, ' ')
-            .replace(/<noscript\b[^>]*>[\s\S]*?(?:<\/noscript\s*>|$)/gi, ' ')
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim(),
+        html.replace(HTML_MARKUP_PATTERN, ' ').replace(/\s+/g, ' ').trim(),
     )
 }
 

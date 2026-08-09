@@ -101,6 +101,26 @@ describe('LinkContentService', () => {
         },
     )
 
+    it('유사 마크업을 실행 요소로 오인해 실제 본문을 누락하지 않는다', async () => {
+        fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 404 }))
+            .mockResolvedValueOnce(
+                htmlResponse(`
+                    <div data-template="> <!--">속성 본문</div>
+                    <style>.item::before { content: '<script>' }</style>
+                    <script>
+                        const comment = '<!--'
+                        const close = '</script\u00a0>'
+                    </script/>
+                    <main>실제 본문</main>
+                `),
+            )
+
+        const result = await service.collect('https://example.com/article')
+
+        expect(result?.content).toBe('속성 본문 실제 본문')
+    })
+
     it('robots.txt가 링크 경로를 차단하면 페이지를 요청하지 않는다', async () => {
         fetchSpy.mockResolvedValueOnce(
             new Response('User-agent: *\nDisallow: /private/', {
