@@ -75,6 +75,32 @@ describe('LinkContentService', () => {
         })
     })
 
+    it.each([
+        ['script', 'var closedData = true', 'var truncatedData = true'],
+        ['style', '.closed { display: none }', '.truncated { color: red }'],
+        ['noscript', '닫힌 대체 콘텐츠', '잘린 대체 콘텐츠'],
+    ])(
+        'HTML 주석과 닫히지 않은 %s 내용을 본문에서 제외한다',
+        async (tag, closedContent, truncatedContent) => {
+            fetchSpy
+                .mockResolvedValueOnce(new Response('', { status: 404 }))
+                .mockResolvedValueOnce(
+                    htmlResponse(`
+                        <body>
+                            <p>본문 앞</p>
+                            <!-- 본문에 포함하지 않을 주석 -->
+                            <${tag}>${closedContent}</${tag}>
+                            <p>본문 뒤</p>
+                            <${tag}>${truncatedContent}
+                    `),
+                )
+
+            const result = await service.collect('https://example.com/article')
+
+            expect(result?.content).toBe('본문 앞 본문 뒤')
+        },
+    )
+
     it('robots.txt가 링크 경로를 차단하면 페이지를 요청하지 않는다', async () => {
         fetchSpy.mockResolvedValueOnce(
             new Response('User-agent: *\nDisallow: /private/', {

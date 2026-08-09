@@ -56,16 +56,14 @@ function extractTitle(html: string): string | null {
     return decodeHtml(match[1]) || null
 }
 
-// AI 입력에 불필요한 실행 요소와 HTML 태그를 제거해 읽을 수 있는 본문으로 만든다.
+// HTML 주석과 실행 요소, 태그를 제거해 사람이 읽을 수 있는 본문으로 만든다.
 function extractReadableContent(html: string): string {
     return decodeHtml(
         html
-            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
-            .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
-            .replace(
-                /<noscript\b[^<]*(?:(?!<\/noscript>)<[^<]*)*<\/noscript>/gi,
-                ' ',
-            )
+            .replace(/<!--[\s\S]*?(?:-->|$)/g, ' ')
+            .replace(/<script\b[^>]*>[\s\S]*?(?:<\/script\s*>|$)/gi, ' ')
+            .replace(/<style\b[^>]*>[\s\S]*?(?:<\/style\s*>|$)/gi, ' ')
+            .replace(/<noscript\b[^>]*>[\s\S]*?(?:<\/noscript\s*>|$)/gi, ' ')
             .replace(/<[^>]+>/g, ' ')
             .replace(/\s+/g, ' ')
             .trim(),
