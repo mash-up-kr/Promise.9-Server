@@ -52,7 +52,7 @@
 
 | 화면 동작              | API                                   | 상태 | 비고                                                  |
 | ---------------------- | ------------------------------------- | :--: | ----------------------------------------------------- |
-| 상세 정보 조회         | `GET /links/{linkId}`                 |  △   | 발행일·태그·연관 링크 조회 연결 필요                  |
+| 상세 정보 조회         | `GET /links/{linkId}`                 |  △   | 발행일 수집 TODO                                      |
 | 화면 노출 시 조회 기록 | `POST /links/{linkId}/view`           |  O   | Request Body 없이 서버 현재 시각을 `viewedAt`에 저장  |
 | 즐겨찾기 설정·해제     | `PATCH /links/{linkId}`               |  O   | `{ "isFavorite": true }` 또는 `false`                 |
 | 폴더 이동·미분류 이동  | `PATCH /links/{linkId}`               |  O   | `folderId` 지정, 미분류 이동은 `{ "folderId": null }` |

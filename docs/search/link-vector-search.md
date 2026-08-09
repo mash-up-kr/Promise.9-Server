@@ -64,23 +64,37 @@ pgvector의 `<=>` 연산자가 코사인 **거리**를 준다. 유사도는 거�
 코사인 유사도 = 1 - (embedding <=> :queryEmbedding)  -- 1에 가까울수록 유사
 ```
 
-`SearchRepository.findVectorCandidateIds()`는 drizzle의 `cosineDistance()`가 컴파일한 `<=>`로 후보를 정렬해 id만 반환한다. 실제 `1 - cosineDistance` 유사도 값은 후보 합집합을 hydrate하는 `findCandidates()`에서 계산한다.
+`SearchRepository`와 `RelatedLinkRepository`의 `findVectorCandidateIds()`는 drizzle의 `cosineDistance()`가 컴파일한 `<=>`로 후보를 정렬해 id만 반환한다. 실제 `1 - cosineDistance` 유사도 값은 후보 합집합을 hydrate하는 각 `findCandidates()`에서 계산한다.
 
-```
+검색 후보는 요청 scope를 적용한다.
+
+```sql
 SELECT id
 FROM links
 WHERE user_id = :userId
-  AND deleted_at IS NULL          -- deleted=true면 IS NOT NULL
-  AND embedding IS NOT NULL       -- 임베딩 미생성 링크는 벡터 후보에서 제외
-  -- 아래는 요청 필터에 따라 붙는다 (buildScopeConditions)
-  [AND folder_id = :folderId]     -- folderId
+  AND deleted_at IS NULL          -- deleted=true면 이 조건 대신 IS NOT NULL
+  AND embedding IS NOT NULL
+  [AND folder_id = :folderId]
   [AND folder_id IS NULL]         -- unassigned=true
-  [AND is_favorite = true]        -- favorite=true
+  [AND is_favorite = true]
 ORDER BY embedding <=> :query
-LIMIT 30                          -- 검색 후보 상한
+LIMIT 30
 ```
 
-정렬은 `score DESC`가 아니라 `거리 ASC`로 한다. 결과 순서는 같지만 거리 계산을 한 번만 하고, 나중에 벡터 인덱스를 도입하면 인덱스가 쓸 수 있는 형태이기도 하다.
+관련 링크 후보는 항상 활성 링크만 대상으로 현재 링크를 제외한다.
+
+```sql
+SELECT id
+FROM links
+WHERE user_id = :userId
+  AND deleted_at IS NULL
+  AND embedding IS NOT NULL
+  AND id <> :sourceLinkId
+ORDER BY embedding <=> :sourceEmbedding
+LIMIT 10
+```
+
+두 쿼리 모두 거리 오름차순으로 정렬한다. 나중에 벡터 인덱스를 도입할 때도 인덱스가 사용할 수 있는 형태다.
 
 <br>
 

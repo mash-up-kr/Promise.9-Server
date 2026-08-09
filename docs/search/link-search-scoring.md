@@ -59,7 +59,7 @@ scoreWithoutEmbedding = (titleKeyword * 0.35
                        + contentKeyword * 0.15) / 0.70
 ```
 
-실제로 계산된 embedding 원점수 `0`은 결측값이 아니므로 기존 가중치에 따라 비유사 신호로 반영한다.
+실제로 계산된 embedding 원점수 `0`은 결측값이 아니므로 기존 가중치에 따라 비유사 신호로 반영한다. 관련 링크도 embedding을 계산할 수 없으면 같은 원칙으로 context 가중치 합 `0.65`를 사용한다.
 
 ## 정렬과 커서
 
@@ -76,3 +76,7 @@ nextCursor = base64url({ "v": "0.87342", "id": 42 })
 쿼리 임베딩 호출이 실패하면 경고 로그를 남기고 제목·태그·본문 신호로 검색을 계속한다. 이때 embedding은 결측 신호로 처리해 lexical 가중치 합 `0.70`으로 재정규화하며 커서 형식은 변하지 않는다.
 
 검색 결과는 요청 시점마다 다시 계산하므로 페이지 사이에 embedding provider의 성공·실패 상태가 바뀌면 후보와 점수 순서도 달라질 수 있다. fallback 중 받은 cursor를 다른 ranking mode의 스냅샷으로 보장하지 않으며, 장애 전후에 페이지 결과가 불안정하면 첫 페이지부터 다시 조회해야 한다.
+
+## 관련 링크와의 관계
+
+검색과 관련 링크는 문자열·태그·cosine 유사도 계산만 `link-similarity.util.ts`에서 공유한다. 후보 쿼리는 `SearchRepository`와 `RelatedLinkRepository`, 점수 정책은 각각 `search/`, `related/` 내부에서 독립적으로 관리한다.

@@ -220,7 +220,8 @@ GET /links/{linkId}
 
 - 처리 중에는 `aiSummary=null`일 수 있다.
 - `tags`, `relatedLinks`는 현재 저장된 결과가 없으면 `[]`로 반환한다.
-- 일부 단계가 실패해도 성공한 단계의 `aiSummary`, `tags`, `relatedLinks`는 부분 결과로 반환될 수 있다.
+- 관련 링크 후보 조회가 실패해도 상세 조회는 성공하며 `relatedLinks: []`로 반환한다.
+- 일부 분석 단계가 실패해도 성공한 단계의 `aiSummary`, `tags`는 부분 결과로 반환될 수 있다.
 - 폴더가 없으면 `folder=null`, 발행일을 수집하지 못하면 `publishedAt=null`이다.
 
 ## 링크 수정

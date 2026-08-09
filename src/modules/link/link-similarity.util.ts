@@ -20,3 +20,54 @@ export function tokenizeLinkText(text: string | null | undefined): string[] {
 
     return text.toLocaleLowerCase('und').match(/[\p{L}\p{N}]+/gu) ?? []
 }
+
+export function jaccardSimilarity<T>(
+    left: Iterable<T> | null | undefined,
+    right: Iterable<T> | null | undefined,
+): number {
+    const leftSet = new Set(left ?? [])
+    const rightSet = new Set(right ?? [])
+
+    if (leftSet.size === 0 || rightSet.size === 0) {
+        return 0
+    }
+
+    let intersectionSize = 0
+    for (const value of leftSet) {
+        if (rightSet.has(value)) {
+            intersectionSize += 1
+        }
+    }
+
+    return intersectionSize / (leftSet.size + rightSet.size - intersectionSize)
+}
+
+export function tokenJaccardSimilarity(
+    left: string | null | undefined,
+    right: string | null | undefined,
+): number {
+    return jaccardSimilarity(tokenizeLinkText(left), tokenizeLinkText(right))
+}
+
+export function tagJaccardSimilarity(
+    left: readonly string[] | null | undefined,
+    right: readonly string[] | null | undefined,
+): number {
+    return jaccardSimilarity(normalizeTags(left), normalizeTags(right))
+}
+
+function normalizeTags(
+    tags: readonly string[] | null | undefined,
+): Set<string> {
+    return new Set(
+        (tags ?? [])
+            .map((tag) =>
+                tag
+                    .normalize('NFKC')
+                    .trim()
+                    .replace(/\s+/g, ' ')
+                    .toLocaleLowerCase('und'),
+            )
+            .filter(Boolean),
+    )
+}

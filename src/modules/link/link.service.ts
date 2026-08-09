@@ -12,6 +12,7 @@ import {
     UpdateLinkInput,
 } from './dto/link.dto'
 import { CreateLinkTagInput } from './dto/tag.dto'
+import { RelatedLinkService } from './related/related-link.service'
 import { SearchResultRow, SearchService } from './search/search.service'
 import { toSearchCursorPayload } from './search/search.util'
 import { LinkRepository, LinkUpdatePatch } from './link.repository'
@@ -27,6 +28,7 @@ export class LinkService {
         private readonly linkRepository: LinkRepository,
         private readonly searchService: SearchService,
         private readonly linkAnalysisService: LinkAnalysisService,
+        private readonly relatedLinkService: RelatedLinkService,
     ) {}
 
     async create(userId: number, input: CreateLinkInput) {
@@ -63,10 +65,15 @@ export class LinkService {
 
     async detail(userId: number, linkId: number) {
         const link = await this.getOwnedLink(userId, linkId)
-        const [folder, linkTags] = await Promise.all([
+        const [folder, tagRows] = await Promise.all([
             this.findFolderRef(link.folderId),
-            this.findTags(userId, linkId),
+            this.linkRepository.findTags(userId, linkId),
         ])
+        const relatedLinks = await this.findRelatedLinks(
+            userId,
+            link,
+            tagRows.map((tag) => tag.normalizedName),
+        )
 
         return {
             linkId: link.id,
@@ -82,9 +89,9 @@ export class LinkService {
             viewedAt: link.viewedAt,
             processingStatus: link.aiSummaryStatus,
             aiSummary: link.aiSummary,
-            tags: linkTags,
+            tags: this.toTagResponses(tagRows),
             memo: link.memo,
-            relatedLinks: [],
+            relatedLinks,
         }
     }
 
@@ -321,16 +328,42 @@ export class LinkService {
         return folder ? { folderId: folder.id, folderName: folder.name } : null
     }
 
-    // 링크에 저장된 사용자·규칙·AI 태그를 표시 순서와 생성 순서대로 반환한다.
-    private async findTags(userId: number, linkId: number) {
-        const rows = await this.linkRepository.findTags(userId, linkId)
-
+    // 링크에 저장된 사용자·규칙·AI 태그를 API 응답 shape으로 바꾼다.
+    private toTagResponses(
+        rows: Awaited<ReturnType<LinkRepository['findTags']>>,
+    ) {
         return rows.map((row) => ({
             tagId: row.id,
             name: row.name,
             sourceType: row.sourceType,
             sortOrder: row.sortOrder,
         }))
+    }
+
+    // 관련 링크는 상세의 부가 결과다. 후보 조회가 실패해도 링크 본문은 반환한다.
+    private async findRelatedLinks(
+        userId: number,
+        link: LinkRow,
+        normalizedTags: string[],
+    ) {
+        try {
+            return await this.relatedLinkService.relatedLinks(userId, {
+                id: link.id,
+                folderId: link.folderId,
+                title: link.title,
+                embedding: link.embedding,
+                normalizedTags,
+            })
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error)
+
+            this.logger.warn(
+                `관련 링크 조회에 실패해 빈 목록을 반환합니다. linkId=${link.id} error=${message}`,
+            )
+
+            return []
+        }
     }
 
     // 링크 소유권을 확인하고, 없거나 타 사용자 소유면 404로 처리한다.
