@@ -41,8 +41,8 @@
 
 | 화면 영역         | API                                                        | 상태 | 남은 작업                               |
 | ----------------- | ---------------------------------------------------------- | :--: | --------------------------------------- |
-| 검색 결과         | `GET /links?q={keyword}`                                   |  △   | cursor 페이지네이션 연결                |
-| 필터 범위 내 검색 | `GET /links?folderId={folderId}&favorite=true&q={keyword}` |  △   | 즐겨찾기 필터·cursor 페이지네이션 연결  |
+| 검색 결과         | `GET /links?q={keyword}`                                   |  O   | -                                       |
+| 필터 범위 내 검색 | `GET /links?folderId={folderId}&favorite=true&q={keyword}` |  O   | -                                       |
 | 최근 본 링크      | `GET /links?sortBy=viewedAt&order=desc&limit=9`            |  △   | 조회 시각 정렬·cursor 페이지네이션 연결 |
 | 최근 검색어       | 현재 정책 결정 필요                                        |  X   | 기기 로컬 저장 또는 서버 저장 여부 결정 |
 

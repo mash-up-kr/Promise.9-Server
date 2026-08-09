@@ -12,7 +12,7 @@ import {
     UpdateLinkInput,
 } from './dto/link.dto'
 import { CreateLinkTagInput } from './dto/tag.dto'
-import { SearchService } from './search/search.service'
+import { SearchResultRow, SearchService } from './search/search.service'
 import { toSearchCursorPayload } from './search/search.util'
 import { LinkListRow, LinkRepository, LinkUpdatePatch } from './link.repository'
 import { LinkRow } from './link.schema'
@@ -236,7 +236,10 @@ export class LinkService {
     }
 
     private toListItems(
-        results: Array<{ row: LinkRow; score: number | null }>,
+        results: Array<{
+            row: LinkRow | SearchResultRow
+            score: number | null
+        }>,
     ) {
         return results.map(({ row, score }) => ({
             linkId: row.id,

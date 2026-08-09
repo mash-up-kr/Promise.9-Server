@@ -64,7 +64,7 @@ pgvector의 `<=>` 연산자가 코사인 **거리**를 준다. 유사도는 거�
 코사인 유사도 = 1 - (embedding <=> :queryEmbedding)  -- 1에 가까울수록 유사
 ```
 
-`findVectorCandidates`(`link.repository.ts`)가 이 계산을 담당한다. drizzle의 `cosineDistance()`가 `<=>`로 컴파일된다.
+`SearchRepository`의 `findVectorCandidateIds`가 이 계산을 담당한다. drizzle의 `cosineDistance()`가 `<=>`로 컴파일된다.
 
 ```
 SELECT id, 1 - (embedding <=> :query) AS score
@@ -76,9 +76,8 @@ WHERE user_id = :userId
   [AND folder_id = :folderId]     -- folderId
   [AND folder_id IS NULL]         -- unassigned=true
   [AND is_favorite = true]        -- favorite=true
-  [AND viewed_at IS NOT NULL]     -- sortBy=viewedAt
 ORDER BY embedding <=> :query
-LIMIT 50                          -- LINK_SEARCH_CANDIDATE_LIMIT
+LIMIT :candidateLimit             -- 검색 30, 관련 링크 10
 ```
 
 정렬은 `score DESC`가 아니라 `거리 ASC`로 한다. 결과 순서는 같지만 거리 계산을 한 번만 하고, 나중에 벡터 인덱스를 도입하면 인덱스가 쓸 수 있는 형태이기도 하다.
