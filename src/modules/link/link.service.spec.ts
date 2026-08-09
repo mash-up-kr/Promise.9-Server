@@ -29,7 +29,6 @@ describe('LinkService', () => {
             linkRepository as unknown as LinkRepository,
             {} as never,
             {} as never,
-            {} as never,
         )
 
         const result = await service.list(1, {

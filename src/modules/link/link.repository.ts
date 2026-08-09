@@ -43,6 +43,13 @@ export type LinkListRow = LinkRow & {
     cursorValue: string | null
 }
 
+export type LinkEmbeddingSource = Pick<
+    LinkRow,
+    'id' | 'userId' | 'title' | 'aiSummary'
+> & {
+    tagNames: string[]
+}
+
 // 목록 sortBy 값 → 실제 정렬 컬럼 매핑. viewedAt만 null 허용.
 const LINK_SORT_COLUMNS: Record<ListLinksQueryInput['sortBy'], Column> = {
     savedAt: links.createdAt,
@@ -227,6 +234,47 @@ export class LinkRepository {
             .orderBy(asc(tags.sortOrder), asc(tags.id))
     }
 
+    // 최신 제목·태그·요약으로 링크 임베딩 원본을 만든다.
+    async findEmbeddingSource(
+        userId: number,
+        linkId: number,
+    ): Promise<LinkEmbeddingSource | undefined> {
+        const link = await this.findOwned(userId, linkId)
+
+        if (!link) return undefined
+
+        const tagRows = await this.findTags(userId, linkId)
+
+        return {
+            id: link.id,
+            userId: link.userId,
+            title: link.title,
+            aiSummary: link.aiSummary,
+            tagNames: tagRows.map((tag) => tag.name),
+        }
+    }
+
+    // 분석 중 삭제된 링크에는 임베딩을 저장하지 않는다.
+    async updateEmbedding(
+        userId: number,
+        linkId: number,
+        embedding: number[] | null,
+    ): Promise<boolean> {
+        const updated = await this.db
+            .update(links)
+            .set({ embedding })
+            .where(
+                and(
+                    eq(links.id, linkId),
+                    eq(links.userId, userId),
+                    isNull(links.deletedAt),
+                ),
+            )
+            .returning({ id: links.id })
+
+        return updated.length > 0
+    }
+
     // 사용자·규칙 태그는 보존하고 AI 태그만 transaction 안에서 교체한다.
     async replaceAiTags(
         userId: number,
@@ -378,29 +426,6 @@ export class LinkRepository {
             .limit(LINK_SEARCH_CANDIDATE_LIMIT)
 
         return rows.map((row) => row.id)
-    }
-
-    // 임베딩 벡터를 저장한다.
-    async updateEmbedding(
-        source: Pick<
-            LinkRow,
-            'id' | 'title' | 'aiSummary' | 'memo' | 'domain' | 'metadata'
-        >,
-        embedding: number[],
-    ): Promise<void> {
-        await this.db
-            .update(links)
-            .set({ embedding })
-            .where(
-                and(
-                    eq(links.id, source.id),
-                    sql`${links.title} is not distinct from ${source.title}`,
-                    sql`${links.aiSummary} is not distinct from ${source.aiSummary}`,
-                    sql`${links.memo} is not distinct from ${source.memo}`,
-                    sql`${links.domain} is not distinct from ${source.domain}`,
-                    sql`${links.metadata} is not distinct from ${source.metadata}`,
-                ),
-            )
     }
 
     // 사용자 범위와 목록 필터의 공통 조건을 만든다.

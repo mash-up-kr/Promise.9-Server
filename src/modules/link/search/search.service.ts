@@ -2,11 +2,11 @@ import { Injectable, Logger } from '@nestjs/common'
 
 import { BaseException } from '../../../common/exception/base.exception'
 import { ListLinksQueryInput } from '../dto/link.dto'
+import { EmbeddingService } from '../embedding/embedding.service'
 import { LinkRepository } from '../link.repository'
 import { LinkRow } from '../link.schema'
 import { LINK_ERROR } from '../link-error.constant'
 
-import { EmbeddingService } from './embedding.service'
 import {
     parseSearchCursor,
     scoreSearchCandidates,
