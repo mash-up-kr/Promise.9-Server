@@ -33,6 +33,7 @@
 ```text
 .
 ├── docs/                  # API, DB, 컨벤션, 정책 문서
+├── infra/                 # AWS CDK 인프라 코드
 ├── src/
 │   ├── common/            # 공통 DTO, 예외, 필터, 인터셉터
 │   ├── config/            # 환경변수, Swagger, 데이터베이스 설정
@@ -52,6 +53,7 @@
 | [Database](./docs/database/README.md) | DB 설정, 마이그레이션, 테이블 설계 문서입니다. |
 | [Convention](./docs/convention/README.md) | 이슈, 브랜치, PR, 머지, 커밋 규칙입니다. |
 | [Policy](./docs/policy/README.md) | 도메인 정책 문서입니다. |
+| [Infrastructure](./docs/infrastructure/README.md) | AWS CLI, IAM, CDK와 팀 인프라 운영 기준입니다. |
 
 ## Team
 
