@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Promise.9 — 저장한 링크를 다시 확인해보세요</title>
+  <style>
+    :root {
+      --night: #0b0b10;
+      --paper: #111116;
+      --olive: #c8c28b;
+      --olive-soft: #8e8a68;
+      --ink: #f5f2e8;
+      --muted: #aaa89e;
+      --arrival-time: 1.9s;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-width: 320px;
+      margin: 0;
+      background: #050507;
+      color: var(--ink);
+      font-family: "Pretendard", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .stage {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 28px 14px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 18%, rgba(200, 194, 139, .07), transparent 28%),
+        #050507;
+    }
+
+    .mail {
+      position: relative;
+      width: min(100%, 600px);
+      min-height: 760px;
+      overflow: hidden;
+      isolation: isolate;
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 32px;
+      background: var(--paper);
+      box-shadow: 0 36px 100px rgba(0,0,0,.55);
+    }
+
+    .mail::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 8;
+      pointer-events: none;
+      background: linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+      background-size: 4px 100%;
+      opacity: .16;
+      mix-blend-mode: soft-light;
+    }
+
+    .arrival {
+      position: relative;
+      z-index: 4;
+      height: 330px;
+    }
+
+    .mascot {
+      position: absolute;
+      top: 55px;
+      left: 50%;
+      width: 162px;
+      height: 146px;
+      transform: translateX(-50%);
+      animation: arrive var(--arrival-time) cubic-bezier(.16,.9,.28,1.12) both;
+      transform-origin: 50% 35%;
+    }
+
+    .mascot-image {
+      width: 100%;
+      height: 100%;
+      background: url("./assets/ddingddong.png") center 42% / 162px auto no-repeat;
+      filter: drop-shadow(0 12px 20px rgba(0,0,0,.7));
+      mix-blend-mode: screen;
+    }
+
+    .beam {
+      position: absolute;
+      z-index: 1;
+      top: 167px;
+      left: 50%;
+      width: 470px;
+      height: 420px;
+      translate: -50% 0;
+      transform-origin: 50% 0;
+      clip-path: polygon(43% 0, 57% 0, 100% 100%, 0 100%);
+      background: linear-gradient(180deg,
+        rgba(232, 226, 172, .52),
+        rgba(178, 173, 132, .20) 54%,
+        rgba(142, 138, 104, 0) 100%);
+      filter: blur(1px);
+      mix-blend-mode: screen;
+      animation: beam-on .85s 1.55s cubic-bezier(.2,.8,.2,1) both;
+    }
+
+    .beam-floor {
+      position: absolute;
+      z-index: 2;
+      top: 514px;
+      left: 50%;
+      width: 425px;
+      height: 28px;
+      translate: -50% 0;
+      border-radius: 50%;
+      background: rgba(215, 209, 158, .42);
+      filter: blur(5px);
+      animation: floor-on .7s 1.8s ease-out both;
+    }
+
+    .content {
+      position: relative;
+      z-index: 3;
+      margin-top: -18px;
+      padding: 30px 64px 58px;
+      text-align: center;
+    }
+
+    h1, .message, .promise-card, .button, .footer {
+      animation: reveal .75s cubic-bezier(.2,.8,.2,1) both;
+    }
+
+    h1 {
+      margin: 0;
+      font-family: "Pretendard", sans-serif;
+      font-size: clamp(32px, 7vw, 46px);
+      font-weight: 600;
+      line-height: 1.18;
+      letter-spacing: -.04em;
+      animation-delay: 2.02s;
+    }
+
+    .message {
+      max-width: 410px;
+      margin: 20px auto 30px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.75;
+      animation-delay: 2.15s;
+    }
+
+    .promise-card {
+      position: relative;
+      margin: 0 auto;
+      padding: 24px 24px 22px;
+      overflow: hidden;
+      border: 1px solid rgba(216, 209, 158, .18);
+      border-radius: 20px;
+      background: rgba(216, 209, 158, .065);
+      text-align: left;
+      animation-delay: 2.28s;
+    }
+
+    .promise-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 22px;
+      width: 58px;
+      height: 1px;
+      background: var(--olive);
+      box-shadow: 0 0 14px var(--olive);
+    }
+
+    .promise-title {
+      margin: 0 0 16px;
+      font-size: 18px;
+      font-weight: 650;
+      line-height: 1.45;
+    }
+
+    .meta {
+      display: flex;
+      color: #8e8d87;
+      font-size: 12px;
+    }
+
+    .button {
+      display: inline-block;
+      margin-top: 24px;
+      padding: 15px 25px;
+      border-radius: 999px;
+      background: var(--ink);
+      color: #171714;
+      font-size: 14px;
+      font-weight: 750;
+      text-decoration: none;
+      box-shadow: 0 8px 34px rgba(216, 209, 158, .13);
+      animation-delay: 2.4s;
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+
+    .button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 40px rgba(216, 209, 158, .23);
+    }
+
+    .footer {
+      margin: 30px 0 0;
+      color: #686862;
+      font-size: 11px;
+      line-height: 1.6;
+      animation-delay: 2.52s;
+    }
+
+    @keyframes arrive {
+      0%   { transform: translate(-50%, -300px) rotate(-210deg) scale(.72); opacity: 0; }
+      18%  { opacity: 1; }
+      68%  { transform: translate(-50%, 8px) rotate(10deg) scale(1.03); }
+      82%  { transform: translate(-50%, -9px) rotate(-4deg) scale(.98); }
+      100% { transform: translate(-50%, 0) rotate(0) scale(1); opacity: 1; }
+    }
+
+    @keyframes beam-on {
+      0%   { opacity: 0; transform: scaleX(.08) scaleY(.1); }
+      55%  { opacity: .94; transform: scaleX(1.04) scaleY(1); }
+      100% { opacity: .72; transform: scale(1); }
+    }
+
+    @keyframes floor-on {
+      from { opacity: 0; transform: scaleX(.1); }
+      to   { opacity: 1; transform: scaleX(1); }
+    }
+
+    @keyframes reveal {
+      from { opacity: 0; transform: translateY(16px); filter: blur(6px); }
+      to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+    }
+
+    @media (max-width: 520px) {
+      .stage { padding: 0; }
+      .mail { min-height: 100vh; border: 0; border-radius: 0; }
+      .arrival { height: 305px; }
+      .content { padding: 24px 24px 48px; }
+      .beam { width: 390px; }
+      .beam-floor { width: 330px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-delay: 0ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <article class="mail" aria-label="Promise.9 이메일 미리보기">
+      <section class="arrival" aria-hidden="true">
+        <div class="beam"></div>
+        <div class="beam-floor"></div>
+        <div class="mascot"><div class="mascot-image"></div></div>
+      </section>
+
+      <section class="content">
+        <h1>저장한 링크<br>잊고 있지 않았죠?</h1>
+        <p class="message">
+          나중에 보려고 남겨둔 링크를 다시 가져왔어요.<br>
+          잠시 시간을 내어 확인해보세요.
+        </p>
+
+        <div class="promise-card">
+          <p class="promise-title">이번 주에 꼭 읽어보려고 저장한 글</p>
+          <div class="meta">
+            <span>3일 전에 저장</span>
+          </div>
+        </div>
+
+        <a class="button" href="#">링크 확인하기&nbsp; →</a>
+        <p class="footer">직접 저장한 링크를 다시 알려드리는 리마인드 메일입니다.<br>버튼이 열리지 않으면 Promise.9에서 확인해주세요.</p>
+      </section>
+    </article>
+  </main>
+</body>
+</html>
