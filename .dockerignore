@@ -12,3 +12,5 @@ Dockerfile
 docker-compose*.yml
 docs
 test
+infra/**
+!infra/package.json
