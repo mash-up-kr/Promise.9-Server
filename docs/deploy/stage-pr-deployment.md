@@ -56,6 +56,7 @@ GitHub repository에 `stage` Environment를 만들고 다음 애플리케이션 
 | `JWT_ACCESS_SECRET`        | Stage Access Token 서명 키            |
 | `JWT_REFRESH_SECRET`       | Stage Refresh Token 서명 키           |
 | `GOOGLE_CLIENT_ID`         | Google ID Token 검증용 Client ID      |
+| `OPENAI_API_KEY`           | 링크 분석·검색 임베딩용 OpenAI API 키 |
 
 Workflow는 Stage 환경파일에 `APP_ENV=development`를 직접 기록한다. `DATABASE_URL_DEVELOPMENT`에 `localhost`를 사용하면 컨테이너 자신을 가리키므로 외부에서 접근 가능한 DB 주소를 등록해야 한다.
 
@@ -68,6 +69,16 @@ Workflow는 Stage 환경파일에 `APP_ENV=development`를 직접 기록한다. 
 | `MASTER_ACCESS_TOKEN`    | Stage 테스트용 마스터 토큰    |
 | `MASTER_USER_ID`         | 마스터 토큰 사용자 ID         |
 | `DB_POOL_SIZE`           | Stage DB connection pool 크기 |
+| `GEMINI_API_KEY`         | Gemini 모델 사용 시 API 키    |
+
+### 선택 Variable
+
+민감하지 않은 LLM 실행 설정은 `stage` Environment Variable로 등록한다. 값을 등록하지 않으면 애플리케이션 기본값을 사용한다.
+
+| 이름                     | 용도                   |
+| ------------------------ | ---------------------- |
+| `LLM_DEFAULT_MODEL`      | 기본 텍스트 생성 모델  |
+| `LLM_REQUEST_TIMEOUT_MS` | LLM 요청 제한 시간(ms) |
 
 Docker Hub와 Lightsail 배포에는 운영 배포에서 사용하는 다음 repository Secret을 재사용한다.
 

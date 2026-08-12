@@ -159,6 +159,10 @@ jobs:
                   JWT_ACCESS_EXPIRES_IN: ${{ secrets.JWT_ACCESS_EXPIRES_IN }}
                   JWT_REFRESH_EXPIRES_IN: ${{ secrets.JWT_REFRESH_EXPIRES_IN }}
                   GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+                  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+                  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+                  LLM_DEFAULT_MODEL: ${{ vars.LLM_DEFAULT_MODEL }}
+                  LLM_REQUEST_TIMEOUT_MS: ${{ vars.LLM_REQUEST_TIMEOUT_MS }}
                   MASTER_ACCESS_TOKEN: ${{ secrets.MASTER_ACCESS_TOKEN }}
                   MASTER_USER_ID: ${{ secrets.MASTER_USER_ID }}
                   DB_POOL_SIZE: ${{ secrets.DB_POOL_SIZE }}
@@ -167,6 +171,7 @@ jobs:
                   : "${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}"
                   : "${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}"
                   : "${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID is required}"
+                  : "${OPENAI_API_KEY:?OPENAI_API_KEY is required}"
 
                   {
                     printf 'APP_ENV=development\n'
@@ -174,6 +179,17 @@ jobs:
                     printf 'JWT_ACCESS_SECRET=%s\n' "$JWT_ACCESS_SECRET"
                     printf 'JWT_REFRESH_SECRET=%s\n' "$JWT_REFRESH_SECRET"
                     printf 'GOOGLE_CLIENT_ID=%s\n' "$GOOGLE_CLIENT_ID"
+                    printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
+
+                    if [ -n "$GEMINI_API_KEY" ]; then
+                      printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY"
+                    fi
+                    if [ -n "$LLM_DEFAULT_MODEL" ]; then
+                      printf 'LLM_DEFAULT_MODEL=%s\n' "$LLM_DEFAULT_MODEL"
+                    fi
+                    if [ -n "$LLM_REQUEST_TIMEOUT_MS" ]; then
+                      printf 'LLM_REQUEST_TIMEOUT_MS=%s\n' "$LLM_REQUEST_TIMEOUT_MS"
+                    fi
 
                     if [ -n "$JWT_ACCESS_EXPIRES_IN" ]; then
                       printf 'JWT_ACCESS_EXPIRES_IN=%s\n' "$JWT_ACCESS_EXPIRES_IN"
