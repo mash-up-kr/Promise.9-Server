@@ -14,7 +14,11 @@ async function bootstrap() {
     app.use(httpLoggerMiddleware)
 
     app.enableCors({
-        origin: ['http://localhost:8090', 'https://link-ding-dong.com'],
+        origin: [
+            'http://localhost:8090',
+            'https://link-ding-dong.com',
+            'https://promise9-ranking-lab.dltmdcks.chatgpt.site',
+        ],
         credentials: true,
     })
 
