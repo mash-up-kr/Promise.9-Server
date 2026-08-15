@@ -5,6 +5,8 @@ import { LLM_MODEL } from '../common/constants/llm'
 export type RuntimeEnvironment = 'development' | 'production'
 
 const DEFAULT_LLM_REQUEST_TIMEOUT_MS = 30_000
+const DEFAULT_SQS_WAIT_TIME_SECONDS = 20
+const DEFAULT_SQS_VISIBILITY_TIMEOUT_SECONDS = 300
 
 // drizzle.config.ts에서 사용 — DB 접속 정보만 검증
 const dbEnvSchema = z
@@ -53,6 +55,25 @@ const appEnvSchema = z
             .default(DEFAULT_LLM_REQUEST_TIMEOUT_MS),
         OPENAI_API_KEY: z.string().min(1).optional(),
         GEMINI_API_KEY: z.string().min(1).optional(),
+        AWS_REGION: z.string().min(1).default('ap-northeast-2'),
+        SQS_LINK_ANALYSIS_QUEUE_URL: z.url().optional(),
+        SQS_ENDPOINT: z.url().optional(),
+        SQS_CONSUMER_ENABLED: z
+            .enum(['true', 'false'])
+            .default('true')
+            .transform((value) => value === 'true'),
+        SQS_WAIT_TIME_SECONDS: z.coerce
+            .number()
+            .int()
+            .min(1)
+            .max(20)
+            .default(DEFAULT_SQS_WAIT_TIME_SECONDS),
+        SQS_VISIBILITY_TIMEOUT_SECONDS: z.coerce
+            .number()
+            .int()
+            .min(1)
+            .max(43_200)
+            .default(DEFAULT_SQS_VISIBILITY_TIMEOUT_SECONDS),
     })
     .superRefine((env, ctx) => {
         const key = getDatabaseUrlKey(env.APP_ENV)

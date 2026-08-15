@@ -44,10 +44,22 @@ export class LinkAnalysisService {
             content: information?.content ?? null,
         }
 
-        await Promise.all([
+        const results = await Promise.allSettled([
             this.generateAndSaveSummary(input, aiInput),
             this.generateAndSaveTags(input, aiInput),
         ])
+
+        const failures = results
+            .filter((result) => result.status === 'rejected')
+            .map((result) => result.reason as unknown)
+
+        if (failures.length === 1) {
+            throw failures[0]
+        }
+
+        if (failures.length > 1) {
+            throw new AggregateError(failures, '링크 AI 분석에 실패했습니다.')
+        }
     }
 
     // 화면과 검색에 사용하는 제목·설명만 저장하고, 크롤링 본문은 DB에 보관하지 않는다.
@@ -86,7 +98,7 @@ export class LinkAnalysisService {
         )
     }
 
-    // 요약 성공 시 결과와 SUCCESS를 저장하고, 실패 시 요약 상태만 FAILED로 변경한다.
+    // 실패 상태를 저장한 뒤 예외를 다시 던져 SQS 재시도·DLQ 처리를 받게 한다.
     private async generateAndSaveSummary(
         input: LinkAnalysisInput,
         aiInput: AiLinkAnalysisInput,
@@ -126,10 +138,12 @@ export class LinkAnalysisService {
                     statusUpdateErrorStack,
                 )
             }
+
+            throw error
         }
     }
 
-    // 태그 생성이 성공하고 결과가 있을 때만 기존 AI 태그를 새 결과로 교체한다.
+    // 태그 생성 실패도 예외를 다시 던지며, 성공한 요약 결과에는 영향을 주지 않는다.
     private async generateAndSaveTags(
         input: LinkAnalysisInput,
         aiInput: AiLinkAnalysisInput,
@@ -149,6 +163,8 @@ export class LinkAnalysisService {
                 `AI 태그 생성에 실패했습니다. linkId=${input.linkId}: ${errorMessage}`,
                 errorStack,
             )
+
+            throw error
         }
     }
 

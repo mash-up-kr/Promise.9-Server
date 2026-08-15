@@ -131,11 +131,13 @@ describe('LinkAnalysisService', () => {
             tags: [],
         })
 
-        await service.analyze({
-            linkId: 1,
-            userId: 2,
-            url: 'https://example.com/article',
-        })
+        await expect(
+            service.analyze({
+                linkId: 1,
+                userId: 2,
+                url: 'https://example.com/article',
+            }),
+        ).rejects.toBe(summaryError)
 
         expect(updatePatches).toEqual([
             expect.objectContaining({
@@ -158,13 +160,16 @@ describe('LinkAnalysisService', () => {
         aiService.generateSummary.mockResolvedValueOnce({
             summary: '생성된 요약이에요.',
         })
-        aiService.generateTags.mockRejectedValueOnce(new Error('tag failed'))
+        const tagError = new Error('tag failed')
+        aiService.generateTags.mockRejectedValueOnce(tagError)
 
-        await service.analyze({
-            linkId: 1,
-            userId: 2,
-            url: 'https://example.com/article',
-        })
+        await expect(
+            service.analyze({
+                linkId: 1,
+                userId: 2,
+                url: 'https://example.com/article',
+            }),
+        ).rejects.toBe(tagError)
 
         expect(updatePatches).toEqual(
             expect.arrayContaining([

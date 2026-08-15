@@ -4,7 +4,7 @@ import { BaseException } from '../../common/exception/base.exception'
 import { buildCursorPage } from '../../common/pagination/cursor'
 import { FOLDER_ERROR } from '../folder/folder-error.constant'
 
-import { LinkAnalysisService } from './analysis/link-analysis.service'
+import { LinkAnalysisQueuePublisher } from './analysis/link-analysis.queue'
 import { LinkAnalysisInput } from './analysis/link-analysis.type'
 import {
     CreateLinkInput,
@@ -28,7 +28,7 @@ export class LinkService {
         private readonly linkRepository: LinkRepository,
         private readonly embeddingService: EmbeddingService,
         private readonly searchService: SearchService,
-        private readonly linkAnalysisService: LinkAnalysisService,
+        private readonly linkAnalysisQueuePublisher: LinkAnalysisQueuePublisher,
     ) {}
 
     async create(userId: number, input: CreateLinkInput) {
@@ -55,7 +55,7 @@ export class LinkService {
         // TODO: 메타데이터/요약 수집 파이프라인 완료 시 embedLinkSafe(row)를 다시 호출해 재임베딩한다.
         void this.embeddingService.embedLinkSafe(row)
 
-        this.startLinkAnalysis({
+        await this.publishLinkAnalysis({
             linkId: row.id,
             userId,
             url: row.originalUrl,
@@ -319,18 +319,25 @@ export class LinkService {
         )
     }
 
-    // 링크 저장 응답과 분석 작업을 분리하고, 현재 프로세스의 예상 밖 실패를 안전하게 기록한다.
-    private startLinkAnalysis(input: LinkAnalysisInput): void {
-        this.linkAnalysisService.analyze(input).catch((error: unknown) => {
+    // 링크 저장은 보존하되 SQS 발행 실패를 상태로 남겨 PENDING 고착을 방지한다.
+    private async publishLinkAnalysis(input: LinkAnalysisInput): Promise<void> {
+        try {
+            await this.linkAnalysisQueuePublisher.publish(input)
+        } catch (error) {
             const errorMessage =
                 error instanceof Error ? error.message : String(error)
             const errorStack = error instanceof Error ? error.stack : undefined
 
             this.logger.error(
-                `링크 분석 작업이 중단되었습니다. linkId=${input.linkId}: ${errorMessage}`,
+                `링크 분석 메시지 발행에 실패했습니다. linkId=${input.linkId}: ${errorMessage}`,
                 errorStack,
             )
-        })
+
+            await this.linkRepository.updateActive(input.userId, input.linkId, {
+                aiSummaryStatus: 'FAILED',
+                updatedAt: new Date(),
+            })
+        }
     }
 
     // 링크에 연결된 폴더 참조를 조회한다. 폴더가 없으면 null.

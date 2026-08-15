@@ -5,6 +5,10 @@ import { DatabaseModule } from '../../config/database/database.module'
 import { AiModule } from '../ai/ai.module'
 import { AuthModule } from '../auth/auth.module'
 
+import {
+    LinkAnalysisQueueConsumer,
+    LinkAnalysisQueuePublisher,
+} from './analysis/link-analysis.queue'
 import { LinkAnalysisService } from './analysis/link-analysis.service'
 import { LinkContentService } from './content/link-content.service'
 import { EmbeddingService } from './search/embedding.service'
@@ -22,6 +26,8 @@ import { LinkService } from './link.service'
         EmbeddingService,
         SearchService,
         LinkAnalysisService,
+        LinkAnalysisQueuePublisher,
+        LinkAnalysisQueueConsumer,
         LinkContentService,
     ],
     exports: [LinkService],
