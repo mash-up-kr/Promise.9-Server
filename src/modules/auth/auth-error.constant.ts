@@ -21,4 +21,10 @@ export const AUTH_ERROR = {
         errorCode: 950004,
         message: '지원하지 않는 소셜 로그인 제공자입니다.',
     },
+    KAKAO_EXCHANGE_FAILED: {
+        code: HttpStatus.BAD_REQUEST,
+        errorCode: 950005,
+        message:
+            'Kakao 토큰 교환에 실패했습니다. code 또는 redirectUri를 확인해주세요.',
+    },
 } as const
