@@ -83,6 +83,20 @@ export class AuthService {
         return { ...tokens, isNewUser }
     }
 
+    // 웹은 Kakao SDK 없이 authorization code만 받으므로, client_secret을 서버에만
+    // 둔 채 code→id_token 교환을 대신 수행한다. 반환된 idToken은 프론트가 다시
+    // socialLogin(provider=kakao)로 넘겨 실제 로그인을 완료한다.
+    async kakaoExchange(
+        code: string,
+        redirectUri: string,
+    ): Promise<{ idToken: string }> {
+        const idToken = await this.kakaoProvider.exchangeCodeForIdToken(
+            code,
+            redirectUri,
+        )
+        return { idToken }
+    }
+
     async refresh(rawRefreshToken: string): Promise<TokenPair> {
         const payload = this.verifyRefreshToken(rawRefreshToken)
         const tokenHash = hashToken(rawRefreshToken)
