@@ -67,6 +67,7 @@ erDiagram
     text ai_summary
     varchar ai_summary_status
     text memo
+    timestamptz reminder_at
     timestamptz deleted_at
     timestamptz created_at
     timestamptz updated_at

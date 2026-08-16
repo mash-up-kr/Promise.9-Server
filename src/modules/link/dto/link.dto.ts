@@ -13,6 +13,12 @@ const booleanQuerySchema = z.preprocess((value) => {
     return value
 }, z.boolean())
 
+const reminderAtSchema = z.iso
+    .datetime({ offset: true })
+    .refine((value) => new Date(value).getTime() > Date.now(), {
+        message: '리마인드 시각은 현재보다 이후여야 합니다.',
+    })
+
 // 링크 저장 전 OG 미리보기 조회용 쿼리 (url 하나)
 export const linkPreviewQuerySchema = z.object({
     url: z.url(),
@@ -23,6 +29,7 @@ export const createLinkSchema = z.object({
     url: z.url(),
     folderId: z.number().int().positive().nullish(),
     memo: z.string().max(LINK_MEMO_MAX_LENGTH).nullish(),
+    reminderAt: reminderAtSchema.nullish(),
 })
 export type CreateLinkInput = z.infer<typeof createLinkSchema>
 
@@ -30,12 +37,14 @@ export const updateLinkSchema = z
     .object({
         folderId: z.number().int().positive().nullish(),
         memo: z.string().max(LINK_MEMO_MAX_LENGTH).nullish(),
+        reminderAt: reminderAtSchema.nullish(),
         isFavorite: z.boolean().optional(),
     })
     .refine(
         (value) =>
             value.folderId !== undefined ||
             value.memo !== undefined ||
+            value.reminderAt !== undefined ||
             value.isFavorite !== undefined,
         {
             message: '변경할 필드가 최소 하나는 필요합니다.',
@@ -95,6 +104,16 @@ export class CreateLinkDto {
         description: `[선택] 메모 (최대 ${LINK_MEMO_MAX_LENGTH}자, 생략·null 가능)`,
     })
     memo?: string | null
+
+    @ApiPropertyOptional({
+        type: String,
+        format: 'date-time',
+        example: '2026-08-20T21:00:00+09:00',
+        nullable: true,
+        description:
+            '[선택] 리마인드 시각 (타임존을 포함한 ISO 8601 미래 시각, 생략·null 가능)',
+    })
+    reminderAt?: string | null
 }
 
 export class UpdateLinkDto {
@@ -112,6 +131,16 @@ export class UpdateLinkDto {
         description: `[선택] 메모 (최대 ${LINK_MEMO_MAX_LENGTH}자, null이면 삭제)`,
     })
     memo?: string | null
+
+    @ApiPropertyOptional({
+        type: String,
+        format: 'date-time',
+        example: '2026-08-20T21:00:00+09:00',
+        nullable: true,
+        description:
+            '[선택] 리마인드 시각 (타임존을 포함한 ISO 8601 미래 시각, null이면 해제)',
+    })
+    reminderAt?: string | null
 
     @ApiPropertyOptional({
         example: true,

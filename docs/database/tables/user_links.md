@@ -19,6 +19,7 @@ erDiagram
     text ai_summary
     varchar ai_summary_status
     text memo
+    timestamptz reminder_at
     boolean is_favorite
     timestamptz viewed_at
     timestamptz deleted_at
@@ -43,6 +44,7 @@ erDiagram
 | ai_summary        | text        | N    | AI 요약 결과                                                                                    |
 | ai_summary_status | varchar     | Y    | AI 요약 대표 상태. 예: `PENDING`, `SUCCESS`, `NEEDS_REVIEW`, `FAILED`                           |
 | memo              | text        | N    | 사용자 메모. 최대 500자                                                                         |
+| reminder_at       | timestamptz | N    | 리마인드를 받을 절대 시각. `NULL`이면 리마인드를 설정하지 않음                                  |
 | is_favorite       | boolean     | Y    | 즐겨찾기 여부. 기본값은 `false`                                                                 |
 | viewed_at         | timestamptz | N    | 링크 상세 화면을 마지막으로 조회한 시각. 조회 전에는 `NULL`                                     |
 | deleted_at        | timestamptz | N    | 최근 삭제된 항목으로 이동한 일시                                                                |
@@ -59,6 +61,7 @@ erDiagram
 - 폴더 미선택 상태와 복원 후 미분류 상태는 `folder_id IS NULL`로 표현한다.
 - 링크 저장 최신순 정렬은 `created_at`을 기준으로 한다.
 - 즐겨찾기 설정·해제는 `is_favorite`을 갱신한다.
+- 리마인드 시각은 타임존이 포함된 ISO 8601 미래 시각으로 받아 `reminder_at`에 저장하며, `NULL`로 설정하면 해제한다.
 - 상세 화면 조회 기록은 `POST /links/{linkId}/view` 호출 시 `viewed_at`을 서버 현재 시각으로 갱신한다.
 - 조회 횟수나 이력은 저장하지 않고 마지막 조회 시각만 보관한다.
 - 영구 삭제 대상은 별도 컬럼 없이 `deleted_at <= now() - interval '30 days'` 조건으로 판단한다.
