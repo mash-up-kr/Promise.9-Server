@@ -8,27 +8,32 @@
 
 ## Provider 구현 상태
 
-| Provider | 상태 | 설명                                                            |
-| -------- | :--: | --------------------------------------------------------------- |
-| Google   |  O   | ID token 검증과 로그인·가입 동작                                |
-| Kakao    | TODO | 요청 enum만 열려 있으며 provider 검증 구현 전에는 `950004` 반환 |
+| Provider | 상태 | 설명                                                                                |
+| -------- | :--: | ----------------------------------------------------------------------------------- |
+| Google   |  O   | ID token 검증과 로그인·가입 동작                                                    |
+| Kakao    |  O   | ID token(JWKS) 검증. 웹은 idToken을 직접 못 받아 `POST /auth/kakao/exchange` 경유   |
+| Apple    |  O   | ID token(JWKS) 검증. iOS 네이티브(Bundle ID)·웹(Services ID) audience 동시 지원     |
 
 ---
 
 ## 인증 플로우
 
 ```
-1. 프론트에서 Google SDK로 idToken 발급
-   - 앱 (iOS / Android): expo-auth-session
-   - 웹 (Expo Web): Google SDK 사용
-   - Kakao SDK 연동은 TODO
+1. 프론트에서 idToken 발급
+   - Google: SDK가 idToken을 바로 반환 (앱: expo-auth-session, 웹: Google SDK)
+   - Kakao
+     - 앱 (iOS / Android): SDK(@react-native-seoul/kakao-login 등)가 idToken을 바로 반환
+     - 웹: Kakao OIDC는 response_type=code로 고정돼 있어, idToken을 직접 못 받음.
+       authorize 리다이렉트로 code를 받은 뒤 POST /auth/kakao/exchange로
+       idToken을 대신 발급받아야 함 (아래 "Kakao 웹 로그인용 code→idToken 교환" 참조)
+   - Apple: SDK(ASAuthorizationAppleIDProvider 등)나 웹 authorize 요청이 idToken을 바로 반환
 
 2. idToken을 서버로 전달
    - POST /auth/social { provider, idToken }
 
 3. 서버에서 idToken 검증
-   - 현재 Google OIDC 검증
-   - Kakao provider 검증은 TODO
+   - Google: OAuth2Client로 서명·audience(GOOGLE_CLIENT_ID) 검증
+   - Kakao / Apple: JWKS로 서명·issuer·audience(KAKAO_CLIENT_ID / APPLE_CLIENT_ID) 검증
    - SOCIAL_ACCOUNTS 테이블에서 provider + provider_user_id로 유저 조회
    - 신규 유저면 USERS + SOCIAL_ACCOUNTS 생성
 
@@ -96,11 +101,52 @@ POST /auth/social
 }
 ```
 
-> - `provider`: 소셜 로그인 제공자
-> - `provider=google`: 현재 사용 가능
-> - `provider=kakao`: 계약만 제공하는 TODO. 현재 요청하면 `400 Bad Request`, `errorCode=950004`
-> - `idToken`: 클라이언트 SDK에서 발급받은 ID 토큰
+> - `provider`: 소셜 로그인 제공자. `google` | `kakao` | `apple`
+> - `idToken`: 클라이언트 SDK(또는 아래 Kakao 웹 프록시)에서 발급받은 ID 토큰
 > - `isNewUser`: 신규 가입 여부 (온보딩 처리용)
+> - 지원하지 않는 provider로 요청하면 `400 Bad Request`, `errorCode=950004`
+
+---
+
+### Kakao 웹 로그인용 code→idToken 교환
+
+```
+POST /auth/kakao/exchange
+```
+
+웹에서만 사용한다. Kakao OIDC는 `response_type=code`로 고정돼 있어, 웹은
+`client_secret` 노출 없이 idToken을 직접 받을 방법이 없다. 프론트가
+authorization code를 이 엔드포인트로 넘기면, 서버가 보관한
+`KAKAO_CLIENT_SECRET`으로 Kakao token endpoint와 대신 교환해 idToken을
+돌려준다. 반환된 idToken은 위 `POST /auth/social` (`provider=kakao`)에
+그대로 넘겨 로그인을 완료한다.
+
+iOS/Android 네이티브 앱은 SDK가 idToken을 직접 발급하므로 이 엔드포인트가
+필요 없다.
+
+**Request Body**
+
+```json
+{
+    "code": "string",
+    "redirectUri": "string"
+}
+```
+
+**Response `200`**
+
+```json
+{
+    "success": true,
+    "data": {
+        "idToken": "string"
+    }
+}
+```
+
+> - `code`: Kakao authorization code (`response_type=code`로 발급받은 값). 1회용이며 발급 후 짧은 시간 내 만료됨
+> - `redirectUri`: code 발급 요청 때 사용한 `redirect_uri`와 정확히 동일해야 함
+> - code 만료·재사용, redirectUri 불일치 등으로 교환에 실패하면 `400 Bad Request`, `errorCode=950005`
 
 ---
 
