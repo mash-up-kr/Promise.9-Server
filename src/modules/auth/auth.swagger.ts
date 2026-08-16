@@ -34,22 +34,23 @@ const TOKEN_PAIR_RESPONSE_EXAMPLE = {
 }
 
 const SOCIAL_LOGIN_DESCRIPTION = `
-현재 Google 로그인만 구현되어 있습니다.
+Google, Kakao, Apple 소셜 로그인을 지원합니다.
 
-- \`provider=google\`: 현재 사용 가능
-- \`provider=kakao\`: 요청 계약만 열어 둔 TODO입니다. Kakao provider가 연결되기 전에는 \`400 Bad Request\`와 \`errorCode=950004\`를 반환합니다.
+- \`provider=google\`: Google ID 토큰 검증 (OAuth2Client, audience=GOOGLE_CLIENT_ID)
+- \`provider=kakao\`: Kakao OIDC ID 토큰 검증 (JWKS, audience=KAKAO_CLIENT_ID)
+- \`provider=apple\`: Apple OIDC ID 토큰 검증 (JWKS, audience=APPLE_CLIENT_ID)
 `
 
 export const ApiSocialLogin = () =>
     applyDecorators(
         ApiOperation({
-            summary: '소셜 로그인 (Google 지원 / Kakao TODO)',
+            summary: '소셜 로그인 (Google / Kakao / Apple)',
             description: SOCIAL_LOGIN_DESCRIPTION,
         }),
         ApiBody({
             type: SocialLoginDto,
             description:
-                '- `provider` (필수): 현재 `google`만 지원\n- `idToken` (필수): 소셜 로그인 제공자가 발급한 ID 토큰',
+                '- `provider` (필수): `google` | `kakao` | `apple`\n- `idToken` (필수): 소셜 로그인 제공자가 발급한 ID 토큰',
         }),
         ApiCommonResponse(SocialLoginResponseDto, {
             description: '로그인 성공',
