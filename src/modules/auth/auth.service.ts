@@ -10,7 +10,9 @@ import { ValidatedEnvironment } from '../../config/environment'
 import { UserRepository } from '../user/repository/user.repository'
 
 import { SupportedProvider } from './dto/auth.dto'
+import { AppleProvider } from './providers/apple.provider'
 import { GoogleProvider } from './providers/google.provider'
+import { KakaoProvider } from './providers/kakao.provider'
 import { SocialProvider } from './providers/social-provider.interface'
 import { RefreshTokenRepository } from './repository/refresh-token.repository'
 import { TOKEN_TYPE, TokenType } from './auth.constants'
@@ -45,6 +47,8 @@ export class AuthService {
         private readonly refreshTokenRepository: RefreshTokenRepository,
         private readonly jwtService: JwtService,
         private readonly googleProvider: GoogleProvider,
+        private readonly kakaoProvider: KakaoProvider,
+        private readonly appleProvider: AppleProvider,
         config: ConfigService<ValidatedEnvironment, true>,
     ) {
         this.accessSecret = config.getOrThrow('JWT_ACCESS_SECRET', {
@@ -138,8 +142,8 @@ export class AuthService {
     private getProvider(provider: SupportedProvider): SocialProvider {
         const providerMap: Record<string, SocialProvider> = {
             google: this.googleProvider,
-            // TODO: 카카오 provider 추가 필요
-            // kakao: this.kakaoProvider,
+            kakao: this.kakaoProvider,
+            apple: this.appleProvider,
         }
 
         const resolved = providerMap[provider]

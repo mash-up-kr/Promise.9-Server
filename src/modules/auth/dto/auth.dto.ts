@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { z } from 'zod'
 
-export const SUPPORTED_PROVIDERS = ['google', 'kakao'] as const
+export const SUPPORTED_PROVIDERS = ['google', 'kakao', 'apple'] as const
 export type SupportedProvider = (typeof SUPPORTED_PROVIDERS)[number]
 
 export const socialLoginSchema = z.object({
@@ -30,8 +30,7 @@ export class SocialLoginDto {
     @ApiProperty({
         enum: SUPPORTED_PROVIDERS,
         example: 'google',
-        description:
-            '[필수] 소셜 로그인 제공자. 현재 google만 동작하며 kakao는 계약만 제공하는 TODO',
+        description: '[필수] 소셜 로그인 제공자',
     })
     provider!: SupportedProvider
 

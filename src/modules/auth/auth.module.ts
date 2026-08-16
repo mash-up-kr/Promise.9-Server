@@ -7,7 +7,9 @@ import { DatabaseModule } from '../../config/database/database.module'
 import { ValidatedEnvironment } from '../../config/environment'
 import { UserModule } from '../user/user.module'
 
+import { AppleProvider } from './providers/apple.provider'
 import { GoogleProvider } from './providers/google.provider'
+import { KakaoProvider } from './providers/kakao.provider'
 import { RefreshTokenRepository } from './repository/refresh-token.repository'
 import { JwtStrategy } from './strategies/jwt.strategy'
 import { AuthController } from './auth.controller'
@@ -33,6 +35,8 @@ import { AuthService } from './auth.service'
         RefreshTokenRepository,
         JwtStrategy,
         GoogleProvider,
+        KakaoProvider,
+        AppleProvider,
     ],
     exports: [JwtStrategy, JwtModule],
 })
