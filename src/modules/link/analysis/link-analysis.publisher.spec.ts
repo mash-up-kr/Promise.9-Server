@@ -4,7 +4,7 @@ import { SendMessageCommand } from '@aws-sdk/client-sqs'
 import { ValidatedEnvironment } from '../../../config/environment'
 import { SqsService } from '../../../infrastructure/sqs/sqs.service'
 
-import { LinkAnalysisQueuePublisher } from './link-analysis.queue'
+import { LinkAnalysisQueuePublisher } from './link-analysis.publisher'
 import { LinkAnalysisRetryMessage } from './link-analysis.type'
 
 const QUEUE_URL =

@@ -4,14 +4,13 @@ import { BaseException } from '../../common/exception/base.exception'
 import { buildCursorPage } from '../../common/pagination/cursor'
 import { FOLDER_ERROR } from '../folder/folder-error.constant'
 
-import { LinkAnalysisDispatcherService } from './analysis/link-analysis.dispatcher'
+import { LinkAnalysisDispatcher } from './analysis/link-analysis.dispatcher'
 import {
     CreateLinkInput,
     ListLinksQueryInput,
     UpdateLinkInput,
 } from './dto/link.dto'
 import { CreateLinkTagInput } from './dto/tag.dto'
-import { EmbeddingService } from './search/embedding.service'
 import { SearchService } from './search/search.service'
 import { toSearchCursorPayload } from './search/search.util'
 import { LinkRepository, LinkUpdatePatch } from './link.repository'
@@ -25,9 +24,8 @@ export class LinkService {
 
     constructor(
         private readonly linkRepository: LinkRepository,
-        private readonly embeddingService: EmbeddingService,
         private readonly searchService: SearchService,
-        private readonly linkAnalysisDispatcher: LinkAnalysisDispatcherService,
+        private readonly linkAnalysisDispatcher: LinkAnalysisDispatcher,
     ) {}
 
     async create(userId: number, input: CreateLinkInput) {
@@ -116,9 +114,13 @@ export class LinkService {
 
         const row = await this.linkRepository.update(userId, linkId, patch)
 
-        // 메모가 바뀌면 임베딩 대상 텍스트가 달라지므로 best-effort로 재생성한다.
+        // 메모가 바뀌면 임베딩 대상 텍스트가 달라지므로 임베딩만 다시 실행한다.
+        // create와 같은 dispatcher를 거치므로 실패 시 재시도도 동일하게 적용된다.
         if (input.memo !== undefined) {
-            void this.embeddingService.embedLinkSafe(row)
+            this.linkAnalysisDispatcher.dispatch(
+                { linkId: row.id, userId, url: row.originalUrl },
+                ['EMBEDDING'],
+            )
         }
 
         return {

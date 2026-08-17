@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
 
 import { BaseException } from '../../../common/exception/base.exception'
+import { describeError } from '../../../common/exception/error.util'
 import { ListLinksQueryInput } from '../dto/link.dto'
 import { LinkRepository } from '../link.repository'
 import { LinkRow } from '../link.schema'
@@ -89,11 +90,8 @@ export class SearchService {
         try {
             return await this.embeddingService.embedQuery(q)
         } catch (error) {
-            const message =
-                error instanceof Error ? error.message : String(error)
-
             this.logger.warn(
-                `검색 쿼리 임베딩에 실패해 키워드 검색으로 폴백합니다. error=${message}`,
+                `검색 쿼리 임베딩에 실패해 키워드 검색으로 폴백합니다. error=${describeError(error)}`,
             )
 
             return null

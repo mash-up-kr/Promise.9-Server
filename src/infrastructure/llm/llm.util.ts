@@ -1,5 +1,7 @@
 import { zodTextFormat } from 'openai/helpers/zod'
 
+import { describeError } from '../../common/exception/error.util'
+
 import { LlmConfigurationError, LlmResponseParseError } from './llm.exception'
 import { LlmObjectSchema } from './llm.type'
 
@@ -21,10 +23,8 @@ export function parseJsonResult(text: string): unknown {
     try {
         return JSON.parse(text) as unknown
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-
         throw new LlmResponseParseError(
-            `LLM 응답 JSON 파싱에 실패했습니다: ${message}`,
+            `LLM 응답 JSON 파싱에 실패했습니다: ${describeError(error)}`,
             { cause: error },
         )
     }

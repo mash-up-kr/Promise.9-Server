@@ -53,28 +53,5 @@ export type LinkAnalysisRetryMessage = {
     attempt: number
 }
 
-// 인라인 실행과 SQS 재시도가 공유하는 단일 실행 지점.
-// 요청한 작업을 각각 독립 실행하고, 예외를 던지지 않고 작업별 결과를 반환한다.
-export interface LinkAnalysisRunner {
-    run(
-        input: LinkAnalysisInput,
-        tasks: readonly LinkAnalysisTask[],
-    ): Promise<LinkAnalysisTaskResult[]>
-}
-
-// 재시도 메시지 발행 지점.
-export interface LinkAnalysisRetryQueue {
-    publishRetry(message: LinkAnalysisRetryMessage): Promise<void>
-}
-
-// 인라인 우선 실행과 실패 작업의 큐 위임을 조율한다.
-export interface LinkAnalysisDispatcher {
-    // 링크 저장 응답을 막지 않는 fire-and-forget 진입점.
-    // 전체 작업을 인라인 실행하고, RETRYABLE 실패만 재시도 큐로 넘긴다.
-    dispatch(input: LinkAnalysisInput): void
-
-    // consumer 진입점. 메시지에 담긴 작업만 실행한다.
-    // RETRYABLE 실패가 남으면 예외를 던져 visibility timeout 이후 재전달을 받고,
-    // 전부 성공이거나 PERMANENT 실패만 남으면 정상 종료해 메시지를 삭제하게 한다.
-    handleRetry(message: LinkAnalysisRetryMessage): Promise<void>
-}
+// 실행 계약은 LinkAnalysisService·LinkAnalysisDispatcher 클래스가 직접 표현한다.
+// NestJS DI가 클래스를 토큰으로 쓰므로 별도 interface는 두지 않는다.

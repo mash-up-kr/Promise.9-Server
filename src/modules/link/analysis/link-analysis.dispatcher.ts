@@ -1,19 +1,17 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common'
 
-import { LinkRepository } from '../link.repository'
-
 import {
     describeError,
     describeErrorStack,
-    isRetryableFailure,
-} from './link-analysis.failure'
-import { LinkAnalysisQueuePublisher } from './link-analysis.queue'
+} from '../../../common/exception/error.util'
+
+import { isRetryableFailure } from './link-analysis.failure'
+import { LinkAnalysisQueuePublisher } from './link-analysis.publisher'
 import { LinkAnalysisService } from './link-analysis.service'
 import {
     LINK_ANALYSIS_MAX_ATTEMPTS,
     LINK_ANALYSIS_MESSAGE_VERSION,
     LINK_ANALYSIS_TASKS,
-    LinkAnalysisDispatcher,
     LinkAnalysisInput,
     LinkAnalysisRetryMessage,
     LinkAnalysisTask,
@@ -24,22 +22,25 @@ import {
 // 프로세스를 내려보낸다. 배포 헬스체크가 기다려주는 시간보다 짧아야 한다.
 const INLINE_DRAIN_TIMEOUT_MS = 15_000
 
+// 링크 분석을 인라인으로 먼저 실행하고, 재시도 가능한 실패만 큐로 넘긴다.
+// 실행 자체는 LinkAnalysisService가 담당하고 여기서는 트리거와 재시도 정책만 다룬다.
 @Injectable()
-export class LinkAnalysisDispatcherService
-    implements LinkAnalysisDispatcher, OnModuleDestroy
-{
-    private readonly logger = new Logger(LinkAnalysisDispatcherService.name)
+export class LinkAnalysisDispatcher implements OnModuleDestroy {
+    private readonly logger = new Logger(LinkAnalysisDispatcher.name)
     private readonly inFlight = new Set<Promise<void>>()
 
     constructor(
         private readonly linkAnalysisService: LinkAnalysisService,
         private readonly queuePublisher: LinkAnalysisQueuePublisher,
-        private readonly linkRepository: LinkRepository,
     ) {}
 
     // 링크 저장 응답을 막지 않도록 인라인 실행을 추적만 하고 즉시 반환한다.
-    dispatch(input: LinkAnalysisInput): void {
-        const task = this.runInline(input)
+    // tasks를 지정하면 그 작업만 실행한다(예: 링크 수정 후 임베딩만 갱신).
+    dispatch(
+        input: LinkAnalysisInput,
+        tasks: readonly LinkAnalysisTask[] = LINK_ANALYSIS_TASKS,
+    ): void {
+        const task = this.runInline(input, tasks)
 
         this.inFlight.add(task)
         void task.finally(() => this.inFlight.delete(task))
@@ -88,13 +89,13 @@ export class LinkAnalysisDispatcherService
         }
     }
 
-    // 전체 작업을 인라인으로 실행한다. fire-and-forget이라 예외를 밖으로 내보내지 않는다.
-    private async runInline(input: LinkAnalysisInput): Promise<void> {
+    // fire-and-forget이라 예외를 밖으로 내보내지 않는다.
+    private async runInline(
+        input: LinkAnalysisInput,
+        tasks: readonly LinkAnalysisTask[],
+    ): Promise<void> {
         try {
-            const results = await this.linkAnalysisService.run(
-                input,
-                LINK_ANALYSIS_TASKS,
-            )
+            const results = await this.linkAnalysisService.run(input, tasks)
 
             await this.scheduleRetry(input, results, 1)
         } catch (error) {
@@ -117,8 +118,12 @@ export class LinkAnalysisDispatcherService
 
         if (failedTasks.length === 0) return
 
+        // 상한을 넘긴 실패는 재발행을 멈춘다. 각 작업의 실패 상태는 이미 실행 시점에
+        // LinkAnalysisService가 기록했으므로 여기서 다시 쓰지 않는다.
         if (attempt >= LINK_ANALYSIS_MAX_ATTEMPTS) {
-            await this.giveUp(input, failedTasks, attempt)
+            this.logger.error(
+                `링크 분석 재시도 상한을 초과했습니다. linkId=${input.linkId}, tasks=${failedTasks.join(',')}, attempt=${attempt}`,
+            )
             return
         }
 
@@ -138,30 +143,5 @@ export class LinkAnalysisDispatcherService
         this.logger.log(
             `링크 분석 재시도를 예약했습니다. linkId=${input.linkId}, tasks=${failedTasks.join(',')}, attempt=${message.attempt}`,
         )
-    }
-
-    // 상한을 넘긴 실패는 재발행을 멈추고 요약 상태를 확정해 PENDING 고착을 막는다.
-    private async giveUp(
-        input: LinkAnalysisInput,
-        failedTasks: LinkAnalysisTask[],
-        attempt: number,
-    ): Promise<void> {
-        this.logger.error(
-            `링크 분석 재시도 상한을 초과했습니다. linkId=${input.linkId}, tasks=${failedTasks.join(',')}, attempt=${attempt}`,
-        )
-
-        if (!failedTasks.includes('SUMMARY')) return
-
-        try {
-            await this.linkRepository.updateActive(input.userId, input.linkId, {
-                aiSummaryStatus: 'FAILED',
-                updatedAt: new Date(),
-            })
-        } catch (error) {
-            this.logger.error(
-                `AI 요약 실패 상태 저장에 실패했습니다. linkId=${input.linkId}: ${describeError(error)}`,
-                describeErrorStack(error),
-            )
-        }
     }
 }

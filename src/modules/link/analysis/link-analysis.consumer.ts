@@ -12,11 +12,14 @@ import {
 } from '@aws-sdk/client-sqs'
 import { z } from 'zod'
 
+import {
+    describeError,
+    describeErrorStack,
+} from '../../../common/exception/error.util'
 import { ValidatedEnvironment } from '../../../config/environment'
 import { SqsService } from '../../../infrastructure/sqs/sqs.service'
 
-import { LinkAnalysisDispatcherService } from './link-analysis.dispatcher'
-import { describeError, describeErrorStack } from './link-analysis.failure'
+import { LinkAnalysisDispatcher } from './link-analysis.dispatcher'
 import {
     LINK_ANALYSIS_MESSAGE_VERSION,
     LINK_ANALYSIS_TASKS,
@@ -47,7 +50,7 @@ export class LinkAnalysisQueueConsumer
     constructor(
         config: ConfigService<ValidatedEnvironment, true>,
         private readonly sqsService: SqsService,
-        private readonly dispatcher: LinkAnalysisDispatcherService,
+        private readonly dispatcher: LinkAnalysisDispatcher,
     ) {
         this.queueUrl = config.get('SQS_LINK_ANALYSIS_QUEUE_URL', {
             infer: true,

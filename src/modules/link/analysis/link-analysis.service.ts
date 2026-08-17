@@ -1,5 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common'
 
+import {
+    describeError,
+    describeErrorStack,
+} from '../../../common/exception/error.util'
 import { AiService } from '../../ai/ai.service'
 import { AiLinkAnalysisInput } from '../../ai/ai.type'
 import { LinkContentService } from '../content/link-content.service'
@@ -8,21 +12,16 @@ import { LinkRepository, LinkUpdatePatch } from '../link.repository'
 import { LinkMetadata } from '../link.schema'
 import { EmbeddingService } from '../search/embedding.service'
 
-import {
-    classifyFailure,
-    describeError,
-    describeErrorStack,
-} from './link-analysis.failure'
+import { classifyFailure } from './link-analysis.failure'
 import {
     LINK_ANALYSIS_CONTENT_DEPENDENT_TASKS,
     LinkAnalysisInput,
-    LinkAnalysisRunner,
     LinkAnalysisTask,
     LinkAnalysisTaskResult,
 } from './link-analysis.type'
 
 @Injectable()
-export class LinkAnalysisService implements LinkAnalysisRunner {
+export class LinkAnalysisService {
     private readonly logger = new Logger(LinkAnalysisService.name)
 
     constructor(

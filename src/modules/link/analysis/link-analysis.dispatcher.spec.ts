@@ -1,9 +1,7 @@
 import { Logger } from '@nestjs/common'
 
-import { LinkRepository } from '../link.repository'
-
-import { LinkAnalysisDispatcherService } from './link-analysis.dispatcher'
-import { LinkAnalysisQueuePublisher } from './link-analysis.queue'
+import { LinkAnalysisDispatcher } from './link-analysis.dispatcher'
+import { LinkAnalysisQueuePublisher } from './link-analysis.publisher'
 import { LinkAnalysisService } from './link-analysis.service'
 import {
     LINK_ANALYSIS_MAX_ATTEMPTS,
@@ -29,13 +27,12 @@ function succeeded(task: LinkAnalysisTask): LinkAnalysisTaskResult {
     return { task, status: 'SUCCESS' }
 }
 
-describe('LinkAnalysisDispatcherService', () => {
+describe('LinkAnalysisDispatcher', () => {
     let runner: jest.Mocked<Pick<LinkAnalysisService, 'run'>>
     let queuePublisher: jest.Mocked<
         Pick<LinkAnalysisQueuePublisher, 'publishRetry'>
     >
-    let linkRepository: jest.Mocked<Pick<LinkRepository, 'updateActive'>>
-    let dispatcher: LinkAnalysisDispatcherService
+    let dispatcher: LinkAnalysisDispatcher
     let loggerErrorSpy: jest.SpyInstance
     let loggerLogSpy: jest.SpyInstance
 
@@ -44,18 +41,14 @@ describe('LinkAnalysisDispatcherService', () => {
         queuePublisher = {
             publishRetry: jest.fn().mockResolvedValue(undefined),
         }
-        linkRepository = {
-            updateActive: jest.fn().mockResolvedValue(undefined),
-        }
         loggerErrorSpy = jest
             .spyOn(Logger.prototype, 'error')
             .mockImplementation()
         loggerLogSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation()
 
-        dispatcher = new LinkAnalysisDispatcherService(
+        dispatcher = new LinkAnalysisDispatcher(
             runner as unknown as LinkAnalysisService,
             queuePublisher as unknown as LinkAnalysisQueuePublisher,
-            linkRepository as unknown as LinkRepository,
         )
     })
 
@@ -141,6 +134,13 @@ describe('LinkAnalysisDispatcherService', () => {
                 expect.anything(),
             )
         })
+
+        it('tasks를 지정하면 그 작업만 인라인 실행한다', async () => {
+            dispatcher.dispatch(INPUT, ['EMBEDDING'])
+            await dispatcher.onModuleDestroy()
+
+            expect(runner.run).toHaveBeenCalledWith(INPUT, ['EMBEDDING'])
+        })
     })
 
     describe('handleRetry', () => {
@@ -186,7 +186,7 @@ describe('LinkAnalysisDispatcherService', () => {
             )
         })
 
-        it('시도 상한을 넘기면 재발행을 멈추고 요약 상태를 FAILED로 확정한다', async () => {
+        it('시도 상한을 넘기면 재발행을 멈추고 로그만 남긴다', async () => {
             runner.run.mockResolvedValueOnce([failed('SUMMARY')])
 
             await dispatcher.handleRetry({
@@ -195,24 +195,9 @@ describe('LinkAnalysisDispatcherService', () => {
             })
 
             expect(queuePublisher.publishRetry).not.toHaveBeenCalled()
-            expect(linkRepository.updateActive).toHaveBeenCalledWith(
-                2,
-                1,
-                expect.objectContaining({ aiSummaryStatus: 'FAILED' }),
+            expect(loggerErrorSpy).toHaveBeenCalledWith(
+                expect.stringContaining('재시도 상한을 초과했습니다'),
             )
-        })
-
-        it('상한을 넘긴 실패가 요약이 아니면 요약 상태를 건드리지 않는다', async () => {
-            runner.run.mockResolvedValueOnce([failed('EMBEDDING')])
-
-            await dispatcher.handleRetry({
-                ...message,
-                tasks: ['EMBEDDING'],
-                attempt: LINK_ANALYSIS_MAX_ATTEMPTS,
-            })
-
-            expect(queuePublisher.publishRetry).not.toHaveBeenCalled()
-            expect(linkRepository.updateActive).not.toHaveBeenCalled()
         })
     })
 })

@@ -6,8 +6,8 @@ import { AiModule } from '../ai/ai.module'
 import { AuthModule } from '../auth/auth.module'
 
 import { LinkAnalysisQueueConsumer } from './analysis/link-analysis.consumer'
-import { LinkAnalysisDispatcherService } from './analysis/link-analysis.dispatcher'
-import { LinkAnalysisQueuePublisher } from './analysis/link-analysis.queue'
+import { LinkAnalysisDispatcher } from './analysis/link-analysis.dispatcher'
+import { LinkAnalysisQueuePublisher } from './analysis/link-analysis.publisher'
 import { LinkAnalysisService } from './analysis/link-analysis.service'
 import { LinkContentService } from './content/link-content.service'
 import { EmbeddingService } from './search/embedding.service'
@@ -25,7 +25,7 @@ import { LinkService } from './link.service'
         EmbeddingService,
         SearchService,
         LinkAnalysisService,
-        LinkAnalysisDispatcherService,
+        LinkAnalysisDispatcher,
         LinkAnalysisQueuePublisher,
         LinkAnalysisQueueConsumer,
         LinkContentService,

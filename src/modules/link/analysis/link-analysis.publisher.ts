@@ -5,10 +5,7 @@ import { SendMessageCommand } from '@aws-sdk/client-sqs'
 import { ValidatedEnvironment } from '../../../config/environment'
 import { SqsService } from '../../../infrastructure/sqs/sqs.service'
 
-import {
-    LinkAnalysisRetryMessage,
-    LinkAnalysisRetryQueue,
-} from './link-analysis.type'
+import { LinkAnalysisRetryMessage } from './link-analysis.type'
 
 // SQS DelaySeconds 상한. 시도 횟수가 늘수록 지연을 두 배로 늘려 백오프를 만든다.
 const MAX_DELAY_SECONDS = 900
@@ -17,7 +14,7 @@ const BASE_DELAY_SECONDS = 60
 // consumer는 dispatcher를 의존하고 dispatcher는 이 publisher를 의존한다.
 // 순환 참조를 만들지 않기 위해 consumer는 link-analysis.consumer.ts에 둔다.
 @Injectable()
-export class LinkAnalysisQueuePublisher implements LinkAnalysisRetryQueue {
+export class LinkAnalysisQueuePublisher {
     private readonly queueUrl?: string
 
     constructor(

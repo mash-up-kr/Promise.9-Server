@@ -4,6 +4,7 @@ import { z } from 'zod'
 import {
     LlmConfigurationError,
     LlmError,
+    LlmProviderError,
 } from '../../infrastructure/llm/llm.exception'
 import { LlmService } from '../../infrastructure/llm/llm.service'
 
@@ -226,8 +227,30 @@ export class AiService {
             code: failure.errorCode,
             message: failure.errorMessage,
             taskType: input.taskType,
+            retryable: this.isRetryable(input.error),
             cause: input.error,
         })
+    }
+
+    // provider 응답을 재시도 가능 여부로 해석해 호출부가 provider 예외를 몰라도 되게 한다.
+    // 429를 제외한 4xx와 설정 오류는 다시 호출해도 결과가 같다.
+    // status를 알 수 없는 실패(네트워크 오류·타임아웃)와 5xx는 재시도 대상으로 본다.
+    private isRetryable(error: unknown): boolean {
+        if (error instanceof LlmConfigurationError) {
+            return false
+        }
+
+        if (
+            error instanceof LlmProviderError &&
+            error.statusCode !== undefined
+        ) {
+            const isClientError =
+                error.statusCode >= 400 && error.statusCode < 500
+
+            return !isClientError || error.statusCode === 429
+        }
+
+        return true
     }
 
     private toFailure(error: unknown): AiGenerationFailure {

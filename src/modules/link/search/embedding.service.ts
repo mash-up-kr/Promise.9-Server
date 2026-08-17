@@ -36,18 +36,4 @@ export class EmbeddingService {
         // 생성 중 링크가 수정됐다면 오래된 텍스트의 임베딩을 저장하지 않는다.
         await this.linkRepository.updateEmbedding(link, embedding)
     }
-
-    // 쓰기 경로에서 쓰는 best-effort 버전. 실패해도 본 작업을 막지 않는다.
-    async embedLinkSafe(link: LinkRow): Promise<void> {
-        try {
-            await this.embedLink(link)
-        } catch (error) {
-            const message =
-                error instanceof Error ? error.message : String(error)
-
-            this.logger.error(
-                `링크 임베딩 생성에 실패했습니다. linkId=${link.id}, error=${message}`,
-            )
-        }
-    }
 }

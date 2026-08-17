@@ -8,14 +8,15 @@
 
 ## 적용 엔드포인트
 
-| 엔드포인트 | 분석 실행 | 비고 |
+| 엔드포인트 | 실행하는 작업 | 비고 |
 | --- | --- | --- |
-| `POST /api/v1/links` | O | 링크 신규 저장. 유일한 실행 지점 |
-| `PATCH /api/v1/links/:linkId` | X | 제목·폴더 등 수정만 하고 재분석하지 않는다(임베딩만 갱신) |
-| `POST /api/v1/links/:linkId/restore` | X | 복원 시 기존 분석 결과를 그대로 쓴다 |
+| `POST /api/v1/links` | 전체(4개) | 링크 신규 저장 |
+| `PATCH /api/v1/links/:linkId` | `EMBEDDING`만 | 메모가 바뀔 때만. 임베딩 텍스트가 달라지므로 재생성한다 |
+| `POST /api/v1/links/:linkId/restore` | 없음 | 복원 시 기존 분석 결과를 그대로 쓴다 |
 
-실행은 `LinkService.create()`가 `LinkAnalysisDispatcherService.dispatch()`를 호출하는 지점
-하나뿐이다. 같은 `normalizedUrl`은 `assertNotDuplicated`가 먼저 막으므로 중복 실행되지 않는다.
+두 경로 모두 `LinkAnalysisDispatcher.dispatch()`를 호출한다. 실패 시 재시도 정책도 동일하게
+적용되므로 임베딩 생성 트리거는 이 한 곳으로 통일되어 있다. 같은 `normalizedUrl`은
+`assertNotDuplicated`가 먼저 막으므로 중복 실행되지 않는다.
 
 <br>
 
@@ -57,7 +58,7 @@ POST /api/v1/links
           └─ 메시지의 tasks만 실행
                ├─ 전부 성공 → 메시지 삭제
                ├─ 일부 실패 → 남은 작업만 새 메시지로 재발행하고 원본 삭제
-               └─ 시도 상한 초과 → 재발행 중단, 요약 상태를 FAILED로 확정
+               └─ 시도 상한 초과 → 재발행 중단하고 로그만 남긴다
 ```
 
 인라인 실행과 재시도 실행은 모두 `LinkAnalysisService.run(input, tasks)` 하나를 호출한다.
@@ -72,15 +73,19 @@ POST /api/v1/links
 | 분류 | 조건 | 처리 |
 | --- | --- | --- |
 | `RETRYABLE` | 네트워크 오류, 타임아웃, 5xx, 429, provider 내부 오류 | 큐에 발행해 재시도 |
-| `PERMANENT` | 429를 제외한 4xx | 재시도하지 않고 종료 |
+| `PERMANENT` | 429를 제외한 4xx, LLM 설정 오류 | 재시도하지 않고 종료 |
+
+AI 실패의 판단은 `AiService`가 `AiGenerationError.retryable`로 노출한다. 링크 분석 쪽은
+provider 예외 타입을 알지 않고 이 값만 본다.
 
 재시도는 원본 메시지의 재전달이 아니라 **남은 작업만 담은 새 메시지 발행**으로 이루어진다.
 따라서 시도 횟수는 SQS `maxReceiveCount`가 아니라 코드의 `LINK_ANALYSIS_MAX_ATTEMPTS`가
 제한하며, 인라인 1회를 포함해 최대 4회 시도한다. 시도 간격은 `SendMessage`의 `DelaySeconds`로
 60초 → 120초 → 240초(상한 900초)로 늘어난다.
 
-상한을 넘기면 재발행을 멈추고, 실패 작업에 `SUMMARY`가 포함된 경우 `aiSummaryStatus`를
-`FAILED`로 확정해 `PENDING` 고착을 막는다.
+상한을 넘기면 재발행을 멈추고 로그만 남긴다. 각 작업의 실패 상태는 실행 시점에
+`LinkAnalysisService`가 이미 기록하므로(요약 실패 시 `aiSummaryStatus=FAILED`) 여기서 다시
+쓰지 않는다. 상태 전이의 주인을 한 곳으로 유지하기 위한 선택이다.
 
 <br>
 
@@ -161,7 +166,8 @@ DLQ redrive policy가 실제 source queue에 연결되어 있는지 확인한다
 | `src/modules/link/analysis/link-analysis.service.ts` | 작업 실행. 인라인과 재시도가 공유 |
 | `src/modules/link/analysis/link-analysis.dispatcher.ts` | 인라인 실행과 재시도 예약 조율 |
 | `src/modules/link/analysis/link-analysis.failure.ts` | RETRYABLE·PERMANENT 분류 |
-| `src/modules/link/analysis/link-analysis.queue.ts` | 재시도 메시지 발행 |
+| `src/modules/ai/ai.exception.ts` | `AiGenerationError.retryable` — AI 실패의 재시도 가능 여부 |
+| `src/modules/link/analysis/link-analysis.publisher.ts` | 재시도 메시지 발행 |
 | `src/modules/link/analysis/link-analysis.consumer.ts` | 큐 polling과 재시도 처리 |
 | `src/infrastructure/sqs/sqs.service.ts` | `SQSClient` 래퍼 |
 | `src/config/environment.ts` | `SQS_*` 환경변수 검증 |

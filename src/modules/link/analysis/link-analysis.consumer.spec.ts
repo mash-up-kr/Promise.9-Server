@@ -6,7 +6,7 @@ import { ValidatedEnvironment } from '../../../config/environment'
 import { SqsService } from '../../../infrastructure/sqs/sqs.service'
 
 import { LinkAnalysisQueueConsumer } from './link-analysis.consumer'
-import { LinkAnalysisDispatcherService } from './link-analysis.dispatcher'
+import { LinkAnalysisDispatcher } from './link-analysis.dispatcher'
 import { LinkAnalysisRetryMessage } from './link-analysis.type'
 
 const QUEUE_URL =
@@ -39,9 +39,7 @@ function createConfig(
 
 describe('LinkAnalysisQueueConsumer', () => {
     let sqsService: jest.Mocked<Pick<SqsService, 'delete'>>
-    let dispatcher: jest.Mocked<
-        Pick<LinkAnalysisDispatcherService, 'handleRetry'>
-    >
+    let dispatcher: jest.Mocked<Pick<LinkAnalysisDispatcher, 'handleRetry'>>
     let consumer: LinkAnalysisQueueConsumer
     let loggerErrorSpy: jest.SpyInstance
 
@@ -58,7 +56,7 @@ describe('LinkAnalysisQueueConsumer', () => {
         consumer = new LinkAnalysisQueueConsumer(
             createConfig(),
             sqsService as unknown as SqsService,
-            dispatcher as unknown as LinkAnalysisDispatcherService,
+            dispatcher as unknown as LinkAnalysisDispatcher,
         )
     })
 
