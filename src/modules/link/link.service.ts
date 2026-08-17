@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotImplementedException } from '@nestjs/common'
+import { Injectable, NotImplementedException } from '@nestjs/common'
 
 import { BaseException } from '../../common/exception/base.exception'
 import { buildCursorPage } from '../../common/pagination/cursor'
@@ -20,8 +20,6 @@ import { LINK_ERROR } from './link-error.constant'
 
 @Injectable()
 export class LinkService {
-    private readonly logger = new Logger(LinkService.name)
-
     constructor(
         private readonly linkRepository: LinkRepository,
         private readonly searchService: SearchService,
