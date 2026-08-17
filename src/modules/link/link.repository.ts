@@ -152,6 +152,41 @@ export class LinkRepository {
         return row
     }
 
+    async markViewed(userId: number, linkId: number, viewedAt: Date) {
+        return this.db.transaction(async (tx) => {
+            const [link] = await tx
+                .update(links)
+                .set({ viewedAt, updatedAt: viewedAt })
+                .where(
+                    and(
+                        eq(links.id, linkId),
+                        eq(links.userId, userId),
+                        isNull(links.deletedAt),
+                    ),
+                )
+                .returning({ folderId: links.folderId })
+
+            if (!link) {
+                return undefined
+            }
+
+            if (link.folderId !== null) {
+                await tx
+                    .update(folders)
+                    .set({ viewCount: sql`${folders.viewCount} + 1` })
+                    .where(
+                        and(
+                            eq(folders.id, link.folderId),
+                            eq(folders.userId, userId),
+                            isNull(folders.deletedAt),
+                        ),
+                    )
+            }
+
+            return link
+        })
+    }
+
     // 삭제되지 않은 링크의 분석 결과만 갱신한다.
     async updateActive(
         userId: number,

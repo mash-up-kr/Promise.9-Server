@@ -295,7 +295,7 @@ POST /links/{linkId}/restore
 POST /links/{linkId}/view
 ```
 
-상세 화면이 실제로 노출된 시점에 프론트가 호출한다. 상세 조회 GET 요청 자체는 조회 시각을 변경하지 않는다. 서버 현재 시각을 `viewedAt`으로 기록하므로 Request Body는 없다.
+상세 화면을 5초 이상 본 시점에 프론트가 한 번 호출한다. 상세 조회 GET 요청 자체는 조회 시각과 조회수를 변경하지 않는다. 서버는 현재 시각을 `viewedAt`으로 기록하고, 링크에 폴더가 있으면 해당 폴더의 `viewCount`를 1 증가시킨다. Request Body는 없다.
 
 **Response `204`** No Content
 
