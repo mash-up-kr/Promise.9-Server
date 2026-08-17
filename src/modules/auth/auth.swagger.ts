@@ -6,6 +6,7 @@ import {
     ApiCommonErrorResponses,
     ApiCommonResponse,
 } from '../../common/swagger/api-response.decorator'
+import { USER_ERROR } from '../user/user-error.constant'
 
 import {
     LogoutDto,
@@ -39,6 +40,10 @@ Google, Kakao, Apple 소셜 로그인을 지원합니다.
 - \`provider=google\`: Google ID 토큰 검증 (OAuth2Client, audience=GOOGLE_CLIENT_ID)
 - \`provider=kakao\`: Kakao OIDC ID 토큰 검증 (JWKS, audience=KAKAO_CLIENT_ID)
 - \`provider=apple\`: Apple OIDC ID 토큰 검증 (JWKS, audience=APPLE_CLIENT_ID)
+
+이메일이 이미 다른 provider로 가입돼 있으면 자동으로 병합하지 않고
+\`409 Conflict\`(\`errorCode=960002\`)를 반환합니다. 같은 사람이어도
+provider마다 별개 계정이며, 기존에 가입한 provider로 로그인해야 합니다.
 `
 
 export const ApiSocialLogin = () =>
@@ -60,6 +65,7 @@ export const ApiSocialLogin = () =>
             COMMON_ERROR.VALIDATION,
             AUTH_ERROR.INVALID_SOCIAL_TOKEN,
             AUTH_ERROR.UNSUPPORTED_PROVIDER,
+            USER_ERROR.EMAIL_ALREADY_REGISTERED,
         ),
     )
 

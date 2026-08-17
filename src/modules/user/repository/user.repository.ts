@@ -1,11 +1,13 @@
 import { Injectable } from '@nestjs/common'
 import { and, eq, isNull } from 'drizzle-orm'
 
+import { BaseException } from '../../../common/exception/base.exception'
 import {
     DatabaseService,
     DbExecutor,
 } from '../../../config/database/database.service'
 import { users } from '../schema/user.schema'
+import { USER_ERROR } from '../user-error.constant'
 
 import { SocialAccountRepository } from './social-account.repository'
 
@@ -28,47 +30,62 @@ export class UserRepository {
     }
 
     // 소셜 로그인 시 회원을 upsert하고 소셜 계정을 연결한다.
-    // 탈퇴 후 재가입이면 deletedAt을 초기화해 계정을 복구하고, 신규 연동 여부를 함께 반환한다.
+    // 이미 이 provider로 연동된 적이 있으면 그 회원으로 바로 로그인시킨다.
+    // 처음 연동하는 provider인데 이메일이 기존 회원과 겹치면, provider 간 계정을
+    // 자동으로 병합하지 않고 거부한다 — 이메일 소유를 검증해주지 않는 provider(Kakao
+    // 등)가 있어, 병합을 허용하면 남의 이메일을 자칭해 계정을 탈취할 수 있기 때문이다.
     async upsertWithSocialAccount(input: {
         email: string
         provider: string
         providerUserId: string
     }): Promise<{ userId: number; isNewUser: boolean }> {
         return this.db.transaction(async (tx) => {
-            const [user] = await tx
-                .insert(users)
-                .values({ email: input.email })
-                .onConflictDoUpdate({
-                    target: users.email,
-                    set: { updatedAt: new Date(), deletedAt: null },
-                })
-                .returning({ id: users.id })
-
-            // insert 성공(= 신규 소셜 연동)이면 isNewUser: true,
-            // (provider, providerUserId) 충돌로 doNothing이 발동되면 기존 row를 조회해 false를 반환한다.
-            const inserted =
-                await this.socialAccountRepository.insertIgnoreConflict(
-                    {
-                        userId: user.id,
-                        provider: input.provider,
-                        providerUserId: input.providerUserId,
-                        providerEmail: input.email,
-                    },
-                    tx,
-                )
-
-            if (inserted) {
-                return { userId: user.id, isNewUser: true }
-            }
-
-            const existing =
+            const existingLink =
                 await this.socialAccountRepository.findByProviderUser(
                     input.provider,
                     input.providerUserId,
                     tx,
                 )
 
-            return { userId: existing!.userId, isNewUser: false }
+            if (existingLink) {
+                return { userId: existingLink.userId, isNewUser: false }
+            }
+
+            const existingUser = await tx.query.users.findFirst({
+                where: eq(users.email, input.email),
+            })
+
+            if (existingUser) {
+                const existingSocial =
+                    await this.socialAccountRepository.findByUserId(
+                        existingUser.id,
+                        tx,
+                    )
+
+                throw new BaseException({
+                    ...USER_ERROR.EMAIL_ALREADY_REGISTERED,
+                    message: existingSocial
+                        ? `이미 ${existingSocial.provider} 계정으로 가입된 이메일입니다. ${existingSocial.provider}로 로그인해주세요.`
+                        : USER_ERROR.EMAIL_ALREADY_REGISTERED.message,
+                })
+            }
+
+            const [user] = await tx
+                .insert(users)
+                .values({ email: input.email })
+                .returning({ id: users.id })
+
+            await this.socialAccountRepository.insertIgnoreConflict(
+                {
+                    userId: user.id,
+                    provider: input.provider,
+                    providerUserId: input.providerUserId,
+                    providerEmail: input.email,
+                },
+                tx,
+            )
+
+            return { userId: user.id, isNewUser: true }
         })
     }
 
