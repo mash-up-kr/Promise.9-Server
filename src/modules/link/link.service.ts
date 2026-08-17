@@ -4,8 +4,7 @@ import { BaseException } from '../../common/exception/base.exception'
 import { buildCursorPage } from '../../common/pagination/cursor'
 import { FOLDER_ERROR } from '../folder/folder-error.constant'
 
-import { LinkAnalysisQueuePublisher } from './analysis/link-analysis.queue'
-import { LinkAnalysisInput } from './analysis/link-analysis.type'
+import { LinkAnalysisDispatcherService } from './analysis/link-analysis.dispatcher'
 import {
     CreateLinkInput,
     ListLinksQueryInput,
@@ -28,7 +27,7 @@ export class LinkService {
         private readonly linkRepository: LinkRepository,
         private readonly embeddingService: EmbeddingService,
         private readonly searchService: SearchService,
-        private readonly linkAnalysisQueuePublisher: LinkAnalysisQueuePublisher,
+        private readonly linkAnalysisDispatcher: LinkAnalysisDispatcherService,
     ) {}
 
     async create(userId: number, input: CreateLinkInput) {
@@ -50,12 +49,9 @@ export class LinkService {
             memo: input.memo ?? null,
         })
 
-        // 임베딩은 외부 호출이라 저장 응답을 막지 않도록 best-effort로 처리한다.
-        // 저장 시점엔 title·aiSummary·metadata가 아직 비어 domain(+memo) 위주로만 임베딩된다.
-        // TODO: 메타데이터/요약 수집 파이프라인 완료 시 embedLinkSafe(row)를 다시 호출해 재임베딩한다.
-        void this.embeddingService.embedLinkSafe(row)
-
-        await this.publishLinkAnalysis({
+        // 정보 수집·AI 요약·태그·임베딩은 저장 응답을 막지 않도록 dispatcher에 넘긴다.
+        // 임베딩은 제목·요약이 저장된 뒤 실행되므로 여기서 따로 호출하지 않는다.
+        this.linkAnalysisDispatcher.dispatch({
             linkId: row.id,
             userId,
             url: row.originalUrl,
@@ -317,27 +313,6 @@ export class LinkService {
                 .filter((row) => row.folderId !== null)
                 .map((row) => [row.folderId as number, row.linkCount]),
         )
-    }
-
-    // 링크 저장은 보존하되 SQS 발행 실패를 상태로 남겨 PENDING 고착을 방지한다.
-    private async publishLinkAnalysis(input: LinkAnalysisInput): Promise<void> {
-        try {
-            await this.linkAnalysisQueuePublisher.publish(input)
-        } catch (error) {
-            const errorMessage =
-                error instanceof Error ? error.message : String(error)
-            const errorStack = error instanceof Error ? error.stack : undefined
-
-            this.logger.error(
-                `링크 분석 메시지 발행에 실패했습니다. linkId=${input.linkId}: ${errorMessage}`,
-                errorStack,
-            )
-
-            await this.linkRepository.updateActive(input.userId, input.linkId, {
-                aiSummaryStatus: 'FAILED',
-                updatedAt: new Date(),
-            })
-        }
     }
 
     // 링크에 연결된 폴더 참조를 조회한다. 폴더가 없으면 null.

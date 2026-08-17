@@ -36,6 +36,9 @@ export type LinkAnalysisTaskResult =
           error: unknown
       }
 
+// 인라인 1회를 포함한 총 시도 횟수 상한. 초과하면 재발행을 멈추고 실패로 확정한다.
+export const LINK_ANALYSIS_MAX_ATTEMPTS = 4
+
 // 재시도 메시지 포맷. 인라인 실행이 실패한 작업만 tasks에 담아 발행한다.
 export const LINK_ANALYSIS_MESSAGE_VERSION = 2 as const
 

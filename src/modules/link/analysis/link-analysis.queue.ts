@@ -1,37 +1,23 @@
-import {
-    Injectable,
-    Logger,
-    OnModuleDestroy,
-    OnModuleInit,
-} from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import {
-    DeleteMessageCommand,
-    Message,
-    ReceiveMessageCommand,
-    SendMessageCommand,
-} from '@aws-sdk/client-sqs'
-import { z } from 'zod'
+import { SendMessageCommand } from '@aws-sdk/client-sqs'
 
 import { ValidatedEnvironment } from '../../../config/environment'
 import { SqsService } from '../../../infrastructure/sqs/sqs.service'
 
-import { LinkAnalysisService } from './link-analysis.service'
-import { LinkAnalysisInput } from './link-analysis.type'
+import {
+    LinkAnalysisRetryMessage,
+    LinkAnalysisRetryQueue,
+} from './link-analysis.type'
 
-const LINK_ANALYSIS_MESSAGE_VERSION = 1 as const
+// SQS DelaySeconds 상한. 시도 횟수가 늘수록 지연을 두 배로 늘려 백오프를 만든다.
+const MAX_DELAY_SECONDS = 900
+const BASE_DELAY_SECONDS = 60
 
-const linkAnalysisMessageSchema = z.object({
-    version: z.literal(LINK_ANALYSIS_MESSAGE_VERSION),
-    linkId: z.number().int().positive(),
-    userId: z.number().int().positive(),
-    url: z.url(),
-})
-
-type LinkAnalysisMessage = z.infer<typeof linkAnalysisMessageSchema>
-
+// consumer는 dispatcher를 의존하고 dispatcher는 이 publisher를 의존한다.
+// 순환 참조를 만들지 않기 위해 consumer는 link-analysis.consumer.ts에 둔다.
 @Injectable()
-export class LinkAnalysisQueuePublisher {
+export class LinkAnalysisQueuePublisher implements LinkAnalysisRetryQueue {
     private readonly queueUrl?: string
 
     constructor(
@@ -43,176 +29,26 @@ export class LinkAnalysisQueuePublisher {
         })
     }
 
-    async publish(input: LinkAnalysisInput): Promise<void> {
+    // 시도 횟수에 따라 지연을 두고 발행해, 일시적인 provider 장애가 회복될 시간을 준다.
+    async publishRetry(message: LinkAnalysisRetryMessage): Promise<void> {
         if (!this.queueUrl) {
             throw new Error(
                 'SQS_LINK_ANALYSIS_QUEUE_URL 환경변수가 필요합니다.',
             )
         }
 
-        const message: LinkAnalysisMessage = {
-            version: LINK_ANALYSIS_MESSAGE_VERSION,
-            ...input,
-        }
-
         await this.sqsService.send(
             new SendMessageCommand({
                 QueueUrl: this.queueUrl,
                 MessageBody: JSON.stringify(message),
-            }),
-        )
-    }
-}
-
-@Injectable()
-export class LinkAnalysisQueueConsumer
-    implements OnModuleInit, OnModuleDestroy
-{
-    private readonly logger = new Logger(LinkAnalysisQueueConsumer.name)
-    private readonly queueUrl?: string
-    private readonly enabled: boolean
-    private readonly waitTimeSeconds: number
-    private readonly visibilityTimeoutSeconds: number
-    private readonly abortController = new AbortController()
-    private consumerTask?: Promise<void>
-
-    constructor(
-        config: ConfigService<ValidatedEnvironment, true>,
-        private readonly sqsService: SqsService,
-        private readonly linkAnalysisService: LinkAnalysisService,
-    ) {
-        this.queueUrl = config.get('SQS_LINK_ANALYSIS_QUEUE_URL', {
-            infer: true,
-        })
-        this.enabled = config.get('SQS_CONSUMER_ENABLED', { infer: true })
-        this.waitTimeSeconds = config.get('SQS_WAIT_TIME_SECONDS', {
-            infer: true,
-        })
-        this.visibilityTimeoutSeconds = config.get(
-            'SQS_VISIBILITY_TIMEOUT_SECONDS',
-            { infer: true },
-        )
-    }
-
-    onModuleInit(): void {
-        if (!this.enabled) {
-            this.logger.log('SQS 링크 분석 consumer가 비활성화되었습니다.')
-            return
-        }
-
-        if (!this.queueUrl) {
-            this.logger.warn(
-                'SQS_LINK_ANALYSIS_QUEUE_URL이 없어 링크 분석 consumer를 시작하지 않습니다.',
-            )
-            return
-        }
-
-        this.consumerTask = this.poll()
-        this.consumerTask.catch((error: unknown) => {
-            const message =
-                error instanceof Error ? error.message : String(error)
-            const stack = error instanceof Error ? error.stack : undefined
-
-            this.logger.error(
-                `SQS consumer가 중단되었습니다: ${message}`,
-                stack,
-            )
-        })
-    }
-
-    async onModuleDestroy(): Promise<void> {
-        this.abortController.abort()
-        await this.consumerTask
-    }
-
-    private async poll(): Promise<void> {
-        while (!this.abortController.signal.aborted) {
-            try {
-                const result = await this.sqsService.receive(
-                    new ReceiveMessageCommand({
-                        QueueUrl: this.queueUrl,
-                        MaxNumberOfMessages: 1,
-                        WaitTimeSeconds: this.waitTimeSeconds,
-                        VisibilityTimeout: this.visibilityTimeoutSeconds,
-                        MessageSystemAttributeNames: [
-                            'ApproximateReceiveCount',
-                        ],
-                    }),
-                    this.abortController.signal,
-                )
-
-                for (const message of result.Messages ?? []) {
-                    await this.process(message)
-                }
-            } catch (error) {
-                if (this.abortController.signal.aborted) return
-
-                const message =
-                    error instanceof Error ? error.message : String(error)
-                const stack = error instanceof Error ? error.stack : undefined
-
-                this.logger.error(
-                    `SQS 메시지 수신에 실패했습니다: ${message}`,
-                    stack,
-                )
-                await this.delay(1_000)
-            }
-        }
-    }
-
-    private async process(message: Message): Promise<void> {
-        try {
-            const input = this.parseMessage(message.Body)
-
-            await this.linkAnalysisService.analyze(input)
-            await this.deleteMessage(message.ReceiptHandle)
-
-            this.logger.log(
-                `링크 분석 메시지를 처리했습니다. messageId=${message.MessageId ?? 'unknown'}, linkId=${input.linkId}`,
-            )
-        } catch (error) {
-            const errorMessage =
-                error instanceof Error ? error.message : String(error)
-            const errorStack = error instanceof Error ? error.stack : undefined
-            const receiveCount =
-                message.Attributes?.ApproximateReceiveCount ?? 'unknown'
-
-            this.logger.error(
-                `링크 분석 메시지 처리에 실패했습니다. messageId=${message.MessageId ?? 'unknown'}, receiveCount=${receiveCount}: ${errorMessage}`,
-                errorStack,
-            )
-        }
-    }
-
-    private parseMessage(body: string | undefined): LinkAnalysisInput {
-        if (!body) {
-            throw new Error('SQS 메시지 본문이 비어 있습니다.')
-        }
-
-        const parsed: unknown = JSON.parse(body)
-        const message = linkAnalysisMessageSchema.parse(parsed)
-
-        return {
-            linkId: message.linkId,
-            userId: message.userId,
-            url: message.url,
-        }
-    }
-
-    private async deleteMessage(receiptHandle: string | undefined) {
-        if (!receiptHandle) {
-            throw new Error('SQS 메시지 ReceiptHandle이 없습니다.')
-        }
-
-        await this.sqsService.delete(
-            new DeleteMessageCommand({
-                QueueUrl: this.queueUrl,
-                ReceiptHandle: receiptHandle,
+                DelaySeconds: this.resolveDelaySeconds(message.attempt),
             }),
         )
     }
 
-    private delay(milliseconds: number): Promise<void> {
-        return new Promise((resolve) => setTimeout(resolve, milliseconds))
+    private resolveDelaySeconds(attempt: number): number {
+        const delay = BASE_DELAY_SECONDS * 2 ** Math.max(0, attempt - 2)
+
+        return Math.min(delay, MAX_DELAY_SECONDS)
     }
 }
