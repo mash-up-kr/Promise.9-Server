@@ -48,6 +48,7 @@ export class LinkService {
             // 링크 정보와 AI 요약은 저장 이후 비동기로 생성하므로 대기 상태로 둔다.
             aiSummaryStatus: 'PENDING',
             memo: input.memo ?? null,
+            reminderAt: input.reminderAt ? new Date(input.reminderAt) : null,
         })
 
         // 임베딩은 외부 호출이라 저장 응답을 막지 않도록 best-effort로 처리한다.
@@ -65,6 +66,7 @@ export class LinkService {
             linkId: row.id,
             url: row.originalUrl,
             savedAt: row.createdAt,
+            reminderAt: row.reminderAt,
         }
     }
 
@@ -91,6 +93,7 @@ export class LinkService {
             aiSummary: link.aiSummary,
             tags: linkTags,
             memo: link.memo,
+            reminderAt: link.reminderAt,
             relatedLinks: [],
         }
     }
@@ -114,6 +117,12 @@ export class LinkService {
             patch.memo = input.memo
         }
 
+        if (input.reminderAt !== undefined) {
+            patch.reminderAt = input.reminderAt
+                ? new Date(input.reminderAt)
+                : null
+        }
+
         if (input.isFavorite !== undefined) {
             patch.isFavorite = input.isFavorite
         }
@@ -129,6 +138,7 @@ export class LinkService {
             linkId: row.id,
             folderId: row.folderId,
             memo: row.memo,
+            reminderAt: row.reminderAt,
             isFavorite: row.isFavorite,
             updatedAt: row.updatedAt,
         }
