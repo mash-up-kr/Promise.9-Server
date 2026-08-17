@@ -1,3 +1,5 @@
+import { setTimeout as sleep } from 'node:timers/promises'
+
 import {
     Injectable,
     Logger,
@@ -25,6 +27,11 @@ import {
     LINK_ANALYSIS_TASKS,
     LinkAnalysisRetryMessage,
 } from './link-analysis.type'
+
+// 큐 URL 오류나 IAM 권한 누락처럼 계속 실패하는 상황에서 초당 한 번씩 로그를 쌓지 않도록
+// 연속 실패에 백오프를 준다. 수신이 한 번 성공하면 다시 최소 간격으로 돌아간다.
+const RECEIVE_RETRY_MIN_DELAY_MS = 1_000
+const RECEIVE_RETRY_MAX_DELAY_MS = 30_000
 
 const linkAnalysisMessageSchema = z.object({
     version: z.literal(LINK_ANALYSIS_MESSAGE_VERSION),
@@ -93,6 +100,8 @@ export class LinkAnalysisQueueConsumer
     }
 
     private async poll(): Promise<void> {
+        let consecutiveFailures = 0
+
         while (!this.abortController.signal.aborted) {
             try {
                 const result = await this.sqsService.receive(
@@ -108,19 +117,30 @@ export class LinkAnalysisQueueConsumer
                     this.abortController.signal,
                 )
 
+                consecutiveFailures = 0
+
                 for (const message of result.Messages ?? []) {
                     await this.process(message)
                 }
             } catch (error) {
                 if (this.abortController.signal.aborted) return
 
+                consecutiveFailures += 1
+
                 this.logger.error(
-                    `SQS 메시지 수신에 실패했습니다: ${describeError(error)}`,
+                    `SQS 메시지 수신에 실패했습니다. 연속 실패=${consecutiveFailures}: ${describeError(error)}`,
                     describeErrorStack(error),
                 )
-                await this.delay(1_000)
+                await this.delay(this.resolveRetryDelay(consecutiveFailures))
             }
         }
+    }
+
+    private resolveRetryDelay(consecutiveFailures: number): number {
+        const delay =
+            RECEIVE_RETRY_MIN_DELAY_MS * 2 ** (consecutiveFailures - 1)
+
+        return Math.min(delay, RECEIVE_RETRY_MAX_DELAY_MS)
     }
 
     // 처리에 성공한 메시지만 삭제한다. 실패한 메시지는 visibility timeout 이후 다시
@@ -166,7 +186,14 @@ export class LinkAnalysisQueueConsumer
         )
     }
 
-    private delay(milliseconds: number): Promise<void> {
-        return new Promise((resolve) => setTimeout(resolve, milliseconds))
+    // 종료 신호가 오면 대기 중이라도 즉시 깨어나야 프로세스 종료가 밀리지 않는다.
+    private async delay(milliseconds: number): Promise<void> {
+        try {
+            await sleep(milliseconds, undefined, {
+                signal: this.abortController.signal,
+            })
+        } catch {
+            // abort로 끊긴 대기는 정상 종료 경로다.
+        }
     }
 }

@@ -116,6 +116,15 @@ describe('LinkAnalysisQueueConsumer', () => {
         expect(dispatcher.handleRetry).not.toHaveBeenCalled()
         expect(sqsService.delete).not.toHaveBeenCalled()
     })
+
+    // 큐 URL·IAM 오류로 수신이 계속 실패할 때 로그가 초당 한 번씩 쌓이지 않게 한다.
+    it('연속 수신 실패에 백오프를 적용하고 상한을 넘기지 않는다', () => {
+        const delays = [1, 2, 3, 6, 20].map((failures) =>
+            resolveRetryDelay(consumer, failures),
+        )
+
+        expect(delays).toEqual([1_000, 2_000, 4_000, 30_000, 30_000])
+    })
 })
 
 function processMessage(
@@ -127,4 +136,15 @@ function processMessage(
             process(message: Message): Promise<void>
         }
     ).process(message)
+}
+
+function resolveRetryDelay(
+    consumer: LinkAnalysisQueueConsumer,
+    consecutiveFailures: number,
+): number {
+    return (
+        consumer as unknown as {
+            resolveRetryDelay(consecutiveFailures: number): number
+        }
+    ).resolveRetryDelay(consecutiveFailures)
 }
