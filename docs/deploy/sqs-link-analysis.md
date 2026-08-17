@@ -113,17 +113,41 @@ where ai_summary_status = 'PENDING'
 
 <br>
 
-## 권장 큐 설정
+## 큐 리소스
+
+큐는 `infra/lib/queue-stack.ts`(CDK)가 정의한다. 콘솔에서 직접 만들지 않는다.
+
+| 환경 | 큐 | DLQ |
+| --- | --- | --- |
+| production | `promise9-link-analysis` | `promise9-link-analysis-dlq` |
+| stage | `promise9-link-analysis-stage` | `promise9-link-analysis-stage-dlq` |
+
+**환경별로 큐를 분리한다.** stage와 production은 서로 다른 DB를 쓰기 때문에, 큐를
+공유하면 stage consumer가 production 재시도 메시지를 가져가 링크를 찾지 못하고 건너뛰어
+production 쪽 재시도가 조용히 사라진다.
+
+적용되는 설정은 아래와 같다.
 
 - Queue type: Standard
-- Receive message wait time: 20초
-- Visibility timeout: 300초 이상(작업 최대 실행 시간보다 길어야 함)
-- Retention period: 4일
-- DLQ: 별도 Standard queue 연결
+- Receive message wait time: 20초 — long polling
+- Visibility timeout: 300초 — 앱의 `SQS_VISIBILITY_TIMEOUT_SECONDS` 기본값과 동일
+- Retention period: 4일(DLQ는 14일)
 - Redrive `maxReceiveCount`: 3
+- 저장 암호화: SQS 관리형 키(`SqsManagedSseEnabled`) — 메시지에 사용자 링크 URL이 담긴다
+- 전송: HTTPS 강제(`aws:SecureTransport`)
 
 재시도 횟수는 코드가 제어하므로 `maxReceiveCount`는 파싱 실패와 발행 실패를 걸러내는
 안전망 역할만 한다.
+
+배포는 `infra`에서 실행한다.
+
+```bash
+bun run diff Promise9QueueStack    # 변경 사항 확인
+bun run deploy Promise9QueueStack  # 큐·DLQ·IAM 사용자 생성
+```
+
+스택 출력값 `ProductionQueueUrl`, `StageQueueUrl`이 각 환경의
+`SQS_LINK_ANALYSIS_QUEUE_URL`에 넣을 값이다.
 
 Standard queue는 같은 메시지를 두 번 이상 전달할 수 있다. 요약·수집 결과는 동일 `linkId`를
 갱신하고 AI 태그는 transaction에서 교체하므로 중복 처리해도 최종 데이터가 중복되지 않는다.
@@ -132,15 +156,33 @@ Standard queue는 같은 메시지를 두 번 이상 전달할 수 있다. 요�
 
 ## IAM 권한
 
-애플리케이션이 사용하는 IAM principal에 대상 queue ARN으로 아래 권한을 부여한다.
+큐 스택이 IAM 사용자 `Promise9AppRuntime`을 만들고, 두 큐의 ARN에만 아래 권한을 준다.
 
 - `sqs:SendMessage`
 - `sqs:ReceiveMessage`
 - `sqs:DeleteMessage`
 
-AWS SDK 기본 credential provider chain을 사용하므로 액세스 키를 코드나 저장소에 넣지 않는다.
-실행 환경의 IAM role을 우선 사용하고, 불가능한 환경에서만 안전하게 주입된
-`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`를 사용한다.
+**Lightsail 인스턴스는 EC2처럼 IAM role을 붙일 수 없다.** 그래서 런타임이 액세스 키로
+인증해야 하고, 앱은 AWS SDK 기본 credential provider chain을 통해 이 키를 읽는다.
+
+액세스 키는 CloudFormation 템플릿과 스택 출력에 남지 않도록 **CDK에서 만들지 않는다.**
+스택 배포 후 콘솔에서 `Promise9AppRuntime`의 키를 발급해 GitHub Secrets에 넣는다.
+키는 코드나 저장소에 넣지 않는다.
+
+<br>
+
+## GitHub Secrets
+
+배포 워크플로가 아래 secret을 `.env`로 내려보낸다. 값이 없는 항목은 아예 쓰지 않으므로,
+secret을 설정하기 전에 배포해도 앱은 정상 부팅된다(재시도만 동작하지 않는다).
+
+| Secret | 사용하는 워크플로 | 값 |
+| --- | --- | --- |
+| `AWS_REGION` | production, stage | `ap-northeast-2` |
+| `SQS_LINK_ANALYSIS_QUEUE_URL` | production | 스택 출력 `ProductionQueueUrl` |
+| `SQS_LINK_ANALYSIS_QUEUE_URL_STAGE` | stage | 스택 출력 `StageQueueUrl` |
+| `AWS_ACCESS_KEY_ID` | production, stage | `Promise9AppRuntime` 액세스 키 |
+| `AWS_SECRET_ACCESS_KEY` | production, stage | 같은 키의 시크릿 |
 
 <br>
 
@@ -154,8 +196,8 @@ API와 consumer를 함께 실행하는 것이 기본값이다. 발행만 담당�
 `SQS_LINK_ANALYSIS_QUEUE_URL`이 없으면 인라인 실행은 정상 동작하지만 재시도 발행이 실패한다.
 즉 큐 없이도 링크 저장과 분석은 되고, 일시적 실패에 대한 재시도만 사라진다.
 
-배포 전에 visibility timeout과 코드의 `SQS_VISIBILITY_TIMEOUT_SECONDS`를 동일하게 맞추고,
-DLQ redrive policy가 실제 source queue에 연결되어 있는지 확인한다.
+visibility timeout과 DLQ 연결은 큐 스택이 코드의 기본값과 맞춰 정의하므로 따로 확인할
+필요는 없다. 큐 설정을 바꿀 때는 콘솔이 아니라 `infra/lib/queue-stack.ts`를 고친다.
 
 <br>
 
@@ -172,3 +214,6 @@ DLQ redrive policy가 실제 source queue에 연결되어 있는지 확인한다
 | `src/modules/link/analysis/link-analysis.consumer.ts` | 큐 polling과 재시도 처리 |
 | `src/infrastructure/sqs/sqs.service.ts` | `SQSClient` 래퍼 |
 | `src/config/environment.ts` | `SQS_*` 환경변수 검증 |
+| `infra/lib/queue-stack.ts` | 큐·DLQ·런타임 IAM 사용자 정의(CDK) |
+| `.github/workflows/deploy-lightsail.yml` | production 배포에 큐 환경변수 주입 |
+| `.github/workflows/deploy-stage.yml` | stage 배포에 큐 환경변수 주입 |

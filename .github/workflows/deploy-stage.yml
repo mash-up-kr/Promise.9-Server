@@ -162,6 +162,10 @@ jobs:
                   MASTER_ACCESS_TOKEN: ${{ secrets.MASTER_ACCESS_TOKEN }}
                   MASTER_USER_ID: ${{ secrets.MASTER_USER_ID }}
                   DB_POOL_SIZE: ${{ secrets.DB_POOL_SIZE }}
+                  AWS_REGION: ${{ secrets.AWS_REGION }}
+                  SQS_LINK_ANALYSIS_QUEUE_URL_STAGE: ${{ secrets.SQS_LINK_ANALYSIS_QUEUE_URL_STAGE }}
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
               run: |
                   : "${DATABASE_URL_DEVELOPMENT:?DATABASE_URL_DEVELOPMENT is required}"
                   : "${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}"
@@ -189,6 +193,19 @@ jobs:
                     fi
                     if [ -n "$DB_POOL_SIZE" ]; then
                       printf 'DB_POOL_SIZE=%s\n' "$DB_POOL_SIZE"
+                    fi
+
+                    # stage는 production과 DB가 달라 큐도 분리한다. 빈 값을 쓰면 URL
+                    # 검증에 실패해 부팅이 막히므로 설정된 항목만 내려보낸다.
+                    if [ -n "$AWS_REGION" ]; then
+                      printf 'AWS_REGION=%s\n' "$AWS_REGION"
+                    fi
+                    if [ -n "$SQS_LINK_ANALYSIS_QUEUE_URL_STAGE" ]; then
+                      printf 'SQS_LINK_ANALYSIS_QUEUE_URL=%s\n' "$SQS_LINK_ANALYSIS_QUEUE_URL_STAGE"
+                    fi
+                    if [ -n "$AWS_ACCESS_KEY_ID" ]; then
+                      printf 'AWS_ACCESS_KEY_ID=%s\n' "$AWS_ACCESS_KEY_ID"
+                      printf 'AWS_SECRET_ACCESS_KEY=%s\n' "$AWS_SECRET_ACCESS_KEY"
                     fi
                   } > .env.stage
 
