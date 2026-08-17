@@ -1,13 +1,24 @@
 import { Injectable, Logger } from '@nestjs/common'
 
+import {
+    describeError,
+    describeErrorStack,
+} from '../../../common/exception/error.util'
 import { AiService } from '../../ai/ai.service'
 import { AiLinkAnalysisInput } from '../../ai/ai.type'
 import { LinkContentService } from '../content/link-content.service'
 import { CollectedLinkContent } from '../content/link-content.type'
 import { LinkRepository, LinkUpdatePatch } from '../link.repository'
 import { LinkMetadata } from '../link.schema'
+import { EmbeddingService } from '../search/embedding.service'
 
-import { LinkAnalysisInput } from './link-analysis.type'
+import { classifyFailure } from './link-analysis.failure'
+import {
+    LINK_ANALYSIS_CONTENT_DEPENDENT_TASKS,
+    LinkAnalysisInput,
+    LinkAnalysisTask,
+    LinkAnalysisTaskResult,
+} from './link-analysis.type'
 
 @Injectable()
 export class LinkAnalysisService {
@@ -17,65 +28,150 @@ export class LinkAnalysisService {
         private readonly linkRepository: LinkRepository,
         private readonly linkContentService: LinkContentService,
         private readonly aiService: AiService,
+        private readonly embeddingService: EmbeddingService,
     ) {}
 
-    // 링크 정보를 먼저 수집한 뒤 요약과 태그 생성 작업을 서로 독립적으로 실행한다.
-    async analyze(input: LinkAnalysisInput): Promise<void> {
-        const information = await this.linkContentService.collect(input.url)
+    // 요청받은 작업만 실행하고 작업별 결과를 돌려준다. 예외는 호출부로 던지지 않으므로
+    // 인라인 실행과 SQS 재시도가 같은 결과 목록을 보고 재발행 여부를 판단할 수 있다.
+    // CONTENT -> (SUMMARY, TAGS) -> EMBEDDING 순서로 실행해 뒤 작업이 앞 결과를 반영한다.
+    async run(
+        input: LinkAnalysisInput,
+        tasks: readonly LinkAnalysisTask[],
+    ): Promise<LinkAnalysisTaskResult[]> {
+        const requested = new Set(tasks)
+        const results: LinkAnalysisTaskResult[] = []
 
-        try {
-            await this.updateCollectedInformation(input, information)
-        } catch (error) {
-            const errorMessage =
-                error instanceof Error ? error.message : String(error)
-            const errorStack = error instanceof Error ? error.stack : undefined
+        const content = await this.collectIfNeeded(input, requested)
 
-            this.logger.error(
-                `수집한 링크 정보 저장에 실패했습니다. linkId=${input.linkId}: ${errorMessage}`,
-                errorStack,
+        if (requested.has('CONTENT')) {
+            results.push(
+                await this.runTask(input, 'CONTENT', () =>
+                    this.saveCollectedContent(input, content),
+                ),
             )
         }
 
-        const aiInput: AiLinkAnalysisInput = {
-            userLinkId: input.linkId,
-            url: input.url,
-            title: information?.title ?? null,
-            description: information?.description ?? null,
-            content: information?.content ?? null,
+        const aiInput = this.buildAiInput(input, content)
+
+        const aiResults = await Promise.all([
+            requested.has('SUMMARY')
+                ? this.runTask(input, 'SUMMARY', () =>
+                      this.generateAndSaveSummary(input, aiInput),
+                  )
+                : undefined,
+            requested.has('TAGS')
+                ? this.runTask(input, 'TAGS', () =>
+                      this.generateAndSaveTags(aiInput, input),
+                  )
+                : undefined,
+        ])
+
+        results.push(...aiResults.filter((result) => result !== undefined))
+
+        // 임베딩은 제목·요약이 저장된 뒤 최신 행으로 실행해야 검색 품질이 올라간다.
+        if (requested.has('EMBEDDING')) {
+            results.push(
+                await this.runTask(input, 'EMBEDDING', () =>
+                    this.embedLatestRow(input),
+                ),
+            )
         }
 
-        await Promise.all([
-            this.generateAndSaveSummary(input, aiInput),
-            this.generateAndSaveTags(input, aiInput),
-        ])
+        return results
+    }
+
+    // 수집 결과는 CONTENT 저장과 AI 입력이 함께 쓰므로 한 실행에서 한 번만 크롤링한다.
+    // EMBEDDING만 재시도할 때처럼 아무도 본문을 쓰지 않으면 크롤링을 건너뛴다.
+    private async collectIfNeeded(
+        input: LinkAnalysisInput,
+        requested: Set<LinkAnalysisTask>,
+    ): Promise<CollectedLinkContent | null> {
+        const needsContent =
+            requested.has('CONTENT') ||
+            LINK_ANALYSIS_CONTENT_DEPENDENT_TASKS.some((task) =>
+                requested.has(task),
+            )
+
+        if (!needsContent) return null
+
+        return this.linkContentService.collect(input.url)
+    }
+
+    // 작업 하나를 실행하고 예외를 결과 객체로 변환한다.
+    private async runTask(
+        input: LinkAnalysisInput,
+        task: LinkAnalysisTask,
+        execute: () => Promise<LinkAnalysisTaskResult | void>,
+    ): Promise<LinkAnalysisTaskResult> {
+        try {
+            return (await execute()) ?? { task, status: 'SUCCESS' }
+        } catch (error) {
+            this.logger.error(
+                `링크 분석 작업이 실패했습니다. task=${task}, linkId=${input.linkId}: ${describeError(error)}`,
+                describeErrorStack(error),
+            )
+
+            return {
+                task,
+                status: 'FAILED',
+                kind: classifyFailure(error),
+                error,
+            }
+        }
+    }
+
+    private buildAiInput(
+        input: LinkAnalysisInput,
+        content: CollectedLinkContent | null,
+    ): AiLinkAnalysisInput {
+        return {
+            userLinkId: input.linkId,
+            url: input.url,
+            title: content?.title ?? null,
+            description: content?.description ?? null,
+            content: content?.content ?? null,
+        }
     }
 
     // 화면과 검색에 사용하는 제목·설명만 저장하고, 크롤링 본문은 DB에 보관하지 않는다.
-    private async updateCollectedInformation(
+    // collect가 실패를 null로 감추므로 수집 결과가 없으면 실패가 아닌 SKIPPED로 본다.
+    private async saveCollectedContent(
         input: LinkAnalysisInput,
-        information: CollectedLinkContent | null,
-    ): Promise<void> {
-        if (!information?.title && !information?.description) return
+        content: CollectedLinkContent | null,
+    ): Promise<LinkAnalysisTaskResult | void> {
+        if (!content?.title && !content?.description) {
+            return {
+                task: 'CONTENT',
+                status: 'SKIPPED',
+                reason: '수집한 제목·설명이 없습니다.',
+            }
+        }
 
         const row = await this.linkRepository.findAnalysisMetadata(
             input.userId,
             input.linkId,
         )
 
-        if (!row) return
+        if (!row) {
+            return {
+                task: 'CONTENT',
+                status: 'SKIPPED',
+                reason: '링크를 찾을 수 없습니다.',
+            }
+        }
 
         const patch: LinkUpdatePatch = {
             updatedAt: new Date(),
         }
 
-        if (information.title) {
-            patch.title = information.title
+        if (content.title) {
+            patch.title = content.title
         }
 
-        if (information.description) {
+        if (content.description) {
             patch.metadata = this.mergeDescription(
                 row.metadata,
-                information.description,
+                content.description,
             )
         }
 
@@ -86,7 +182,7 @@ export class LinkAnalysisService {
         )
     }
 
-    // 요약 성공 시 결과와 SUCCESS를 저장하고, 실패 시 요약 상태만 FAILED로 변경한다.
+    // 요약 실패는 상태를 FAILED로 남긴 뒤 예외를 다시 던져 재시도 판단을 runTask에 맡긴다.
     private async generateAndSaveSummary(
         input: LinkAnalysisInput,
         aiInput: AiLinkAnalysisInput,
@@ -100,56 +196,47 @@ export class LinkAnalysisService {
                 updatedAt: new Date(),
             })
         } catch (error) {
-            const errorMessage =
-                error instanceof Error ? error.message : String(error)
-            const errorStack = error instanceof Error ? error.stack : undefined
+            await this.markSummaryFailedSafe(input)
 
-            this.logger.error(
-                `AI 요약 생성에 실패했습니다. linkId=${input.linkId}: ${errorMessage}`,
-                errorStack,
-            )
-
-            try {
-                await this.markSummaryFailed(input)
-            } catch (statusUpdateError) {
-                const statusUpdateErrorMessage =
-                    statusUpdateError instanceof Error
-                        ? statusUpdateError.message
-                        : String(statusUpdateError)
-                const statusUpdateErrorStack =
-                    statusUpdateError instanceof Error
-                        ? statusUpdateError.stack
-                        : undefined
-
-                this.logger.error(
-                    `AI 요약 실패 상태 저장에 실패했습니다. linkId=${input.linkId}: ${statusUpdateErrorMessage}`,
-                    statusUpdateErrorStack,
-                )
-            }
+            throw error
         }
     }
 
-    // 태그 생성이 성공하고 결과가 있을 때만 기존 AI 태그를 새 결과로 교체한다.
     private async generateAndSaveTags(
-        input: LinkAnalysisInput,
         aiInput: AiLinkAnalysisInput,
-    ): Promise<void> {
-        try {
-            const result = await this.aiService.generateTags(aiInput)
+        input: LinkAnalysisInput,
+    ): Promise<LinkAnalysisTaskResult | void> {
+        const result = await this.aiService.generateTags(aiInput)
 
-            if (result.tags.length === 0) return
-
-            await this.replaceAiTags(input, result.tags)
-        } catch (error) {
-            const errorMessage =
-                error instanceof Error ? error.message : String(error)
-            const errorStack = error instanceof Error ? error.stack : undefined
-
-            this.logger.error(
-                `AI 태그 생성에 실패했습니다. linkId=${input.linkId}: ${errorMessage}`,
-                errorStack,
-            )
+        if (result.tags.length === 0) {
+            return {
+                task: 'TAGS',
+                status: 'SKIPPED',
+                reason: '생성된 태그가 없습니다.',
+            }
         }
+
+        await this.replaceAiTags(input, result.tags)
+    }
+
+    // 제목·요약이 반영된 최신 행을 다시 읽어 임베딩한다. 삭제된 링크는 건너뛴다.
+    private async embedLatestRow(
+        input: LinkAnalysisInput,
+    ): Promise<LinkAnalysisTaskResult | void> {
+        const row = await this.linkRepository.findOwned(
+            input.userId,
+            input.linkId,
+        )
+
+        if (!row) {
+            return {
+                task: 'EMBEDDING',
+                status: 'SKIPPED',
+                reason: '링크를 찾을 수 없습니다.',
+            }
+        }
+
+        await this.embeddingService.embedLink(row)
     }
 
     // 사용자·규칙 태그는 보존하고 AI 태그만 transaction 안에서 멱등하게 교체한다.
@@ -168,12 +255,21 @@ export class LinkAnalysisService {
         )
     }
 
-    // 요약 생성 또는 결과 저장이 실패한 링크의 요약 상태를 FAILED로 변경한다.
-    private async markSummaryFailed(input: LinkAnalysisInput): Promise<void> {
-        await this.linkRepository.updateActive(input.userId, input.linkId, {
-            aiSummaryStatus: 'FAILED',
-            updatedAt: new Date(),
-        })
+    // 상태 저장 실패가 원래 실패를 덮지 않도록 로그만 남긴다.
+    private async markSummaryFailedSafe(
+        input: LinkAnalysisInput,
+    ): Promise<void> {
+        try {
+            await this.linkRepository.updateActive(input.userId, input.linkId, {
+                aiSummaryStatus: 'FAILED',
+                updatedAt: new Date(),
+            })
+        } catch (error) {
+            this.logger.error(
+                `AI 요약 실패 상태 저장에 실패했습니다. linkId=${input.linkId}: ${describeError(error)}`,
+                describeErrorStack(error),
+            )
+        }
     }
 
     // 기존 metadata 확장 필드를 보존하면서 수집한 description만 갱신한다.

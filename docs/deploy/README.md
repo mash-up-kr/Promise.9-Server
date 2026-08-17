@@ -8,3 +8,4 @@ Promise.9 서버 배포 문서입니다.
 | ---------------------------------------------------- | --------------------------------------------------- |
 | [Lightsail Docker Deployment](./lightsail-docker.md) | AWS Lightsail, Docker Hub, GitHub Actions 기반 배포 |
 | [PR Stage Deployment](./stage-pr-deployment.md)      | PR 본문·코멘트 기반 공유 Stage 배포                 |
+| [링크 분석 SQS 설정](./sqs-link-analysis.md)         | 링크 분석 비동기 처리 큐 설정, IAM, 동작 흐름       |

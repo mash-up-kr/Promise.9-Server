@@ -76,6 +76,10 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           MASTER_ACCESS_TOKEN: ${{ secrets.MASTER_ACCESS_TOKEN }}
           MASTER_USER_ID: ${{ secrets.MASTER_USER_ID }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          SQS_LINK_ANALYSIS_QUEUE_URL: ${{ secrets.SQS_LINK_ANALYSIS_QUEUE_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           {
             printf 'APP_ENV=production\n'
@@ -85,6 +89,18 @@ jobs:
             printf 'GOOGLE_CLIENT_ID=%s\n' "$GOOGLE_CLIENT_ID"
             printf 'MASTER_ACCESS_TOKEN=%s\n' "$MASTER_ACCESS_TOKEN"
             printf 'MASTER_USER_ID=%s\n' "$MASTER_USER_ID"
+
+            # 빈 값을 쓰면 URL 검증에 실패해 부팅이 막히므로 설정된 항목만 내려보낸다.
+            if [ -n "$AWS_REGION" ]; then
+              printf 'AWS_REGION=%s\n' "$AWS_REGION"
+            fi
+            if [ -n "$SQS_LINK_ANALYSIS_QUEUE_URL" ]; then
+              printf 'SQS_LINK_ANALYSIS_QUEUE_URL=%s\n' "$SQS_LINK_ANALYSIS_QUEUE_URL"
+            fi
+            if [ -n "$AWS_ACCESS_KEY_ID" ]; then
+              printf 'AWS_ACCESS_KEY_ID=%s\n' "$AWS_ACCESS_KEY_ID"
+              printf 'AWS_SECRET_ACCESS_KEY=%s\n' "$AWS_SECRET_ACCESS_KEY"
+            fi
           } > .env.production
 
       - name: Ensure deploy directory

@@ -1,18 +1,16 @@
-import { Injectable, Logger, NotImplementedException } from '@nestjs/common'
+import { Injectable, NotImplementedException } from '@nestjs/common'
 
 import { BaseException } from '../../common/exception/base.exception'
 import { buildCursorPage } from '../../common/pagination/cursor'
 import { FOLDER_ERROR } from '../folder/folder-error.constant'
 
-import { LinkAnalysisService } from './analysis/link-analysis.service'
-import { LinkAnalysisInput } from './analysis/link-analysis.type'
+import { LinkAnalysisDispatcher } from './analysis/link-analysis.dispatcher'
 import {
     CreateLinkInput,
     ListLinksQueryInput,
     UpdateLinkInput,
 } from './dto/link.dto'
 import { CreateLinkTagInput } from './dto/tag.dto'
-import { EmbeddingService } from './search/embedding.service'
 import { SearchService } from './search/search.service'
 import { toSearchCursorPayload } from './search/search.util'
 import { LinkRepository, LinkUpdatePatch } from './link.repository'
@@ -22,13 +20,10 @@ import { LINK_ERROR } from './link-error.constant'
 
 @Injectable()
 export class LinkService {
-    private readonly logger = new Logger(LinkService.name)
-
     constructor(
         private readonly linkRepository: LinkRepository,
-        private readonly embeddingService: EmbeddingService,
         private readonly searchService: SearchService,
-        private readonly linkAnalysisService: LinkAnalysisService,
+        private readonly linkAnalysisDispatcher: LinkAnalysisDispatcher,
     ) {}
 
     async create(userId: number, input: CreateLinkInput) {
@@ -50,12 +45,9 @@ export class LinkService {
             memo: input.memo ?? null,
         })
 
-        // 임베딩은 외부 호출이라 저장 응답을 막지 않도록 best-effort로 처리한다.
-        // 저장 시점엔 title·aiSummary·metadata가 아직 비어 domain(+memo) 위주로만 임베딩된다.
-        // TODO: 메타데이터/요약 수집 파이프라인 완료 시 embedLinkSafe(row)를 다시 호출해 재임베딩한다.
-        void this.embeddingService.embedLinkSafe(row)
-
-        this.startLinkAnalysis({
+        // 정보 수집·AI 요약·태그·임베딩은 저장 응답을 막지 않도록 dispatcher에 넘긴다.
+        // 임베딩은 제목·요약이 저장된 뒤 실행되므로 여기서 따로 호출하지 않는다.
+        this.linkAnalysisDispatcher.dispatch({
             linkId: row.id,
             userId,
             url: row.originalUrl,
@@ -120,9 +112,13 @@ export class LinkService {
 
         const row = await this.linkRepository.update(userId, linkId, patch)
 
-        // 메모가 바뀌면 임베딩 대상 텍스트가 달라지므로 best-effort로 재생성한다.
+        // 메모가 바뀌면 임베딩 대상 텍스트가 달라지므로 임베딩만 다시 실행한다.
+        // create와 같은 dispatcher를 거치므로 실패 시 재시도도 동일하게 적용된다.
         if (input.memo !== undefined) {
-            void this.embeddingService.embedLinkSafe(row)
+            this.linkAnalysisDispatcher.dispatch(
+                { linkId: row.id, userId, url: row.originalUrl },
+                ['EMBEDDING'],
+            )
         }
 
         return {
@@ -317,20 +313,6 @@ export class LinkService {
                 .filter((row) => row.folderId !== null)
                 .map((row) => [row.folderId as number, row.linkCount]),
         )
-    }
-
-    // 링크 저장 응답과 분석 작업을 분리하고, 현재 프로세스의 예상 밖 실패를 안전하게 기록한다.
-    private startLinkAnalysis(input: LinkAnalysisInput): void {
-        this.linkAnalysisService.analyze(input).catch((error: unknown) => {
-            const errorMessage =
-                error instanceof Error ? error.message : String(error)
-            const errorStack = error instanceof Error ? error.stack : undefined
-
-            this.logger.error(
-                `링크 분석 작업이 중단되었습니다. linkId=${input.linkId}: ${errorMessage}`,
-                errorStack,
-            )
-        })
     }
 
     // 링크에 연결된 폴더 참조를 조회한다. 폴더가 없으면 null.
