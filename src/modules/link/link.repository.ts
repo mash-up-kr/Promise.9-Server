@@ -26,7 +26,7 @@ import { FolderRow, folders } from '../folder/folder.schema'
 
 import { ListLinksQueryInput } from './dto/link.dto'
 import { LINK_SEARCH_CANDIDATE_LIMIT } from './link.constants'
-import { LinkRow, links } from './link.schema'
+import { LinkMetadata, LinkRow, links } from './link.schema'
 import { LINK_ERROR } from './link-error.constant'
 import { TagRow, tags } from './tag.schema'
 
@@ -361,9 +361,19 @@ export class LinkRepository {
                     sql`${links.aiSummary} is not distinct from ${source.aiSummary}`,
                     sql`${links.memo} is not distinct from ${source.memo}`,
                     sql`${links.domain} is not distinct from ${source.domain}`,
-                    sql`${links.metadata} is not distinct from ${source.metadata}`,
+                    this.sameMetadataCondition(source.metadata),
                 ),
             )
+    }
+
+    // jsonb는 객체를 그대로 파라미터로 넘기면 직렬화에 실패하므로 문자열로 바인딩한다.
+    // null은 'null'::jsonb(JSON null)과 다르므로 is null로 따로 비교한다.
+    private sameMetadataCondition(metadata: LinkMetadata | null): SQL {
+        if (metadata === null) {
+            return sql`${links.metadata} is null`
+        }
+
+        return sql`${links.metadata} = ${JSON.stringify(metadata)}::jsonb`
     }
 
     // 사용자 범위와 목록 필터의 공통 조건을 만든다.
