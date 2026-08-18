@@ -18,6 +18,7 @@ erDiagram
     bigint user_id FK
     varchar name
     integer sort_order
+    integer view_count
     timestamptz created_at
     timestamptz updated_at
     timestamptz deleted_at
@@ -31,15 +32,16 @@ erDiagram
 
 ## 필드
 
-| 필드       | 타입        | 필수 | 설명                                |
-| ---------- | ----------- | ---- | ----------------------------------- |
-| id         | bigint      | Y    | 폴더 식별자                         |
-| user_id    | bigint      | Y    | 폴더를 생성한 회원 ID               |
-| name       | varchar     | Y    | 폴더명. 최대 255자 (`varchar(255)`) |
-| sort_order | integer     | N    | 사용자별 폴더 노출 순서             |
-| created_at | timestamptz | Y    | 폴더 생성 일시                      |
-| updated_at | timestamptz | Y    | 폴더 수정 일시                      |
-| deleted_at | timestamptz | N    | 폴더 삭제 일시                      |
+| 필드       | 타입        | 필수 | 설명                                                 |
+| ---------- | ----------- | ---- | ---------------------------------------------------- |
+| id         | bigint      | Y    | 폴더 식별자                                          |
+| user_id    | bigint      | Y    | 폴더를 생성한 회원 ID                                |
+| name       | varchar     | Y    | 폴더명. 최대 255자 (`varchar(255)`)                  |
+| sort_order | integer     | N    | 사용자별 폴더 노출 순서                              |
+| view_count | integer     | Y    | 폴더 내 링크를 5초 이상 조회한 누적 횟수. 기본값 `0` |
+| created_at | timestamptz | Y    | 폴더 생성 일시                                       |
+| updated_at | timestamptz | Y    | 폴더 수정 일시                                       |
+| deleted_at | timestamptz | N    | 폴더 삭제 일시                                       |
 
 ## 제약
 
@@ -47,6 +49,8 @@ erDiagram
 - 활성 폴더(`deleted_at IS NULL`)는 `user_id + name`이 유니크하다. 삭제된 폴더가 이름을 점유하지 않도록 partial unique index로 DB에서 보장하며, 동시 생성/rename 경쟁도 DB 레벨에서 차단한다.
 - 폴더 삭제 시 포함된 링크는 최근 삭제 상태로 변경한다.
 - 폴더 삭제 후 링크 복원 시 미분류로 이동하므로 `user_links.folder_id`는 `NULL`로 정리한다.
+- 활성 상태인 소유 링크를 5초 이상 조회하면 해당 링크의 현재 폴더 `view_count`를 원자적으로 1 증가시킨다.
+- 미분류 링크는 증가시킬 폴더가 없으므로 폴더 조회수에 반영하지 않는다.
 
 ## 인덱스 설계
 

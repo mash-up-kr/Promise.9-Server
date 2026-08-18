@@ -60,7 +60,7 @@ export const links = pgTable(
         memo: text(),
         reminderAt: timestamp({ withTimezone: true }),
         isFavorite: boolean().notNull().default(false),
-        // 상세 화면이 실제 노출됐을 때 POST /links/:linkId/view로 갱신한다.
+        // 상세 화면을 5초 이상 본 뒤 POST /links/:linkId/view로 갱신한다.
         viewedAt: timestamp({ withTimezone: true }),
         deletedAt: timestamp({ withTimezone: true }),
         createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

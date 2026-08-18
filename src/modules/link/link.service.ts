@@ -180,13 +180,15 @@ export class LinkService {
     }
 
     async markViewed(userId: number, linkId: number) {
-        await this.getOwnedLink(userId, linkId)
+        const link = await this.linkRepository.markViewed(
+            userId,
+            linkId,
+            new Date(),
+        )
 
-        const now = new Date()
-        await this.linkRepository.update(userId, linkId, {
-            viewedAt: now,
-            updatedAt: now,
-        })
+        if (!link) {
+            throw new BaseException(LINK_ERROR.NOT_FOUND)
+        }
     }
 
     createTag(

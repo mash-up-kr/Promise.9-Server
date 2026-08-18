@@ -50,6 +50,13 @@
       "when": 1786894300629,
       "tag": "0006_perfect_black_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786897379201,
+      "tag": "0007_first_carnage",
+      "breakpoints": true
     }
   ]
 }

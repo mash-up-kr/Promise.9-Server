@@ -110,13 +110,13 @@ const LINK_DETAIL_DESCRIPTION = `
 `
 
 const MARK_LINK_VIEWED_DESCRIPTION = `
-링크 상세 화면이 실제로 노출된 시점에 프론트가 호출합니다. \`GET /links/:linkId\`는 조회 시각을 암묵적으로 변경하지 않습니다.
+링크 상세 화면을 5초 이상 본 시점에 프론트가 한 번 호출합니다. \`GET /links/:linkId\`는 조회 시각과 조회수를 암묵적으로 변경하지 않습니다.
 
-서버가 호출 시각을 \`viewedAt\`으로 기록하며 프론트는 timestamp를 보내지 않습니다.
+서버가 호출 시각을 \`viewedAt\`으로 기록하고 링크의 현재 폴더 \`viewCount\`를 1 증가시킵니다. 미분류 링크는 \`viewedAt\`만 기록하며 프론트는 timestamp를 보내지 않습니다.
 
 ### 현재 구현 상태
 
-- 링크 소유권을 확인한 후 호출 시각을 \`viewedAt\`에 저장합니다.
+- 활성 상태인 소유 링크에만 \`viewedAt\`과 폴더 \`viewCount\`를 한 transaction으로 반영합니다.
 `
 
 const UPDATE_LINK_DESCRIPTION = `
@@ -520,7 +520,7 @@ export const ApiRestoreLink = () =>
 export const ApiMarkLinkViewed = () =>
     applyDecorators(
         ApiOperation({
-            summary: '링크 조회 기록',
+            summary: '링크 열람 기록 (5초 이상 조회)',
             description: MARK_LINK_VIEWED_DESCRIPTION,
         }),
         ApiParam({
@@ -528,10 +528,10 @@ export const ApiMarkLinkViewed = () =>
             required: true,
             type: Number,
             example: 42,
-            description: '[필수] 조회 시각을 기록할 링크 ID',
+            description: '[필수] 5초 이상 조회한 링크 ID',
         }),
         ApiNoContentResponse({
-            description: '조회 접수 성공 (응답 본문 없음)',
+            description: '조회 기록 성공 (응답 본문 없음)',
         }),
         ApiCommonErrorResponses(
             COMMON_ERROR.VALIDATION,

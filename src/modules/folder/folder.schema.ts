@@ -28,6 +28,7 @@ export const folders = pgTable(
             .notNull()
             .default(DEFAULT_FOLDER_COLOR),
         sortOrder: integer(),
+        viewCount: integer().notNull().default(0),
         createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
         deletedAt: timestamp({ withTimezone: true }),
