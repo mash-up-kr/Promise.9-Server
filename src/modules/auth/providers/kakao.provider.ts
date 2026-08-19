@@ -11,6 +11,7 @@ import { SocialPayload, SocialProvider } from './social-provider.interface'
 const KAKAO_ISSUER = 'https://kauth.kakao.com'
 const KAKAO_JWKS_URI = 'https://kauth.kakao.com/.well-known/jwks.json'
 const KAKAO_TOKEN_URI = 'https://kauth.kakao.com/oauth/token'
+const KAKAO_TOKEN_REQUEST_TIMEOUT_MS = 5_000
 
 @Injectable()
 export class KakaoProvider implements SocialProvider {
@@ -39,24 +40,32 @@ export class KakaoProvider implements SocialProvider {
             params.set('client_secret', this.clientSecret)
         }
 
-        const response = await fetch(KAKAO_TOKEN_URI, {
-            method: 'POST',
-            headers: {
-                'Content-Type':
-                    'application/x-www-form-urlencoded;charset=utf-8',
-            },
-            body: params,
-        })
+        try {
+            const response = await fetch(KAKAO_TOKEN_URI, {
+                method: 'POST',
+                headers: {
+                    'Content-Type':
+                        'application/x-www-form-urlencoded;charset=utf-8',
+                },
+                body: params,
+                // 인증 없이 호출 가능한 엔드포인트라, Kakao 쪽이 응답을 지연시키면
+                // outbound 연결이 쌓여 서버 자원을 소진할 수 있어 타임아웃을 건다.
+                signal: AbortSignal.timeout(KAKAO_TOKEN_REQUEST_TIMEOUT_MS),
+            })
 
-        const data = (await response.json().catch(() => null)) as {
-            id_token?: string
-        } | null
+            const data = (await response.json().catch(() => null)) as {
+                id_token?: string
+            } | null
 
-        if (!response.ok || typeof data?.id_token !== 'string') {
+            if (!response.ok || typeof data?.id_token !== 'string') {
+                throw new BaseException(AUTH_ERROR.KAKAO_EXCHANGE_FAILED)
+            }
+
+            return data.id_token
+        } catch (error) {
+            if (error instanceof BaseException) throw error
             throw new BaseException(AUTH_ERROR.KAKAO_EXCHANGE_FAILED)
         }
-
-        return data.id_token
     }
 
     async verify(idToken: string): Promise<SocialPayload> {
