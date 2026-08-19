@@ -40,15 +40,18 @@ export class UserRepository {
         providerUserId: string
     }): Promise<{ userId: number; isNewUser: boolean }> {
         return this.db.transaction(async (tx) => {
-            const existingLink =
+            const existingSocialAccount =
                 await this.socialAccountRepository.findByProviderUser(
                     input.provider,
                     input.providerUserId,
                     tx,
                 )
 
-            if (existingLink) {
-                return { userId: existingLink.userId, isNewUser: false }
+            if (existingSocialAccount) {
+                return {
+                    userId: existingSocialAccount.userId,
+                    isNewUser: false,
+                }
             }
 
             const existingUser = await tx.query.users.findFirst({
@@ -56,7 +59,7 @@ export class UserRepository {
             })
 
             if (existingUser) {
-                const existingSocial =
+                const conflictingSocialAccount =
                     await this.socialAccountRepository.findByUserId(
                         existingUser.id,
                         tx,
@@ -64,8 +67,8 @@ export class UserRepository {
 
                 throw new BaseException({
                     ...USER_ERROR.EMAIL_ALREADY_REGISTERED,
-                    message: existingSocial
-                        ? `이미 ${existingSocial.provider} 계정으로 가입된 이메일입니다. ${existingSocial.provider}로 로그인해주세요.`
+                    message: conflictingSocialAccount
+                        ? `이미 ${conflictingSocialAccount.provider} 계정으로 가입된 이메일입니다. ${conflictingSocialAccount.provider}로 로그인해주세요.`
                         : USER_ERROR.EMAIL_ALREADY_REGISTERED.message,
                 })
             }
