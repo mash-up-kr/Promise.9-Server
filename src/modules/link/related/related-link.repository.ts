@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import {
     and,
+    asc,
     cosineDistance,
     count,
     desc,
@@ -150,21 +151,13 @@ export class RelatedLinkRepository {
                 else 1 - (${cosineDistance(links.embedding, comparisonEmbedding)})
               end`
             : sql<number | null>`null`
-        const normalizedTags = sql<string[]>`coalesce((
-            select array_agg(${tags.normalizedName} order by ${tags.sortOrder}, ${tags.id})
-            from ${tags}
-            where ${tags.userId} = ${userId}
-              and ${tags.linkId} = ${links.id}
-        ), array[]::varchar[])`
-
-        return this.db
+        const rows = await this.db
             .select({
                 id: links.id,
                 folderId: links.folderId,
                 title: links.title,
                 domain: links.domain,
                 metadata: links.metadata,
-                normalizedTags,
                 embeddingSimilarity,
             })
             .from(links)
@@ -175,6 +168,29 @@ export class RelatedLinkRepository {
                     inArray(links.id, [...ids]),
                 ),
             )
+
+        if (rows.length === 0) return []
+
+        const activeIds = rows.map((row) => row.id)
+        const tagRows = await this.db
+            .select({ linkId: tags.linkId, name: tags.normalizedName })
+            .from(tags)
+            .where(
+                and(eq(tags.userId, userId), inArray(tags.linkId, activeIds)),
+            )
+            .orderBy(asc(tags.sortOrder), asc(tags.id))
+        const tagsByLinkId = new Map<number, string[]>()
+
+        for (const tag of tagRows) {
+            const linkTags = tagsByLinkId.get(tag.linkId) ?? []
+            linkTags.push(tag.name)
+            tagsByLinkId.set(tag.linkId, linkTags)
+        }
+
+        return rows.map((row) => ({
+            ...row,
+            normalizedTags: tagsByLinkId.get(row.id) ?? [],
+        }))
     }
 
     private buildCandidateConditions(
