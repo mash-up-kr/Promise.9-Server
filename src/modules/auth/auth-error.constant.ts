@@ -27,4 +27,9 @@ export const AUTH_ERROR = {
         message:
             'Kakao 토큰 교환에 실패했습니다. code 또는 redirectUri를 확인해주세요.',
     },
+    KAKAO_UPSTREAM_UNAVAILABLE: {
+        code: HttpStatus.BAD_GATEWAY,
+        errorCode: 950006,
+        message: 'Kakao 서버 응답에 실패했습니다. 잠시 후 다시 시도해주세요.',
+    },
 } as const

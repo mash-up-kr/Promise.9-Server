@@ -53,18 +53,32 @@ export class KakaoProvider implements SocialProvider {
                 signal: AbortSignal.timeout(KAKAO_TOKEN_REQUEST_TIMEOUT_MS),
             })
 
+            if (!response.ok) {
+                // rate limit(429)·Kakao 장애(5xx)는 우리 요청이 아니라 Kakao
+                // 쪽 문제이므로, 클라이언트에게 code/redirectUri를 의심하게
+                // 만드는 400 대신 502로 구분해서 알린다.
+                if (response.status === 429 || response.status >= 500) {
+                    throw new BaseException(
+                        AUTH_ERROR.KAKAO_UPSTREAM_UNAVAILABLE,
+                    )
+                }
+                throw new BaseException(AUTH_ERROR.KAKAO_EXCHANGE_FAILED)
+            }
+
             const data = (await response.json().catch(() => null)) as {
                 id_token?: string
             } | null
 
-            if (!response.ok || typeof data?.id_token !== 'string') {
+            if (typeof data?.id_token !== 'string') {
                 throw new BaseException(AUTH_ERROR.KAKAO_EXCHANGE_FAILED)
             }
 
             return data.id_token
         } catch (error) {
             if (error instanceof BaseException) throw error
-            throw new BaseException(AUTH_ERROR.KAKAO_EXCHANGE_FAILED)
+            // fetch 자체가 실패한 경우(네트워크 오류, 타임아웃 등)도 우리가
+            // 아니라 Kakao 쪽 문제이므로 동일하게 502로 다룬다.
+            throw new BaseException(AUTH_ERROR.KAKAO_UPSTREAM_UNAVAILABLE)
         }
     }
 

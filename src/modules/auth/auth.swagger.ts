@@ -110,6 +110,7 @@ export const ApiKakaoExchange = () =>
         ApiCommonErrorResponses(
             COMMON_ERROR.VALIDATION,
             AUTH_ERROR.KAKAO_EXCHANGE_FAILED,
+            AUTH_ERROR.KAKAO_UPSTREAM_UNAVAILABLE,
         ),
     )
 
