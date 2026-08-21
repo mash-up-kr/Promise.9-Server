@@ -1,13 +1,13 @@
 # Lightsail
 
-Promise9의 기존 Lightsail Instance와 Static IP를 `Promise9LightsailStack`에서 관리한다.
+Promise9의 Lightsail Instance와 Static IP를 `Promise9LightsailStack`에서 관리한다.
 
 ## 관리 리소스
 
-| CDK 리소스     | Physical name | 역할                         |
-| -------------- | ------------- | ---------------------------- |
-| `CfnInstance`  | `Ubuntu-1`    | 운영 API·PostgreSQL 서버     |
-| `CfnStaticIp`  | `StaticIp-1`  | Instance의 고정 public IP    |
+| CDK 리소스    | Physical name | 역할                      |
+| ------------- | ------------- | ------------------------- |
+| `CfnInstance` | `Ubuntu-1`    | 운영 API·PostgreSQL 서버  |
+| `CfnStaticIp` | `StaticIp-1`  | Instance의 고정 public IP |
 
 Instance의 blueprint, bundle, Availability Zone, key pair와 public firewall를 CDK 코드에
 정의한다. Static IP 연결도 같은 Stack에서 관리한다.
