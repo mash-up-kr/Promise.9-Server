@@ -12,8 +12,8 @@ import {
     UpdateLinkInput,
 } from './dto/link.dto'
 import { CreateLinkTagInput } from './dto/tag.dto'
-import { EmbeddingService } from './search/embedding.service'
-import { SearchService } from './search/search.service'
+import { RelatedLinkService } from './related/related-link.service'
+import { SearchResultRow, SearchService } from './search/search.service'
 import { toSearchCursorPayload } from './search/search.util'
 import { LinkRepository, LinkUpdatePatch } from './link.repository'
 import { LinkRow } from './link.schema'
@@ -26,9 +26,9 @@ export class LinkService {
 
     constructor(
         private readonly linkRepository: LinkRepository,
-        private readonly embeddingService: EmbeddingService,
         private readonly searchService: SearchService,
         private readonly linkAnalysisService: LinkAnalysisService,
+        private readonly relatedLinkService: RelatedLinkService,
     ) {}
 
     async create(userId: number, input: CreateLinkInput) {
@@ -50,11 +50,6 @@ export class LinkService {
             memo: input.memo ?? null,
         })
 
-        // 임베딩은 외부 호출이라 저장 응답을 막지 않도록 best-effort로 처리한다.
-        // 저장 시점엔 title·aiSummary·metadata가 아직 비어 domain(+memo) 위주로만 임베딩된다.
-        // TODO: 메타데이터/요약 수집 파이프라인 완료 시 embedLinkSafe(row)를 다시 호출해 재임베딩한다.
-        void this.embeddingService.embedLinkSafe(row)
-
         this.startLinkAnalysis({
             linkId: row.id,
             userId,
@@ -70,10 +65,15 @@ export class LinkService {
 
     async detail(userId: number, linkId: number) {
         const link = await this.getOwnedLink(userId, linkId)
-        const [folder, linkTags] = await Promise.all([
+        const [folder, tagRows] = await Promise.all([
             this.findFolderRef(link.folderId),
-            this.findTags(userId, linkId),
+            this.linkRepository.findTags(userId, linkId),
         ])
+        const relatedLinks = await this.findRelatedLinks(
+            userId,
+            link,
+            tagRows.map((tag) => tag.normalizedName),
+        )
 
         return {
             linkId: link.id,
@@ -89,9 +89,9 @@ export class LinkService {
             viewedAt: link.viewedAt,
             processingStatus: link.aiSummaryStatus,
             aiSummary: link.aiSummary,
-            tags: linkTags,
+            tags: this.toTagResponses(tagRows),
             memo: link.memo,
-            relatedLinks: [],
+            relatedLinks,
         }
     }
 
@@ -119,11 +119,6 @@ export class LinkService {
         }
 
         const row = await this.linkRepository.update(userId, linkId, patch)
-
-        // 메모가 바뀌면 임베딩 대상 텍스트가 달라지므로 best-effort로 재생성한다.
-        if (input.memo !== undefined) {
-            void this.embeddingService.embedLinkSafe(row)
-        }
 
         return {
             linkId: row.id,
@@ -248,7 +243,10 @@ export class LinkService {
     }
 
     private toListItems(
-        results: Array<{ row: LinkRow; score: number | null }>,
+        results: Array<{
+            row: LinkRow | SearchResultRow
+            score: number | null
+        }>,
     ) {
         return results.map(({ row, score }) => ({
             linkId: row.id,
@@ -330,16 +328,42 @@ export class LinkService {
         return folder ? { folderId: folder.id, folderName: folder.name } : null
     }
 
-    // 링크에 저장된 사용자·규칙·AI 태그를 표시 순서와 생성 순서대로 반환한다.
-    private async findTags(userId: number, linkId: number) {
-        const rows = await this.linkRepository.findTags(userId, linkId)
-
+    // 링크에 저장된 사용자·규칙·AI 태그를 API 응답 shape으로 바꾼다.
+    private toTagResponses(
+        rows: Awaited<ReturnType<LinkRepository['findTags']>>,
+    ) {
         return rows.map((row) => ({
             tagId: row.id,
             name: row.name,
             sourceType: row.sourceType,
             sortOrder: row.sortOrder,
         }))
+    }
+
+    // 관련 링크는 상세의 부가 결과다. 후보 조회가 실패해도 링크 본문은 반환한다.
+    private async findRelatedLinks(
+        userId: number,
+        link: LinkRow,
+        normalizedTags: string[],
+    ) {
+        try {
+            return await this.relatedLinkService.relatedLinks(userId, {
+                id: link.id,
+                folderId: link.folderId,
+                title: link.title,
+                embedding: link.embedding,
+                normalizedTags,
+            })
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error)
+
+            this.logger.warn(
+                `관련 링크 조회에 실패해 빈 목록을 반환합니다. linkId=${link.id} error=${message}`,
+            )
+
+            return []
+        }
     }
 
     // 링크 소유권을 확인하고, 없거나 타 사용자 소유면 404로 처리한다.

@@ -1,38 +1,10 @@
 import { CursorPayload, decodeCursor } from '../../../common/pagination/cursor'
-import {
-    LINK_SEARCH_KEYWORD_BOOST,
-    LINK_SEARCH_SCORE_PRECISION,
-} from '../link.constants'
+import { LINK_SEARCH_SCORE_PRECISION } from '../link.constants'
 
-export type VectorCandidate = { id: number; score: number }
 export type ScoredCandidate = { id: number; score: number }
 
 // 검색 결과 커서: 정렬 키인 (점수, id)를 그대로 담는다.
 export type SearchCursor = { score: number; id: number }
-
-// 벡터·키워드 후보를 합집합으로 모아 점수를 매기고 정렬한다.
-// 정렬 키는 (score desc, id desc) — 점수가 같을 때 id로 tiebreak해서
-// 커서 페이지네이션이 같은 항목을 건너뛰거나 중복하지 않게 한다.
-export function scoreSearchCandidates(
-    vectorCandidates: VectorCandidate[],
-    keywordCandidateIds: number[],
-): ScoredCandidate[] {
-    const similarityById = new Map(
-        vectorCandidates.map((candidate) => [candidate.id, candidate.score]),
-    )
-    const keywordIds = new Set(keywordCandidateIds)
-
-    return [...new Set([...similarityById.keys(), ...keywordIds])]
-        .map((id) => {
-            const similarity = similarityById.get(id) ?? 0
-            const score = keywordIds.has(id)
-                ? Math.min(1, similarity + LINK_SEARCH_KEYWORD_BOOST)
-                : similarity
-
-            return { id, score: roundSearchScore(score) }
-        })
-        .sort((a, b) => b.score - a.score || b.id - a.id)
-}
 
 // 커서 이후 후보만 남겨 limit + 1개를 자른다. (다음 페이지 존재 여부 판단용)
 // candidates는 scoreSearchCandidates가 정렬한 (score desc, id desc) 순서여야 한다.

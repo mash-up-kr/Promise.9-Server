@@ -75,37 +75,39 @@ const LIST_LINKS_DESCRIPTION = `
 - \`score\`: 0~1 사이 검색 점수(소수점 5자리). \`q\` 없는 일반 목록에서는 항상 \`null\`입니다.
 - 정렬은 \`score\` 내림차순으로 고정되며 \`sortBy\`·\`order\`는 적용되지 않습니다.
 - 검색 cursor는 \`(score, id)\` 기준이라 일반 목록 cursor와 호환되지 않습니다. 서로 바꿔 넘기면 \`400 Bad Request\`입니다. \`q\`를 바꿀 때도 cursor를 폐기하고 첫 페이지부터 다시 요청합니다.
-- \`totalCount\`는 검색 후보 풀 전체 크기로 최대 100으로 제한됩니다.
+- \`totalCount\`는 관련도 상위 검색 결과 크기로 최대 30입니다.
 
 ### 현재 구현 상태
 
 - **현재 동작:** \`q\`, \`folderId\`, \`unassigned\`, \`deleted\`, \`favorite\`, \`sortBy\`, \`order\`, \`cursor\`, \`limit\`
 - **계약만 제공:** 대표 태그(\`representativeTag\`)
-- \`sortBy\`/\`order\`에 따라 정렬되며, cursor 페이지네이션으로 \`nextCursor\`·\`hasNext\`를 실제 계산해 반환합니다.
+- \`q\`가 없는 일반 목록은 \`sortBy\`/\`order\`에 따라 정렬되며, 검색은 위 설명처럼 \`score\` 내림차순으로 고정됩니다. 두 경로 모두 cursor 페이지네이션으로 \`nextCursor\`·\`hasNext\`를 실제 계산해 반환합니다.
 - \`representativeTag\`는 대표 태그 선정 로직 구현 전까지 \`null\`을 반환합니다.
 `
 
 const CREATE_LINK_DESCRIPTION = `
-URL과 사용자 입력값을 먼저 저장한 뒤 링크 정보 수집, AI 요약, AI 태그 생성을 현재 프로세스에서 비동기로 처리합니다. 저장 직후 상세 조회에서는 요약 상태인 \`processingStatus=PENDING\`일 수 있습니다.
+URL과 사용자 입력값을 먼저 저장한 뒤 링크 정보 수집, AI 요약, AI 태그, 임베딩 생성을 현재 프로세스에서 비동기로 처리합니다. 저장 직후 상세 조회에서는 전체 분석 상태인 \`processingStatus=PENDING\`일 수 있습니다.
 
 \`folderId\`를 생략하거나 \`null\`로 보내면 미분류로 저장합니다. \`memo\`도 선택값이며 생략 시 \`null\`입니다.
 
 ### 현재 구현 상태
 
-- URL, 폴더, 메모를 저장한 뒤 링크 정보 수집과 AI 요약·태그 생성을 시작합니다.
+- URL, 폴더, 메모를 저장한 뒤 링크 정보 수집과 AI 요약·태그·임베딩 생성을 시작합니다.
 - 메시지 큐와 재시도 정책은 아직 적용하지 않았습니다.
 `
 
 const LINK_DETAIL_DESCRIPTION = `
 링크 상세 화면에 필요한 폴더, 원문, 메타데이터, AI 요약, 태그, 메모, 연관 링크를 한 번에 반환합니다.
 
-\`processingStatus\`는 AI 요약 상태만 나타냅니다. 태그와 연관 링크는 현재 저장된 결과를 배열로 반환하며 결과가 없으면 \`[]\`입니다.
+\`processingStatus\`는 요약·태그·임베딩 전체 처리 상태를 나타냅니다. 세 단계가 모두 성공해야 \`SUCCESS\`이며, 일부 분석 단계가 실패해도 저장된 요약·태그는 부분 결과로 반환될 수 있습니다.
 
 ### 현재 구현 상태
 
-- 저장된 링크·폴더·메모·AI 요약 상태와 태그를 조회합니다.
+- 저장된 링크·폴더·메모·전체 분석 상태와 태그를 조회합니다.
 - \`isFavorite\`, \`viewedAt\`은 저장된 실제 값을 반환합니다.
-- \`publishedAt\`, 연관 링크 조회 연결은 후속 구현입니다.
+- \`publishedAt\`은 후속 구현입니다.
+- 연관 링크는 같은 폴더·태그·제목·저장된 임베딩 유사도의 기본 가중치로 상위 5개를 반환합니다.
+- 연관 링크 후보 조회에 실패해도 상세 조회는 성공하며 \`relatedLinks: []\`로 반환합니다.
 - 응답 Example은 모든 비동기 처리가 완료된 **목표 계약**을 보여줍니다.
 `
 
@@ -195,7 +197,7 @@ const LIST_LINKS_RESPONSE_EXAMPLE = {
         hasNext: true,
         limit: 9,
     },
-    totalCount: 42,
+    totalCount: 30,
 }
 
 const LINK_DETAIL_RESPONSE_EXAMPLE = {
