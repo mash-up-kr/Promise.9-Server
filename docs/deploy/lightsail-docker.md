@@ -9,7 +9,8 @@ Promise.9 서버는 Docker image를 Docker Hub에 올리고, Lightsail에서 해
 | API 도메인            | `api.link-ding-dong.com` |
 | Lightsail static IP   | `52.78.189.19`           |
 | SSH 사용자            | `ubuntu`                 |
-| 컨테이너 포트         | `3000`                   |
+| API 컨테이너          | `promise9-api`           |
+| PostgreSQL 컨테이너   | `promise9-db`            |
 | Docker Hub repository | `promise9-server`        |
 
 AWS와 Docker Hub는 팀 계정을 사용한다.
@@ -25,7 +26,8 @@ GitHub Actions
   -> Docker image build
   -> Docker Hub push
   -> Lightsail SSH
-  -> docker compose pull/up
+  -> PostgreSQL pull/up 및 health check
+  -> API pull/up 및 health check
 ```
 
 ## 서버 상태
@@ -45,12 +47,12 @@ Nginx는 `api.link-ding-dong.com` 요청을 컨테이너의 `127.0.0.1:3000`으�
 Internet
   -> Nginx 80/443
   -> 127.0.0.1:3000
-  -> promise9-api container
+  -> promise9-api
+  -> db:5432
+  -> promise9-db
 ```
 
 Nginx 설정 파일은 [deploy/nginx/promise9-api.conf](../../deploy/nginx/promise9-api.conf)에 둔다.
-
-PR 단위 공유 Stage 배포는 [PR Stage Deployment](./stage-pr-deployment.md)에서 별도로 설명한다.
 
 ## 네트워크
 
@@ -62,7 +64,10 @@ Lightsail public firewall은 CDK의 `Promise9LightsailStack`에서 관리한다.
 ## 운영 메모
 
 - Docker image에는 `.env`를 포함하지 않는다.
-- 운영 환경변수는 배포 중 `.env.production`으로 만들고 서버의 `/opt/promise9/.env`로 반영한다.
-- PostgreSQL은 compose에 포함하지 않고 외부 DB를 사용한다.
+- GitHub repository의 `POSTGRES_PASSWORD` secret으로 API용 `.env`와 DB용 `db.env`를 만든다.
+- DB 데이터는 host의 `/opt/promise9/postgres-data`에 저장한다.
+- PostgreSQL 18과 pgvector 0.8.6을 포함한 image를 고정해서 사용한다.
+- 최초 DB 복구와 migration은 대상과 실행 결과를 확인하며 직접 수행한다.
 - DB migration은 현재 배포 workflow에서 자동 실행하지 않는다.
+- DB 백업은 Lightsail Instance 외부에도 보관한다.
 - 배포 후 72시간 이상 지난 미사용 Docker image를 정리한다.

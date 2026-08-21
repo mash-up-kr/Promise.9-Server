@@ -1,8 +1,35 @@
 services:
+  db:
+    image: pgvector/pgvector:0.8.6-pg18-bookworm
+    container_name: promise9-db
+    restart: unless-stopped
+    env_file:
+      - /opt/promise9/db.env
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - /opt/promise9/postgres-data:/var/lib/postgresql
+    shm_size: "256mb"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    stop_grace_period: 1m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   api:
     image: ${APP_IMAGE:?APP_IMAGE is required}
     container_name: promise9-api
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     env_file:
       - /opt/promise9/.env
     ports:

@@ -36,6 +36,11 @@ docker run -d --name promise9-db \
 
 기본 `postgres` 이미지로 이미 만들어 뒀다면 컨테이너를 교체해야 한다. 벡터 컬럼과 코사인 계산을 검색이 어떻게 쓰는지는 [벡터 검색 구조](../search/link-vector-search.md)를 참고한다.
 
+운영은 `docker-compose.prod.yml`의 `pgvector/pgvector:0.8.6-pg18-bookworm` 이미지를
+사용한다. PostgreSQL 18부터 컨테이너 데이터 경로가 `/var/lib/postgresql`로 바뀌므로,
+Lightsail의 `/opt/promise9/postgres-data`를 해당 경로에 mount한다. `5432`는
+`127.0.0.1`에만 bind하며 Lightsail public firewall에는 열지 않는다.
+
 <br>
 
 ## Schema
