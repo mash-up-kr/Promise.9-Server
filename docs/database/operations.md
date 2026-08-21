@@ -6,16 +6,18 @@ RDS 같은 managed DB를 쓰지 않기 때문에 snapshot이나 백업을 로컬
 
 - `.env` 또는 실행 환경에 `DATABASE_URL_DEVELOPMENT`, `DATABASE_URL_PRODUCTION`이 있어야 한다.
 - 백업/검증/복구는 PostgreSQL client tools의 `pg_dump`, `pg_restore`를 사용한다.
+- Lightsail 운영 DB 접속에는 AWS CLI의 `promise9` profile과 OpenSSH client가 필요하다.
 
 ## 명령어
 
-| 목적        | 명령어                                                                         |
-| ----------- | ------------------------------------------------------------------------------ |
-| 백업        | `bun run db:backup -- --env=development`                                       |
-| 백업 검증   | `bun run db:backup:verify -- --file=backups/database/example.dump`             |
-| 복구        | `bun run db:restore -- --env=development --file=backups/database/example.dump` |
-| 상태 확인   | `bun run db:health -- --env=development`                                       |
-| Mermaid ERD | `bun run db:visualize_mermaid -- --env=development`                            |
+| 목적         | 명령어                                                                         |
+| ------------ | ------------------------------------------------------------------------------ |
+| 백업         | `bun run db:backup -- --env=development`                                       |
+| 백업 검증    | `bun run db:backup:verify -- --file=backups/database/example.dump`             |
+| 복구         | `bun run db:restore -- --env=development --file=backups/database/example.dump` |
+| 상태 확인    | `bun run db:health -- --env=development`                                       |
+| 운영 DB 터널 | `bun run db:tunnel`                                                            |
+| Mermaid ERD  | `bun run db:visualize_mermaid -- --env=development`                            |
 
 `--env`를 지정하지 않으면 `APP_ENV`를 사용하고, 없으면 `development`로 동작한다.
 백업 기본 저장 위치는 `backups/database`이며 `.gitignore` 대상이다.
@@ -30,6 +32,35 @@ bun run db:restore -- --env=development --file=backups/database/dev.dump --clean
 bun run db:health -- --env=development
 bun run db:visualize_mermaid -- --env=development
 ```
+
+## Lightsail 운영 DB 접속
+
+운영 PostgreSQL은 외부에 공개하지 않고 Lightsail 내부의 `127.0.0.1:5432`에만
+연결한다. 다음 명령은 AWS CLI에서 인스턴스용 임시 SSH 접속 정보를 받은 뒤 로컬
+`127.0.0.1:15432`로 터널을 연다.
+
+```bash
+bun run db:tunnel
+```
+
+터널을 연 터미널은 그대로 두고, 다른 터미널에서 운영 DB 명령을 실행한다.
+`DATABASE_URL_PRODUCTION`의 host와 port는 `127.0.0.1:15432`를 사용해야 한다.
+
+```bash
+bun run db:health -- --env=production --sslmode=disable
+bun run db:backup -- --env=production --sslmode=disable
+```
+
+터널은 `Ctrl+C`로 종료한다. 임시 private key, SSH certificate, host key 파일은
+OS 임시 디렉터리에 만들고 터널 종료 시 삭제한다. 기본값은 다음 환경변수로 덮어쓸
+수 있다.
+
+| 환경변수                  | 기본값           |
+| ------------------------- | ---------------- |
+| `AWS_PROFILE`             | `promise9`       |
+| `AWS_REGION`              | `ap-northeast-2` |
+| `LIGHTSAIL_INSTANCE_NAME` | `Ubuntu-1`       |
+| `LIGHTSAIL_DB_LOCAL_PORT` | `15432`          |
 
 ## 운영 환경 주의사항
 

@@ -26,6 +26,7 @@
         "db:backup:verify": "bun run script/verify-db-backup.ts",
         "db:restore": "bun run script/restore-db.ts",
         "db:health": "bun run script/db-health.ts",
+        "db:tunnel": "bun run script/lightsail-db-tunnel.ts",
         "db:seed:list": "bun run script/seed-links-folders.ts",
         "db:seed:master": "bun run script/seed-master-user.ts",
         "db:backfill:embeddings": "bun run script/backfill-link-embeddings.ts",
