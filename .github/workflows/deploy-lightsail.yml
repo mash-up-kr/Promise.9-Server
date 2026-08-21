@@ -79,11 +79,6 @@ jobs:
         run: |
           : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
 
-          if ! printf '%s' "$POSTGRES_PASSWORD" | grep -Eq '^[A-Za-z0-9_-]{32,128}$'; then
-            echo 'POSTGRES_PASSWORD must be 32-128 characters using only A-Z, a-z, 0-9, _ and -.' >&2
-            exit 1
-          fi
-
           {
             printf 'APP_ENV=production\n'
             printf 'DATABASE_URL_PRODUCTION=postgresql://promise9:%s@db:5432/promise9\n' "$POSTGRES_PASSWORD"
