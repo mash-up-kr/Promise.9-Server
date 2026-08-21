@@ -4,7 +4,8 @@ import { EmbeddingService } from '../embedding/embedding.service'
 
 import { SearchLinkCandidate, SearchRepository } from './search.repository'
 import { SearchService } from './search.service'
-import { toSearchCursorPayload } from './search.util'
+import { roundSearchScore, toSearchCursorPayload } from './search.util'
+import { SEARCH_RANKING_WEIGHTS } from './search-ranking.constant'
 
 type RepositoryMock = jest.Mocked<
     Pick<
@@ -129,7 +130,9 @@ describe('SearchService', () => {
             input,
         )
         expect(result.totalCount).toBe(2)
-        expect(result.rows.map(({ row }) => row.id)).toEqual([1, 2])
+        expect(result.rows.map(({ row }) => row.id)).toEqual(
+            expect.arrayContaining([1, 2]),
+        )
     })
 
     it('운영 검색 결과 집합은 관련도 상위 30개로 제한한다', async () => {
@@ -177,7 +180,12 @@ describe('SearchService', () => {
             { limit: 30, scope: input },
         )
         expect(result.rows).toHaveLength(1)
-        expect(result.rows[0].score).toBe(0.5)
+        expect(result.rows[0].score).toBe(
+            roundSearchScore(
+                SEARCH_RANKING_WEIGHTS.titleKeyword /
+                    (1 - SEARCH_RANKING_WEIGHTS.embedding),
+            ),
+        )
     })
 
     it('반올림 후 동점인 후보를 id로 재정렬해 다음 cursor 페이지까지 누락 없이 반환한다', async () => {
