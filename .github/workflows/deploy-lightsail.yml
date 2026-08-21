@@ -68,24 +68,34 @@ jobs:
             ${{ steps.image.outputs.name }}:${{ github.sha }}
             ${{ steps.image.outputs.name }}:latest
 
-      - name: Create production env file
+      - name: Create runtime env files
         env:
-          DATABASE_URL_PRODUCTION: ${{ secrets.DATABASE_URL_PRODUCTION }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
           JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           MASTER_ACCESS_TOKEN: ${{ secrets.MASTER_ACCESS_TOKEN }}
           MASTER_USER_ID: ${{ secrets.MASTER_USER_ID }}
         run: |
+          : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+
           {
             printf 'APP_ENV=production\n'
-            printf 'DATABASE_URL_PRODUCTION=%s\n' "$DATABASE_URL_PRODUCTION"
+            printf 'DATABASE_URL_PRODUCTION=postgresql://promise9:%s@db:5432/promise9\n' "$POSTGRES_PASSWORD"
             printf 'JWT_ACCESS_SECRET=%s\n' "$JWT_ACCESS_SECRET"
             printf 'JWT_REFRESH_SECRET=%s\n' "$JWT_REFRESH_SECRET"
             printf 'GOOGLE_CLIENT_ID=%s\n' "$GOOGLE_CLIENT_ID"
             printf 'MASTER_ACCESS_TOKEN=%s\n' "$MASTER_ACCESS_TOKEN"
             printf 'MASTER_USER_ID=%s\n' "$MASTER_USER_ID"
           } > .env.production
+
+          {
+            printf 'POSTGRES_DB=promise9\n'
+            printf 'POSTGRES_USER=promise9\n'
+            printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
+          } > .env.database
+
+          chmod 600 .env.production .env.database
 
       - name: Ensure deploy directory
         uses: appleboy/ssh-action@v1.2.0
@@ -98,6 +108,7 @@ jobs:
           script: |
             sudo mkdir -p /opt/promise9
             sudo chown "$USER:$USER" /opt/promise9
+            sudo mkdir -p /opt/promise9/postgres-data
 
       - name: Upload runtime files
         uses: appleboy/scp-action@v0.1.7
@@ -106,7 +117,7 @@ jobs:
           username: ${{ secrets.LIGHTSAIL_USERNAME }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           port: ${{ secrets.LIGHTSAIL_PORT || '22' }}
-          source: docker-compose.prod.yml,.env.production
+          source: docker-compose.prod.yml,.env.production,.env.database
           target: /opt/promise9
           overwrite: true
 
@@ -121,7 +132,9 @@ jobs:
           script: |
             cd /opt/promise9
             mv .env.production .env
-            chmod 600 .env
-            APP_IMAGE="${{ steps.image.outputs.name }}:${{ github.sha }}" docker compose -f docker-compose.prod.yml pull api
-            APP_IMAGE="${{ steps.image.outputs.name }}:${{ github.sha }}" docker compose -f docker-compose.prod.yml up -d api
+            mv .env.database db.env
+            chmod 600 .env db.env
+            APP_IMAGE="${{ steps.image.outputs.name }}:${{ github.sha }}" docker compose -f docker-compose.prod.yml pull db api
+            APP_IMAGE="${{ steps.image.outputs.name }}:${{ github.sha }}" docker compose -f docker-compose.prod.yml up -d --wait --wait-timeout 120 db
+            APP_IMAGE="${{ steps.image.outputs.name }}:${{ github.sha }}" docker compose -f docker-compose.prod.yml up -d --wait --wait-timeout 120 api
             docker image prune -af --filter "until=72h"

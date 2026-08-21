@@ -44,7 +44,8 @@ aws lightsail get-instances \
   --profile promise9
 ```
 
-`Account`가 `743070678932`이고, `Arn`이 본인의 IAM User이며 `root`가 아닌지 확인한다.
+`Account`가 관리자가 안내한 팀 AWS 계정이고, `Arn`이 본인의 IAM User이며 `root`가
+아닌지 확인한다.
 
 `Promise9Team`은 전체 관리자 권한을 가진다. profile과 로그인 세션을 다른 사람이나
 스크립트에 전달하지 않고, 인프라 변경은 팀 절차에 따라 실행한다.
@@ -56,6 +57,34 @@ aws logout --profile promise9
 ```
 
 다음 단계: [CDK Guide](./cdk.md)
+
+## Lightsail SSH 접속
+
+팀원의 Lightsail 수동 접속은 모두 개인 `promise9` profile로 수행한다. default key
+pair나 공유 PEM 파일을 사용하지 않는다.
+
+```bash
+aws login --profile promise9
+bun run lightsail:ssh
+```
+
+`lightsail:ssh`는 AWS CLI의 `get-instance-access-details`로 인스턴스용 임시 SSH key와
+certificate를 받아 shell에 접속하고, `exit`로 종료할 때 임시 파일을 삭제한다.
+
+GitHub Actions의 `LIGHTSAIL_SSH_KEY`는 자동 배포 전용이다. 팀원이 로컬에 내려받거나
+수동 SSH 접속에 사용하지 않는다.
+
+### 운영 DB 터널
+
+운영 PostgreSQL도 같은 AWS CLI 임시 접속 방식을 사용한다.
+
+```bash
+bun run db:tunnel
+```
+
+`db:tunnel`은 `127.0.0.1:15432`에 터널을 열고 `Ctrl+C`로 종료할 때 임시 파일을
+삭제한다. 자세한 DB 명령은 [Database Operations](../../database/operations.md)를
+참고한다.
 
 ## 참고
 
