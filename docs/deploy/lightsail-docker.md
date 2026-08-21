@@ -53,6 +53,9 @@ workflow는 `deploy-lightsail` concurrency group으로 한 번에 하나만 실�
 
 secret 값 자체는 workflow나 문서에 기록하지 않는다.
 
+`LIGHTSAIL_SSH_KEY`는 GitHub Actions 자동 배포 전용이다. 팀원의 수동 서버 접속은
+공유 key 대신 개인 AWS CLI 로그인을 사용하는 `bun run lightsail:ssh`로 수행한다.
+
 ## 서버 상태
 
 Lightsail 서버에는 다음을 설치했다.

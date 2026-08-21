@@ -24,6 +24,15 @@ type InstanceAccessDetails = {
     hostKeys: HostKey[]
 }
 
+type SshMode =
+    | {
+          type: 'shell'
+      }
+    | {
+          type: 'db-tunnel'
+          localPort: number
+      }
+
 const DEFAULT_AWS_PROFILE = 'promise9'
 const DEFAULT_AWS_REGION = 'ap-northeast-2'
 const DEFAULT_INSTANCE_NAME = 'Ubuntu-1'
@@ -32,17 +41,25 @@ const REMOTE_DB_HOST = '127.0.0.1'
 const REMOTE_DB_PORT = 5432
 
 async function main() {
+    const mode = resolveMode(process.argv.slice(2))
     const config = resolveConfig()
     let tempDirectory: string | undefined
 
-    printTitle('🔐 Lightsail PostgreSQL SSH 터널')
+    printTitle(
+        mode.type === 'shell'
+            ? '🔐 Lightsail SSH 접속'
+            : '🔐 Lightsail PostgreSQL SSH 터널',
+    )
     printKeyValue('AWS profile', config.awsProfile)
     printKeyValue('AWS region', config.awsRegion)
     printKeyValue('Lightsail instance', config.instanceName)
-    printKeyValue(
-        '포트 전달',
-        `127.0.0.1:${config.localPort} -> ${REMOTE_DB_HOST}:${REMOTE_DB_PORT}`,
-    )
+
+    if (mode.type === 'db-tunnel') {
+        printKeyValue(
+            '포트 전달',
+            `127.0.0.1:${mode.localPort} -> ${REMOTE_DB_HOST}:${REMOTE_DB_PORT}`,
+        )
+    }
 
     try {
         const accessDetails = await getInstanceAccessDetails(config)
@@ -76,22 +93,48 @@ async function main() {
             ),
         ])
 
-        console.log('\n터널이 열렸습니다. 종료하려면 Ctrl+C를 누르세요.')
+        console.log(
+            mode.type === 'shell'
+                ? '\nSSH shell에 접속합니다. 종료하려면 exit를 입력하세요.'
+                : '\n터널이 열렸습니다. 종료하려면 Ctrl+C를 누르세요.',
+        )
 
-        await runSshTunnel({
+        await runSsh({
             accessDetails,
             certificatePath,
             knownHostsPath,
-            localPort: config.localPort,
+            mode,
             privateKeyPath,
         })
 
-        printSuccess('SSH 터널을 종료했습니다.')
+        printSuccess(
+            mode.type === 'shell'
+                ? 'SSH 접속을 종료했습니다.'
+                : 'SSH 터널을 종료했습니다.',
+        )
     } finally {
         if (tempDirectory) {
             await rm(tempDirectory, { force: true, recursive: true })
         }
     }
+}
+
+function resolveMode(args: string[]): SshMode {
+    if (args.length === 0) {
+        return {
+            type: 'db-tunnel',
+            localPort: parsePort(
+                process.env.LIGHTSAIL_DB_LOCAL_PORT,
+                DEFAULT_LOCAL_PORT,
+            ),
+        }
+    }
+
+    if (args.length === 1 && args[0] === '--shell') {
+        return { type: 'shell' }
+    }
+
+    throw new Error(`알 수 없는 옵션입니다: ${args.join(' ')}`)
 }
 
 function resolveConfig() {
@@ -100,10 +143,6 @@ function resolveConfig() {
         awsRegion: process.env.AWS_REGION ?? DEFAULT_AWS_REGION,
         instanceName:
             process.env.LIGHTSAIL_INSTANCE_NAME ?? DEFAULT_INSTANCE_NAME,
-        localPort: parsePort(
-            process.env.LIGHTSAIL_DB_LOCAL_PORT,
-            DEFAULT_LOCAL_PORT,
-        ),
     }
 }
 
@@ -210,24 +249,32 @@ function createKnownHosts(ipAddress: string, hostKeys: HostKey[]) {
     )
 }
 
-async function runSshTunnel({
+async function runSsh({
     accessDetails,
     certificatePath,
     knownHostsPath,
-    localPort,
+    mode,
     privateKeyPath,
 }: {
     accessDetails: InstanceAccessDetails
     certificatePath: string
     knownHostsPath: string
-    localPort: number
+    mode: SshMode
     privateKeyPath: string
 }) {
+    const modeArgs =
+        mode.type === 'shell'
+            ? ['-t']
+            : [
+                  '-N',
+                  '-T',
+                  '-L',
+                  `${mode.localPort}:${REMOTE_DB_HOST}:${REMOTE_DB_PORT}`,
+              ]
     const child = spawn(
         'ssh',
         [
-            '-N',
-            '-T',
+            ...modeArgs,
             '-i',
             privateKeyPath,
             '-o',
@@ -246,8 +293,6 @@ async function runSshTunnel({
             'ServerAliveInterval=30',
             '-o',
             'ServerAliveCountMax=3',
-            '-L',
-            `${localPort}:${REMOTE_DB_HOST}:${REMOTE_DB_PORT}`,
             `${accessDetails.username}@${accessDetails.ipAddress}`,
         ],
         { stdio: 'inherit' },

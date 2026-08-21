@@ -42,6 +42,9 @@ Billing Information`을 활성화해야 한다.
 - AWS Console에서 직접 변경하지 않는다.
 - Access Key를 생성하지 않는다.
 - 출처를 확인하지 않은 명령이나 스크립트를 실행하지 않는다.
+- Lightsail 수동 SSH 접속은 개인 `promise9` profile과 프로젝트의
+  `bun run lightsail:ssh` 명령을 사용한다.
+- Lightsail default key pair나 공유 PEM 파일을 내려받아 보관하지 않는다.
 
 PR 리뷰와 `main` 반영은 IAM이 강제하지 않는다. 기술적으로는 로컬의 미병합 코드도 배포할
 수 있으므로 실행 전에 현재 branch와 `cdk diff`를 확인한다.
@@ -65,3 +68,4 @@ root는 최초 계정 설정과 계정 복구에만 사용한다.
 - 다른 팀원의 IAM User 사용
 - `.env`, 토큰, DB URL을 Git, Slack, Notion, 이슈에 노출
 - 출처를 확인하지 않은 스크립트에 AWS 자격 증명 전달
+- Lightsail 수동 접속용 PEM 파일 다운로드·공유

@@ -8,6 +8,7 @@ RDS 같은 managed DB를 쓰지 않기 때문에 snapshot이나 백업을 로컬
 - 백업/검증/복구는 PostgreSQL client tools의 `pg_dump`, `pg_restore`를 사용한다.
 - Lightsail 운영 DB 접속에는 AWS CLI의 `promise9` profile과 OpenSSH client가 필요하다.
 - `aws login --profile promise9` 로그인이 유효해야 한다.
+- 팀원의 일반 Lightsail shell 접속은 `bun run lightsail:ssh`를 사용한다.
 
 ## 명령어
 

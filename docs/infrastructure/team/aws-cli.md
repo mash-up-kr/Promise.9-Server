@@ -58,19 +58,33 @@ aws logout --profile promise9
 
 다음 단계: [CDK Guide](./cdk.md)
 
-## Lightsail 운영 DB 터널
+## Lightsail SSH 접속
 
-운영 PostgreSQL 접속에는 default key pair를 로컬에 보관하지 않고 프로젝트의 터널
-명령을 사용한다.
+팀원의 Lightsail 수동 접속은 모두 개인 `promise9` profile로 수행한다. default key
+pair나 공유 PEM 파일을 사용하지 않는다.
 
 ```bash
 aws login --profile promise9
+bun run lightsail:ssh
+```
+
+`lightsail:ssh`는 AWS CLI의 `get-instance-access-details`로 인스턴스용 임시 SSH key와
+certificate를 받아 shell에 접속하고, `exit`로 종료할 때 임시 파일을 삭제한다.
+
+GitHub Actions의 `LIGHTSAIL_SSH_KEY`는 자동 배포 전용이다. 팀원이 로컬에 내려받거나
+수동 SSH 접속에 사용하지 않는다.
+
+### 운영 DB 터널
+
+운영 PostgreSQL도 같은 AWS CLI 임시 접속 방식을 사용한다.
+
+```bash
 bun run db:tunnel
 ```
 
-이 명령은 AWS CLI의 `get-instance-access-details`로 임시 SSH 접속 정보를 받아
-`127.0.0.1:15432`에 터널을 열고, 종료할 때 임시 파일을 삭제한다. 자세한 DB 명령은
-[Database Operations](../../database/operations.md)를 참고한다.
+`db:tunnel`은 `127.0.0.1:15432`에 터널을 열고 `Ctrl+C`로 종료할 때 임시 파일을
+삭제한다. 자세한 DB 명령은 [Database Operations](../../database/operations.md)를
+참고한다.
 
 ## 참고
 
