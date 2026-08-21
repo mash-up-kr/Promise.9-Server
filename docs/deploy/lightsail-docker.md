@@ -7,7 +7,6 @@ Promise.9 서버는 Docker image를 Docker Hub에 올리고, Lightsail에서 해
 | 항목                  | 값                       |
 | --------------------- | ------------------------ |
 | API 도메인            | `api.link-ding-dong.com` |
-| Lightsail static IP   | `52.78.189.19`           |
 | SSH 사용자            | `ubuntu`                 |
 | API 컨테이너          | `promise9-api`           |
 | PostgreSQL 컨테이너   | `promise9-db`            |

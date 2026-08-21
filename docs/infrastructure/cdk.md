@@ -46,7 +46,7 @@ bun run infra:synth --profile <초기-관리자-profile>
 bun run infra:diff Promise9AccessStack --profile <초기-관리자-profile>
 bun run infra:bootstrap \
   --profile <초기-관리자-profile> \
-  aws://743070678932/ap-northeast-2
+  aws://<팀-AWS-Account-ID>/ap-northeast-2
 bun run infra:deploy Promise9AccessStack \
   --profile <초기-관리자-profile>
 ```

@@ -44,7 +44,8 @@ aws lightsail get-instances \
   --profile promise9
 ```
 
-`Account`가 `743070678932`이고, `Arn`이 본인의 IAM User이며 `root`가 아닌지 확인한다.
+`Account`가 관리자가 안내한 팀 AWS 계정이고, `Arn`이 본인의 IAM User이며 `root`가
+아닌지 확인한다.
 
 `Promise9Team`은 전체 관리자 권한을 가진다. profile과 로그인 세션을 다른 사람이나
 스크립트에 전달하지 않고, 인프라 변경은 팀 절차에 따라 실행한다.
