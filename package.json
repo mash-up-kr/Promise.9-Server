@@ -59,6 +59,7 @@
         "dotenv": "^17.4.2",
         "drizzle-orm": "^0.45.2",
         "google-auth-library": "^10.9.0",
+        "jose": "^6.2.8",
         "node-vibrant": "^4.0.4",
         "openai": "^6.45.0",
         "passport": "^0.7.0",
