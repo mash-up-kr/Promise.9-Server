@@ -42,9 +42,23 @@ docker run -d --name promise9-db \
 `/opt/promise9/postgres-data`를 mount한다. `5432`는 `127.0.0.1`에만 bind하며
 Lightsail public firewall에는 열지 않는다.
 
+운영 Compose는 이미 초기화하고 개발 DB 백업을 복구한 `postgres-data`를 전제로 한다.
+배포 workflow는 빈 데이터 디렉터리를 초기화하거나 DB 계정과 비밀번호를 생성하지 않는다.
+API 배포도 `--no-deps`로 실행해 DB 컨테이너를 재시작하지 않는다.
+
 운영 API는 Docker network의 `db:5432`로 연결한다. 개발자 PC에서는 DB 포트를
 직접 열지 않고 [DB Operations](./operations.md)의 SSH 터널을 통해
 `127.0.0.1:15432`로 연결한다.
+
+운영 role은 다음처럼 분리한다.
+
+| role           | 용도                                   |
+| -------------- | -------------------------------------- |
+| `promise9`     | 초기화, migration, 복구 등 관리자 작업 |
+| `promise9_app` | API의 일반 테이블·sequence 접근        |
+
+API connection URL에는 `promise9_app`만 사용한다. role 비밀번호 변경은 DB의 `ALTER ROLE`과
+connection URL 변경을 같은 작업으로 수행하며 배포 workflow에 맡기지 않는다.
 
 <br>
 
@@ -91,6 +105,7 @@ schema.ts 수정
 
 Lightsail 배포 workflow는 migration을 자동 실행하지 않는다. 운영에 적용할 때는 먼저
 현재 DB를 백업하고 migration SQL을 검토한 뒤, SSH 터널을 연 상태에서 직접 실행한다.
+로컬 `.env`의 운영 URL은 관리자 role을 사용하고 API가 사용하는 제한 role URL과 분리한다.
 
 ```bash
 # 터미널 1

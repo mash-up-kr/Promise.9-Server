@@ -47,7 +47,9 @@ bun run db:tunnel
 
 터널을 연 터미널은 그대로 두고, 다른 터미널에서 운영 DB 명령을 실행한다.
 `DATABASE_URL_PRODUCTION`의 host와 port는 `127.0.0.1:15432`를 사용해야 한다.
-로컬 `.env`는 git ignore 대상이며 권한을 `600`으로 제한한다.
+로컬 운영 명령은 관리자 role `promise9`을 사용한다. API 컨테이너는 별도의 제한된
+`promise9_app` role을 사용한다. 로컬 `.env`는 git ignore 대상이며 권한을 `600`으로
+제한한다.
 
 ```dotenv
 DATABASE_URL_PRODUCTION=postgresql://promise9:<password>@127.0.0.1:15432/promise9
@@ -86,6 +88,7 @@ aws login --profile promise9
 ## 운영 환경 주의사항
 
 - 운영 DB 대상 실행은 `--env=production` 여부를 먼저 확인한다.
+- 관리자 role 비밀번호 변경과 API connection URL 변경은 같은 운영 작업으로 처리한다.
 - 백업은 읽기 작업이지만 DB 전체를 읽으므로 부하가 생길 수 있다.
 - 백업 완료 후 `db:backup:verify`로 archive를 확인하고 Lightsail Instance 외부에 보관한다.
 - 복구는 데이터 변경 작업이므로 백업 파일 검증과 현재 DB 백업 후 실행된다.
