@@ -23,7 +23,7 @@ API 명세, Swagger, controller endpoint, 실제 비즈니스 로직의 진행 �
 | `POST /links`                         |  O   |    O    |    O     |  O   | 큐·재시도 정책은 후속 적용                                    |
 | `GET /links/{linkId}`                 |  O   |    O    |    O     |  △   | 발행일 수집 TODO                                              |
 | `PATCH /links/{linkId}`               |  O   |    O    |    O     |  O   | -                                                             |
-| `PATCH /links/folder`                 |  O   |    O    |    O     |  O   | 최대 100개, 중복 제거, transaction 기반 일괄 폴더 이동        |
+| `PATCH /links/folder`                 |  O   |    O    |    O     |  O   | 1~100개 양의 정수 ID, 중복 제거, transaction 기반 일괄 이동   |
 | `DELETE /links/{linkId}`              |  O   |    O    |    O     |  O   | -                                                             |
 | `POST /links/{linkId}/restore`        |  O   |    O    |    O     |  O   | -                                                             |
 | `POST /links/{linkId}/view`           |  O   |    O    |    O     |  O   | -                                                             |
