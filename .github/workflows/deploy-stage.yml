@@ -162,6 +162,10 @@ jobs:
                   MASTER_ACCESS_TOKEN: ${{ secrets.MASTER_ACCESS_TOKEN }}
                   MASTER_USER_ID: ${{ secrets.MASTER_USER_ID }}
                   DB_POOL_SIZE: ${{ secrets.DB_POOL_SIZE }}
+                  EMAIL_FROM_ADDRESS: ${{ secrets.EMAIL_FROM_ADDRESS }}
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
               run: |
                   : "${DATABASE_URL_DEVELOPMENT:?DATABASE_URL_DEVELOPMENT is required}"
                   : "${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}"
@@ -174,6 +178,7 @@ jobs:
                     printf 'JWT_ACCESS_SECRET=%s\n' "$JWT_ACCESS_SECRET"
                     printf 'JWT_REFRESH_SECRET=%s\n' "$JWT_REFRESH_SECRET"
                     printf 'GOOGLE_CLIENT_ID=%s\n' "$GOOGLE_CLIENT_ID"
+                    printf 'EMAIL_SES_REGION=ap-northeast-2\n'
 
                     if [ -n "$JWT_ACCESS_EXPIRES_IN" ]; then
                       printf 'JWT_ACCESS_EXPIRES_IN=%s\n' "$JWT_ACCESS_EXPIRES_IN"
@@ -189,6 +194,18 @@ jobs:
                     fi
                     if [ -n "$DB_POOL_SIZE" ]; then
                       printf 'DB_POOL_SIZE=%s\n' "$DB_POOL_SIZE"
+                    fi
+                    if [ -n "$EMAIL_FROM_ADDRESS" ]; then
+                      printf 'EMAIL_FROM_ADDRESS=%s\n' "$EMAIL_FROM_ADDRESS"
+                    fi
+                    if [ -n "$AWS_ACCESS_KEY_ID" ]; then
+                      printf 'AWS_ACCESS_KEY_ID=%s\n' "$AWS_ACCESS_KEY_ID"
+                    fi
+                    if [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+                      printf 'AWS_SECRET_ACCESS_KEY=%s\n' "$AWS_SECRET_ACCESS_KEY"
+                    fi
+                    if [ -n "$AWS_SESSION_TOKEN" ]; then
+                      printf 'AWS_SESSION_TOKEN=%s\n' "$AWS_SESSION_TOKEN"
                     fi
                   } > .env.stage
 
