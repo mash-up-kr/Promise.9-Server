@@ -71,9 +71,6 @@ bun run lightsail:ssh
 `lightsail:ssh`는 AWS CLI의 `get-instance-access-details`로 인스턴스용 임시 SSH key와
 certificate를 받아 shell에 접속하고, `exit`로 종료할 때 임시 파일을 삭제한다.
 
-GitHub Actions의 `LIGHTSAIL_SSH_KEY`는 자동 배포 전용이다. 팀원이 로컬에 내려받거나
-수동 SSH 접속에 사용하지 않는다.
-
 ### 운영 DB 터널
 
 운영 PostgreSQL도 같은 AWS CLI 임시 접속 방식을 사용한다.

@@ -33,29 +33,6 @@ workflow는 `deploy-lightsail` concurrency group으로 한 번에 하나만 실�
 컨테이너가 모두 health check를 통과해야 배포 step이 성공한다. migration은 이 흐름에
 포함하지 않는다.
 
-### GitHub Actions secrets
-
-| Secret                 | 용도                                         |
-| ---------------------- | -------------------------------------------- |
-| `DOCKERHUB_USERNAME`   | Docker Hub 로그인과 image 이름               |
-| `DOCKERHUB_REPOSITORY` | API image repository                         |
-| `DOCKERHUB_TOKEN`      | Docker Hub push 인증                         |
-| `LIGHTSAIL_HOST`       | 배포 대상 host                               |
-| `LIGHTSAIL_USERNAME`   | 배포 SSH 사용자                              |
-| `LIGHTSAIL_SSH_KEY`    | GitHub Actions 배포용 SSH private key        |
-| `LIGHTSAIL_PORT`       | SSH port, 없으면 `22`                        |
-| `POSTGRES_PASSWORD`    | PostgreSQL과 API DB URL에 함께 쓰는 비밀번호 |
-| `JWT_ACCESS_SECRET`    | Access Token 서명                            |
-| `JWT_REFRESH_SECRET`   | Refresh Token 서명                           |
-| `GOOGLE_CLIENT_ID`     | Google login client 식별자                   |
-| `MASTER_ACCESS_TOKEN`  | Master API 인증                              |
-| `MASTER_USER_ID`       | Master API 사용자 식별자                     |
-
-secret 값 자체는 workflow나 문서에 기록하지 않는다.
-
-`LIGHTSAIL_SSH_KEY`는 GitHub Actions 자동 배포 전용이다. 팀원의 수동 서버 접속은
-공유 key 대신 개인 AWS CLI 로그인을 사용하는 `bun run lightsail:ssh`로 수행한다.
-
 ## 서버 상태
 
 Lightsail 서버에는 다음을 설치했다.
@@ -84,12 +61,12 @@ Nginx 설정 파일은 [deploy/nginx/promise9-api.conf](../../deploy/nginx/promi
 
 workflow는 다음 파일을 `/opt/promise9`에 배치한다.
 
-| 서버 경로                               | 생성 기준                                       |
-| --------------------------------------- | ----------------------------------------------- |
-| `/opt/promise9/docker-compose.prod.yml` | repository의 Compose 파일                       |
-| `/opt/promise9/.env`                    | GitHub Actions가 API secret으로 매 배포 생성    |
-| `/opt/promise9/db.env`                  | GitHub Actions가 DB 이름·사용자·비밀번호로 생성 |
-| `/opt/promise9/postgres-data`           | PostgreSQL data bind mount                      |
+| 서버 경로                               | 생성 기준                    |
+| --------------------------------------- | ---------------------------- |
+| `/opt/promise9/docker-compose.prod.yml` | repository의 Compose 파일    |
+| `/opt/promise9/.env`                    | 배포 workflow가 매 배포 생성 |
+| `/opt/promise9/db.env`                  | 배포 workflow가 매 배포 생성 |
+| `/opt/promise9/postgres-data`           | PostgreSQL data bind mount   |
 
 `.env`와 `db.env`는 서버에서 `600` 권한을 사용한다. `postgres-data`는 배포 때 덮어쓰지
 않으며 Instance 안의 운영 데이터이므로 별도 로컬 백업을 유지한다.
@@ -104,7 +81,6 @@ Lightsail public firewall은 CDK의 `Promise9LightsailStack`에서 관리한다.
 ## 운영 메모
 
 - Docker image에는 `.env`를 포함하지 않는다.
-- GitHub repository의 `POSTGRES_PASSWORD` secret으로 API용 `.env`와 DB용 `db.env`를 만든다.
 - DB 데이터는 host의 `/opt/promise9/postgres-data`에 저장한다.
 - PostgreSQL 18과 pgvector 0.8.6을 포함한 image를 고정해서 사용한다.
 - DB 복구와 migration은 대상과 실행 결과를 확인하며 직접 수행한다.

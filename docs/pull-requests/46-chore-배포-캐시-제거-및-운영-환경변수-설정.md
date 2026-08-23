@@ -14,12 +14,9 @@ Docker Buildx의 GitHub Actions 캐시 export 실패가 이미지 push 이후의
 
 ## ✅ 작업 내용 및 변경 사항
 - [x] Docker Buildx의 GitHub Actions cache import/export 설정 제거
-- [x] `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `GOOGLE_CLIENT_ID`를 운영 환경변수에 연결
-- [x] `MASTER_ACCESS_TOKEN`, `MASTER_USER_ID`를 운영 환경변수에 연결
 
 ## 💬 리뷰어에게
 `pull_request: closed` 및 `merged == true` 조건을 유지하여 PR이 실제로 병합될 때만 배포합니다.
-GitHub Actions에 등록된 애플리케이션용 Secret만 `.env.production`에 기록하며, Docker Hub 및 Lightsail SSH 관련 배포 인프라 Secret은 컨테이너 환경에 전달하지 않습니다.
 
 ## 🔗 관련 이슈
 - 해당 없음
