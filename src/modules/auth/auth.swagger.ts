@@ -9,12 +9,14 @@ import {
 import { USER_ERROR } from '../user/user-error.constant'
 
 import {
+    KakaoExchangeDto,
     LogoutDto,
     RefreshDto,
     SocialLoginDto,
     WithdrawDto,
 } from './dto/auth.dto'
 import {
+    KakaoExchangeResponseDto,
     SocialLoginResponseDto,
     TokenPairResponseDto,
 } from './dto/auth.response.dto'
@@ -66,6 +68,49 @@ export const ApiSocialLogin = () =>
             AUTH_ERROR.INVALID_SOCIAL_TOKEN,
             AUTH_ERROR.UNSUPPORTED_PROVIDER,
             USER_ERROR.EMAIL_ALREADY_REGISTERED,
+        ),
+    )
+
+const KAKAO_EXCHANGE_DESCRIPTION = `
+웹에서만 사용합니다. Kakao OIDC는 response_type=code로 고정되어 있어,
+웹은 client_secret 노출 없이 idToken을 얻을 방법이 없습니다. 프론트가
+authorization code를 이 엔드포인트로 넘기면 서버가 대신 Kakao token
+endpoint와 교환해 idToken을 돌려줍니다. 이후 그 idToken을
+\`POST /auth/social\` (\`provider=kakao\`)에 그대로 넘겨 로그인을 완료하세요.
+
+⚠️ **선행 조건**: idToken은 순수 OAuth가 아니라 OIDC 확장 기능이라,
+이 code를 발급받는 authorize 요청의 \`scope\`에 \`openid\`가 반드시
+포함되어야 발급됩니다. 빠뜨리면 \`response_type=code\` 자체는 정상적으로
+code를 내주지만, token 교환 응답에 idToken이 없어 이 엔드포인트가 항상
+\`KAKAO_EXCHANGE_FAILED\`를 반환합니다.
+
+\`\`\`
+https://kauth.kakao.com/oauth/authorize?client_id=...&redirect_uri=...&response_type=code&scope=openid
+\`\`\`
+
+iOS/Android 네이티브 앱은 SDK가 idToken을 직접 발급하므로 이 엔드포인트가
+필요 없습니다.
+`
+
+export const ApiKakaoExchange = () =>
+    applyDecorators(
+        ApiOperation({
+            summary: 'Kakao 웹 로그인용 code→idToken 교환 (웹 전용)',
+            description: KAKAO_EXCHANGE_DESCRIPTION,
+        }),
+        ApiBody({
+            type: KakaoExchangeDto,
+            description:
+                '- `code` (필수): Kakao authorization code\n- `redirectUri` (필수): code 발급에 사용한 redirect_uri와 동일한 값',
+        }),
+        ApiCommonResponse(KakaoExchangeResponseDto, {
+            description: '교환 성공',
+            dataExample: { idToken: ACCESS_TOKEN_EXAMPLE },
+        }),
+        ApiCommonErrorResponses(
+            COMMON_ERROR.VALIDATION,
+            AUTH_ERROR.KAKAO_EXCHANGE_FAILED,
+            AUTH_ERROR.KAKAO_UPSTREAM_UNAVAILABLE,
         ),
     )
 
