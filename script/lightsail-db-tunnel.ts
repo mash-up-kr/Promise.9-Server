@@ -269,7 +269,7 @@ async function runSsh({
                   '-N',
                   '-T',
                   '-L',
-                  `${mode.localPort}:${REMOTE_DB_HOST}:${REMOTE_DB_PORT}`,
+                  `127.0.0.1:${mode.localPort}:${REMOTE_DB_HOST}:${REMOTE_DB_PORT}`,
               ]
     const child = spawn(
         'ssh',

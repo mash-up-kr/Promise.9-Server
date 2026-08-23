@@ -60,7 +60,7 @@ chmod 600 .env
 ```
 
 ```bash
-bun run db:health -- --env=production --sslmode=disable
+bun run db:health -- --env=production
 bun run db:backup -- --env=production --sslmode=disable
 bun run db:backup:verify -- --file=backups/database/example.dump
 ```

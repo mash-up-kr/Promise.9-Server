@@ -112,10 +112,10 @@ Lightsail 배포 workflow는 migration을 자동 실행하지 않는다. 운영�
 bun run db:tunnel
 
 # 터미널 2
-bun run db:health -- --env=production --sslmode=disable
+bun run db:health -- --env=production
 bun run db:backup -- --env=production --sslmode=disable
 APP_ENV=production bun run db:migrate
-bun run db:health -- --env=production --sslmode=disable
+bun run db:health -- --env=production
 ```
 
 백업 명령이 출력한 파일은 `db:backup:verify`로 검증한 뒤 migration을 실행한다.
