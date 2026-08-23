@@ -181,6 +181,72 @@ export class LinkRepository {
         return row
     }
 
+    async markViewed(userId: number, linkId: number, viewedAt: Date) {
+        return this.db.transaction(async (tx) => {
+            const [source] = await tx
+                .select({ folderId: links.folderId })
+                .from(links)
+                .where(
+                    and(
+                        eq(links.id, linkId),
+                        eq(links.userId, userId),
+                        isNull(links.deletedAt),
+                    ),
+                )
+                .limit(1)
+
+            if (!source) {
+                return undefined
+            }
+
+            if (source.folderId !== null) {
+                await tx
+                    .select({ id: folders.id })
+                    .from(folders)
+                    .where(
+                        and(
+                            eq(folders.id, source.folderId),
+                            eq(folders.userId, userId),
+                            isNull(folders.deletedAt),
+                        ),
+                    )
+                    .for('update')
+                    .limit(1)
+            }
+
+            const [link] = await tx
+                .update(links)
+                .set({ viewedAt, updatedAt: viewedAt })
+                .where(
+                    and(
+                        eq(links.id, linkId),
+                        eq(links.userId, userId),
+                        isNull(links.deletedAt),
+                    ),
+                )
+                .returning({ id: links.id })
+
+            if (!link) {
+                return undefined
+            }
+
+            if (source.folderId !== null) {
+                await tx
+                    .update(folders)
+                    .set({ viewCount: sql`${folders.viewCount} + 1` })
+                    .where(
+                        and(
+                            eq(folders.id, source.folderId),
+                            eq(folders.userId, userId),
+                            isNull(folders.deletedAt),
+                        ),
+                    )
+            }
+
+            return link
+        })
+    }
+
     // 삭제되지 않은 링크의 분석 결과만 갱신한다.
     async updateActive(
         userId: number,

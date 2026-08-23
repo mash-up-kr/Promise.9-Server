@@ -71,8 +71,9 @@ export const links = pgTable(
         // 의미 검색용 임베딩 벡터. 제목·태그·AI 요약으로 생성하며 미생성 시 null.
         embedding: vector({ dimensions: EMBEDDING_DIMENSIONS }),
         memo: text(),
+        reminderAt: timestamp({ withTimezone: true }),
         isFavorite: boolean().notNull().default(false),
-        // 상세 화면이 실제 노출됐을 때 POST /links/:linkId/view로 갱신한다.
+        // 상세 화면을 5초 이상 본 뒤 POST /links/:linkId/view로 갱신한다.
         viewedAt: timestamp({ withTimezone: true }),
         deletedAt: timestamp({ withTimezone: true }),
         createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

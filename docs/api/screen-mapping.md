@@ -12,11 +12,11 @@
 
 <img src="./screens/home.png" alt="홈 화면" width="240" />
 
-| 화면 영역            | API                                                  | 상태 | 남은 작업                                 |
-| -------------------- | ---------------------------------------------------- | :--: | ----------------------------------------- |
-| 최근 저장            | `GET /links?sortBy=savedAt&order=desc&limit=9`       |  △   | 정렬·cursor 페이지네이션 연결             |
-| 최근 저장한 폴더     | `GET /folders?lastSavedAt=true&limit=3`              |  △   | `lastSavedAt` 집계·정렬 연결              |
-| 폴더별 링크 미리보기 | 현재 정책 결정 필요                                  |  X   | 폴더별 호출 또는 홈 전용 집계 API 중 선택 |
+| 화면 영역            | API                                            | 상태 | 남은 작업                                 |
+| -------------------- | ---------------------------------------------- | :--: | ----------------------------------------- |
+| 최근 저장            | `GET /links?sortBy=savedAt&order=desc&limit=9` |  △   | 정렬·cursor 페이지네이션 연결             |
+| 최근 저장한 폴더     | `GET /folders?lastSavedAt=true&limit=3`        |  △   | `lastSavedAt` 집계·정렬 연결              |
+| 폴더별 링크 미리보기 | 현재 정책 결정 필요                            |  X   | 폴더별 호출 또는 홈 전용 집계 API 중 선택 |
 
 ## 보관함과 폴더별 링크
 
@@ -50,15 +50,15 @@
 
 <img src="./screens/link-detail.png" alt="링크 상세 화면" width="240" />
 
-| 화면 동작              | API                                   | 상태 | 비고                                                  |
-| ---------------------- | ------------------------------------- | :--: | ----------------------------------------------------- |
-| 상세 정보 조회         | `GET /links/{linkId}`                 |  △   | 발행일 수집 TODO                                      |
-| 화면 노출 시 조회 기록 | `POST /links/{linkId}/view`           |  O   | Request Body 없이 서버 현재 시각을 `viewedAt`에 저장  |
-| 즐겨찾기 설정·해제     | `PATCH /links/{linkId}`               |  O   | `{ "isFavorite": true }` 또는 `false`                 |
-| 폴더 이동·미분류 이동  | `PATCH /links/{linkId}`               |  O   | `folderId` 지정, 미분류 이동은 `{ "folderId": null }` |
-| 사용자 태그 추가       | `POST /links/{linkId}/tags`           |  △   | Endpoint·계약만 존재, 현재 501·DB 저장 TODO           |
-| 사용자 태그 삭제       | `DELETE /links/{linkId}/tags/{tagId}` |  △   | Endpoint·계약만 존재, 현재 501·DB 삭제 TODO           |
-| 폴더 선택 목록         | `GET /folders`                        |  O   | 전체 사용자 폴더 반환                                 |
+| 화면 동작                  | API                                   | 상태 | 비고                                                  |
+| -------------------------- | ------------------------------------- | :--: | ----------------------------------------------------- |
+| 상세 정보 조회             | `GET /links/{linkId}`                 |  △   | 발행일 수집 TODO                                      |
+| 5초 이상 조회 시 열람 기록 | `POST /links/{linkId}/view`           |  O   | `viewedAt` 갱신 및 현재 폴더 `viewCount` 1 증가       |
+| 즐겨찾기 설정·해제         | `PATCH /links/{linkId}`               |  O   | `{ "isFavorite": true }` 또는 `false`                 |
+| 폴더 이동·미분류 이동      | `PATCH /links/{linkId}`               |  O   | `folderId` 지정, 미분류 이동은 `{ "folderId": null }` |
+| 사용자 태그 추가           | `POST /links/{linkId}/tags`           |  △   | Endpoint·계약만 존재, 현재 501·DB 저장 TODO           |
+| 사용자 태그 삭제           | `DELETE /links/{linkId}/tags/{tagId}` |  △   | Endpoint·계약만 존재, 현재 501·DB 삭제 TODO           |
+| 폴더 선택 목록             | `GET /folders`                        |  O   | 전체 사용자 폴더 반환                                 |
 
 ## 카테고리 둘러보기
 

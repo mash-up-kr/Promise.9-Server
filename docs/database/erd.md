@@ -49,6 +49,7 @@ erDiagram
     bigint user_id FK
     varchar name
     integer sort_order
+    integer view_count
     timestamptz created_at
     timestamptz updated_at
     timestamptz deleted_at
@@ -67,6 +68,7 @@ erDiagram
     text ai_summary
     varchar ai_summary_status
     text memo
+    timestamptz reminder_at
     timestamptz deleted_at
     timestamptz created_at
     timestamptz updated_at
