@@ -48,6 +48,7 @@ export class LinkService {
             // 링크 정보와 AI 요약은 저장 이후 비동기로 생성하므로 대기 상태로 둔다.
             aiSummaryStatus: 'PENDING',
             memo: input.memo ?? null,
+            reminderAt: input.reminderAt ? new Date(input.reminderAt) : null,
         })
 
         this.startLinkAnalysis({
@@ -60,6 +61,7 @@ export class LinkService {
             linkId: row.id,
             url: row.originalUrl,
             savedAt: row.createdAt,
+            reminderAt: row.reminderAt,
         }
     }
 
@@ -91,6 +93,7 @@ export class LinkService {
             aiSummary: link.aiSummary,
             tags: this.toTagResponses(tagRows),
             memo: link.memo,
+            reminderAt: link.reminderAt,
             relatedLinks,
         }
     }
@@ -114,6 +117,12 @@ export class LinkService {
             patch.memo = input.memo
         }
 
+        if (input.reminderAt !== undefined) {
+            patch.reminderAt = input.reminderAt
+                ? new Date(input.reminderAt)
+                : null
+        }
+
         if (input.isFavorite !== undefined) {
             patch.isFavorite = input.isFavorite
         }
@@ -124,6 +133,7 @@ export class LinkService {
             linkId: row.id,
             folderId: row.folderId,
             memo: row.memo,
+            reminderAt: row.reminderAt,
             isFavorite: row.isFavorite,
             updatedAt: row.updatedAt,
         }
@@ -165,13 +175,15 @@ export class LinkService {
     }
 
     async markViewed(userId: number, linkId: number) {
-        await this.getOwnedLink(userId, linkId)
+        const link = await this.linkRepository.markViewed(
+            userId,
+            linkId,
+            new Date(),
+        )
 
-        const now = new Date()
-        await this.linkRepository.update(userId, linkId, {
-            viewedAt: now,
-            updatedAt: now,
-        })
+        if (!link) {
+            throw new BaseException(LINK_ERROR.NOT_FOUND)
+        }
     }
 
     createTag(

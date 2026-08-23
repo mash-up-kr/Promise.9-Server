@@ -20,7 +20,6 @@ Lightsail 기반 Docker 배포 구성을 추가합니다. GitHub Actions에서 D
 - [x] 기본 build script를 Nest CLI 대신 tsc 기반으로 변경
 
 ## 💬 리뷰어에게
-- Docker Hub, AWS Lightsail, GitHub Actions secrets을 팀 계정으로 만들었습니다.
 - 현재 DB migration은 배포 workflow에서 자동 실행하지 않습니다.
 - 운영 환경변수는 Docker image에 포함하지 않고, 배포 시 서버의 /opt/promise9/.env로 반영합니다.
 - 배포는 main 머지 시 자동으로 진행되며, 필요하면 main 브랜치에서 수동 실행할 수도 있습니다.

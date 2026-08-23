@@ -6,6 +6,8 @@ const baseEnvironment = {
     JWT_ACCESS_SECRET: 'access-secret',
     JWT_REFRESH_SECRET: 'refresh-secret',
     GOOGLE_CLIENT_ID: 'google-client-id',
+    KAKAO_CLIENT_ID: 'kakao-client-id',
+    APPLE_CLIENT_ID: 'apple-client-id',
 }
 
 describe('validateEnvironment', () => {

@@ -88,8 +88,6 @@ GET /links?folderId=3&favorite=true&q=피그마&limit=9
 - **`nextCursor`**: 검색 커서는 `(score, id)` 기준이라 일반 목록 커서와 **호환되지 않는다.** 검색 요청에 일반 목록의 커서를 넘기면(또는 반대) `400 Bad Request`(`INVALID_CURSOR`)다. `q`를 바꾸면 커서도 버리고 첫 페이지부터 다시 요청한다.
 - **`totalCount`**: 관련도 상위 검색 결과 크기로, 최대 30이다.
 
-> 기존 `GET /links/search`, `GET /folders/{folderId}/links`는 이 API로 통합하여 제거한다.
-
 ## 링크 미리보기
 
 ```http
@@ -296,7 +294,7 @@ POST /links/{linkId}/restore
 POST /links/{linkId}/view
 ```
 
-상세 화면이 실제로 노출된 시점에 프론트가 호출한다. 상세 조회 GET 요청 자체는 조회 시각을 변경하지 않는다. 서버 현재 시각을 `viewedAt`으로 기록하므로 Request Body는 없다.
+상세 화면을 5초 이상 본 시점에 프론트가 한 번 호출한다. 상세 조회 GET 요청 자체는 조회 시각과 조회수를 변경하지 않는다. 서버는 현재 시각을 `viewedAt`으로 기록하고, 링크에 폴더가 있으면 해당 폴더의 `viewCount`를 1 증가시킨다. Request Body는 없다.
 
 **Response `204`** No Content
 

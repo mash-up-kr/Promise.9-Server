@@ -22,7 +22,7 @@ Access Key는 생성하지 않는다. AWS Console에서 Console 접근과 최초
 
 팀원에게 전달할 정보:
 
-- IAM 로그인 URL: `https://743070678932.signin.aws.amazon.com/console/`
+- 관리자가 별도로 전달하는 IAM 로그인 URL
 - 개인 IAM User 이름
 - 임시 비밀번호
 

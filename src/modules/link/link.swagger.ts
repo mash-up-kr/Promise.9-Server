@@ -88,11 +88,11 @@ const LIST_LINKS_DESCRIPTION = `
 const CREATE_LINK_DESCRIPTION = `
 URL과 사용자 입력값을 먼저 저장한 뒤 링크 정보 수집, AI 요약, AI 태그, 임베딩 생성을 현재 프로세스에서 비동기로 처리합니다. 저장 직후 상세 조회에서는 전체 분석 상태인 \`processingStatus=PENDING\`일 수 있습니다.
 
-\`folderId\`를 생략하거나 \`null\`로 보내면 미분류로 저장합니다. \`memo\`도 선택값이며 생략 시 \`null\`입니다.
+\`folderId\`를 생략하거나 \`null\`로 보내면 미분류로 저장합니다. \`memo\`와 \`reminderAt\`도 선택값이며 생략하거나 \`null\`로 보내면 설정하지 않습니다. \`reminderAt\`은 타임존을 포함한 ISO 8601 미래 시각으로 전달합니다.
 
 ### 현재 구현 상태
 
-- URL, 폴더, 메모를 저장한 뒤 링크 정보 수집과 AI 요약·태그·임베딩 생성을 시작합니다.
+- URL, 폴더, 메모, 리마인드 시각을 저장한 뒤 링크 정보 수집과 AI 요약·태그·임베딩 생성을 시작합니다.
 - 메시지 큐와 재시도 정책은 아직 적용하지 않았습니다.
 `
 
@@ -103,7 +103,7 @@ const LINK_DETAIL_DESCRIPTION = `
 
 ### 현재 구현 상태
 
-- 저장된 링크·폴더·메모·전체 분석 상태와 태그를 조회합니다.
+- 저장된 링크·폴더·메모·리마인드 시각·전체 분석 상태와 태그를 조회합니다.
 - \`isFavorite\`, \`viewedAt\`은 저장된 실제 값을 반환합니다.
 - \`publishedAt\`은 후속 구현입니다.
 - 연관 링크는 같은 폴더·태그·제목·저장된 임베딩 유사도의 기본 가중치로 상위 5개를 반환합니다.
@@ -112,25 +112,26 @@ const LINK_DETAIL_DESCRIPTION = `
 `
 
 const MARK_LINK_VIEWED_DESCRIPTION = `
-링크 상세 화면이 실제로 노출된 시점에 프론트가 호출합니다. \`GET /links/:linkId\`는 조회 시각을 암묵적으로 변경하지 않습니다.
+링크 상세 화면을 5초 이상 본 시점에 프론트가 한 번 호출합니다. \`GET /links/:linkId\`는 조회 시각과 조회수를 암묵적으로 변경하지 않습니다.
 
-서버가 호출 시각을 \`viewedAt\`으로 기록하며 프론트는 timestamp를 보내지 않습니다.
+서버가 호출 시각을 \`viewedAt\`으로 기록하고 링크의 현재 폴더 \`viewCount\`를 1 증가시킵니다. 미분류 링크는 \`viewedAt\`만 기록하며 프론트는 timestamp를 보내지 않습니다.
 
 ### 현재 구현 상태
 
-- 링크 소유권을 확인한 후 호출 시각을 \`viewedAt\`에 저장합니다.
+- 활성 상태인 소유 링크에만 \`viewedAt\`과 폴더 \`viewCount\`를 한 transaction으로 반영합니다.
 `
 
 const UPDATE_LINK_DESCRIPTION = `
-폴더, 메모, 즐겨찾기 중 변경할 필드만 전달합니다. 최소 한 필드는 필요합니다.
+폴더, 메모, 리마인드 시각, 즐겨찾기 중 변경할 필드만 전달합니다. 최소 한 필드는 필요합니다.
 
 - \`folderId=null\`: 미분류로 이동
 - \`memo=null\`: 메모 삭제
+- \`reminderAt=null\`: 리마인드 해제
 - \`isFavorite\`: 즐겨찾기 설정 또는 해제
 
 ### 현재 구현 상태
 
-- 폴더 이동, 메모 변경, 즐겨찾기 설정·해제가 모두 저장됩니다.
+- 폴더 이동, 메모 변경, 리마인드 설정·해제, 즐겨찾기 설정·해제가 모두 저장됩니다.
 `
 
 const REMOVE_LINK_DESCRIPTION = `
@@ -168,6 +169,7 @@ const CREATE_LINK_RESPONSE_EXAMPLE = {
     linkId: 42,
     url: 'https://toss.tech/article/experiment-design',
     savedAt: TIMESTAMP_EXAMPLE,
+    reminderAt: '2026-08-20T12:00:00.000Z',
 }
 
 const LIST_LINKS_RESPONSE_EXAMPLE = {
@@ -221,6 +223,7 @@ const LINK_DETAIL_RESPONSE_EXAMPLE = {
         { tagId: 8, name: '실험 설계', sourceType: 'user', sortOrder: 2 },
     ],
     memo: '다음 회의 전에 다시 보기',
+    reminderAt: '2026-08-20T12:00:00.000Z',
     relatedLinks: [
         {
             linkId: 41,
@@ -234,6 +237,7 @@ const UPDATE_LINK_RESPONSE_EXAMPLE = {
     linkId: 42,
     folderId: 3,
     memo: '다음 회의 전에 다시 보기',
+    reminderAt: '2026-08-20T12:00:00.000Z',
     isFavorite: true,
     updatedAt: TIMESTAMP_EXAMPLE,
 }
@@ -275,7 +279,8 @@ export const ApiCreateLink = () =>
             type: CreateLinkDto,
             description: `- \`url\` (필수): 저장할 URL
 - \`folderId\` (선택): 저장할 폴더 ID. 생략하거나 \`null\`이면 미분류
-- \`memo\` (선택): 최대 ${LINK_MEMO_MAX_LENGTH}자. 생략하거나 \`null\`이면 설정하지 않음`,
+- \`memo\` (선택): 최대 ${LINK_MEMO_MAX_LENGTH}자. 생략하거나 \`null\`이면 설정하지 않음
+- \`reminderAt\` (선택): 타임존을 포함한 ISO 8601 미래 시각. 생략하거나 \`null\`이면 설정하지 않음`,
         }),
         ApiCommonResponse(CreateLinkResponseDto, {
             status: 201,
@@ -436,7 +441,7 @@ export const ApiLinkPreview = () =>
 export const ApiUpdateLink = () =>
     applyDecorators(
         ApiOperation({
-            summary: '링크 수정 (폴더 / 메모 / 즐겨찾기)',
+            summary: '링크 수정 (폴더 / 메모 / 리마인드 / 즐겨찾기)',
             description: UPDATE_LINK_DESCRIPTION,
         }),
         ApiParam({
@@ -452,6 +457,7 @@ export const ApiUpdateLink = () =>
 
 - \`folderId\` (선택): 이동할 폴더 ID. \`null\`이면 미분류로 이동
 - \`memo\` (선택): 최대 ${LINK_MEMO_MAX_LENGTH}자. \`null\`이면 삭제
+- \`reminderAt\` (선택): 타임존을 포함한 ISO 8601 미래 시각. \`null\`이면 해제
 - \`isFavorite\` (선택): \`true\`이면 설정, \`false\`이면 해제`,
         }),
         ApiCommonResponse(UpdateLinkResponseDto, {
@@ -516,7 +522,7 @@ export const ApiRestoreLink = () =>
 export const ApiMarkLinkViewed = () =>
     applyDecorators(
         ApiOperation({
-            summary: '링크 조회 기록',
+            summary: '링크 열람 기록 (5초 이상 조회)',
             description: MARK_LINK_VIEWED_DESCRIPTION,
         }),
         ApiParam({
@@ -524,10 +530,10 @@ export const ApiMarkLinkViewed = () =>
             required: true,
             type: Number,
             example: 42,
-            description: '[필수] 조회 시각을 기록할 링크 ID',
+            description: '[필수] 5초 이상 조회한 링크 ID',
         }),
         ApiNoContentResponse({
-            description: '조회 접수 성공 (응답 본문 없음)',
+            description: '조회 기록 성공 (응답 본문 없음)',
         }),
         ApiCommonErrorResponses(
             COMMON_ERROR.VALIDATION,

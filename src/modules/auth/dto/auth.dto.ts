@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { z } from 'zod'
 
-export const SUPPORTED_PROVIDERS = ['google', 'kakao'] as const
+export const SUPPORTED_PROVIDERS = ['google', 'kakao', 'apple'] as const
 export type SupportedProvider = (typeof SUPPORTED_PROVIDERS)[number]
 
 export const socialLoginSchema = z.object({
@@ -25,13 +25,18 @@ export const withdrawSchema = z.object({
 })
 export type WithdrawInput = z.infer<typeof withdrawSchema>
 
+export const kakaoExchangeSchema = z.object({
+    code: z.string().min(1),
+    redirectUri: z.string().min(1),
+})
+export type KakaoExchangeInput = z.infer<typeof kakaoExchangeSchema>
+
 // Swagger 문서용
 export class SocialLoginDto {
     @ApiProperty({
         enum: SUPPORTED_PROVIDERS,
         example: 'google',
-        description:
-            '[필수] 소셜 로그인 제공자. 현재 google만 동작하며 kakao는 계약만 제공하는 TODO',
+        description: '[필수] 소셜 로그인 제공자',
     })
     provider!: SupportedProvider
 
@@ -64,4 +69,20 @@ export class WithdrawDto {
         description: '[필수] 본인 확인 및 폐기에 사용할 리프레시 토큰',
     })
     refreshToken!: string
+}
+
+export class KakaoExchangeDto {
+    @ApiProperty({
+        example: '4/0AY0e-g7...',
+        description:
+            '[필수] Kakao authorization code. authorize 요청 시 response_type=code&scope=openid로 발급받아야 함',
+    })
+    code!: string
+
+    @ApiProperty({
+        example: 'https://example.com/oauth/kakao/callback',
+        description:
+            '[필수] authorization code 요청 시 사용한 redirect_uri와 정확히 동일한 값',
+    })
+    redirectUri!: string
 }
