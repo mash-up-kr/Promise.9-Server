@@ -1,0 +1,4 @@
+CREATE EXTENSION IF NOT EXISTS pg_trgm;--> statement-breakpoint
+CREATE INDEX "links_title_search_trgm_idx" ON "links" USING gin (regexp_replace(lower(coalesce("title"::text, '')), '[[:space:]]', '', 'g') gin_trgm_ops) WHERE "links"."deleted_at" is null;--> statement-breakpoint
+CREATE INDEX "links_content_search_trgm_idx" ON "links" USING gin (regexp_replace(lower(coalesce("ai_summary"::text, '') || ' ' || coalesce("memo"::text, '') || ' ' || coalesce("domain"::text, '') || ' ' || coalesce("original_url"::text, '') || ' ' || coalesce("final_url"::text, '') || ' ' || coalesce("metadata"->>'description'::text, '')), '[[:space:]]', '', 'g') gin_trgm_ops) WHERE "links"."deleted_at" is null;--> statement-breakpoint
+CREATE INDEX "tags_normalized_name_trgm_idx" ON "tags" USING gin (regexp_replace(lower(coalesce("normalized_name"::text, '')), '[[:space:]]', '', 'g') gin_trgm_ops);

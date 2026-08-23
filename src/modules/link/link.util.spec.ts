@@ -5,28 +5,25 @@ describe('buildEmbeddingText', () => {
     const base = {
         title: null,
         aiSummary: null,
-        memo: null,
-        domain: null,
-        metadata: null,
-    } as Pick<LinkRow, 'title' | 'aiSummary' | 'memo' | 'domain' | 'metadata'>
+        tagNames: [],
+    } as Pick<LinkRow, 'title' | 'aiSummary'> & {
+        tagNames: string[]
+    }
 
     it('의미 있는 필드를 개행으로 결합한다', () => {
         const text = buildEmbeddingText({
             ...base,
             title: 'NestJS 클린 아키텍처',
+            tagNames: ['NestJS', '백엔드'],
             aiSummary: '계층 분리와 의존성 역전 정리',
-            memo: '나중에 다시 읽기',
-            domain: 'toss.tech',
-            metadata: { version: 1, description: 'DDD 관점 요약' },
         })
 
         expect(text).toBe(
             [
                 'NestJS 클린 아키텍처',
+                'NestJS',
+                '백엔드',
                 '계층 분리와 의존성 역전 정리',
-                '나중에 다시 읽기',
-                'toss.tech',
-                'DDD 관점 요약',
             ].join('\n'),
         )
     })
@@ -35,7 +32,7 @@ describe('buildEmbeddingText', () => {
         const text = buildEmbeddingText({
             ...base,
             title: '제목',
-            memo: '   ',
+            tagNames: ['', '   '],
         })
 
         expect(text).toBe('제목')

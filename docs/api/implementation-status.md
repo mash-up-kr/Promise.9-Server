@@ -18,10 +18,10 @@ API 명세, Swagger, controller endpoint, 실제 비즈니스 로직의 진행 �
 
 | API                                   | 명세 | Swagger | Endpoint | 로직 | 남은 작업                                                     |
 | ------------------------------------- | :--: | :-----: | :------: | :--: | ------------------------------------------------------------- |
-| `GET /links`                          |  O   |    O    |    O     |  △   | 즐겨찾기, 대표 태그, 최근 조회 정렬, cursor 페이지네이션 연결 |
+| `GET /links`                          |  O   |    O    |    O     |  △   | 대표 태그 선정·조회 TODO                                      |
 | `GET /links/preview`                  |  O   |    X    |    X     |  X   | URL 메타데이터 미리보기 구현                                  |
 | `POST /links`                         |  O   |    O    |    O     |  O   | 큐·재시도 정책은 후속 적용                                    |
-| `GET /links/{linkId}`                 |  O   |    O    |    O     |  △   | 발행일·연관 링크 실제 값 연결                                 |
+| `GET /links/{linkId}`                 |  O   |    O    |    O     |  △   | 발행일 수집 TODO                                              |
 | `PATCH /links/{linkId}`               |  O   |    O    |    O     |  O   | -                                                             |
 | `DELETE /links/{linkId}`              |  O   |    O    |    O     |  O   | -                                                             |
 | `POST /links/{linkId}/restore`        |  O   |    O    |    O     |  O   | -                                                             |
@@ -50,8 +50,8 @@ API 명세, Swagger, controller endpoint, 실제 비즈니스 로직의 진행 �
 | 홈 최근 저장 링크            |  △   | `GET /links` 정렬·limit 실제 적용              |
 | 홈 최근 저장 폴더            |  △   | `lastSavedAt` 집계 및 정렬 연결                |
 | 보관함 링크 상태·사용자 폴더 |  △   | 즐겨찾기 카운트와 폴더 정렬 연결               |
-| 링크 상세                    |  △   | 발행일·태그·연관 링크 실제 값 연결             |
-| 검색 결과                    |  △   | `GET /links?q=...` 계약 완료, cursor 연결 필요 |
+| 링크 상세                    |  △   | 발행일 수집 TODO                               |
+| 검색 결과                    |  O   | -                                              |
 | 검색 기본 화면 최근 본 링크  |  △   | `viewedAt` 기준 정렬·페이지네이션 연결 필요    |
 | 카테고리 둘러보기            |  X   | 카테고리 데이터 정책과 API 결정 필요           |
 | 최근 검색어                  |  X   | 로컬 또는 서버 저장 정책 결정 필요             |

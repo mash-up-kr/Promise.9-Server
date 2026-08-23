@@ -7,8 +7,8 @@ Promise.9 서버 DB 문서의 시작점입니다.
 | 문서                          | 내용                                                 |
 | ----------------------------- | ---------------------------------------------------- |
 | [Setup](./setup.md)           | PostgreSQL, Drizzle ORM, 환경변수, 마이그레이션 흐름 |
-| [Operations](./operations.md) | DB 백업, 복구, 상태 확인, Mermaid ERD 생성 스크립트  |
-| [Restore](./restore.md)       | DB 복구 스크립트 사용법과 안전 조건                  |
+| [Operations](./operations.md) | DB 백업, 상태 확인, 운영 SSH 터널과 Mermaid ERD      |
+| [Restore](./restore.md)       | 개발·운영 DB 복구 절차와 안전 조건                   |
 | [ERD](./erd.md)               | 전체 테이블 통합 ERD (커밋된 설계 문서 기준)         |
 | [Tables](./tables)            | 테이블별 상세 설계 (필드·제약·인덱스)                |
 

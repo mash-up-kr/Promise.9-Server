@@ -10,7 +10,9 @@ import { ValidatedEnvironment } from '../../config/environment'
 import { UserRepository } from '../user/repository/user.repository'
 
 import { SupportedProvider } from './dto/auth.dto'
+import { AppleProvider } from './providers/apple.provider'
 import { GoogleProvider } from './providers/google.provider'
+import { KakaoProvider } from './providers/kakao.provider'
 import { SocialProvider } from './providers/social-provider.interface'
 import { RefreshTokenRepository } from './repository/refresh-token.repository'
 import { TOKEN_TYPE, TokenType } from './auth.constants'
@@ -45,6 +47,8 @@ export class AuthService {
         private readonly refreshTokenRepository: RefreshTokenRepository,
         private readonly jwtService: JwtService,
         private readonly googleProvider: GoogleProvider,
+        private readonly kakaoProvider: KakaoProvider,
+        private readonly appleProvider: AppleProvider,
         config: ConfigService<ValidatedEnvironment, true>,
     ) {
         this.accessSecret = config.getOrThrow('JWT_ACCESS_SECRET', {
@@ -77,6 +81,20 @@ export class AuthService {
 
         const tokens = await this.issueTokens(userId)
         return { ...tokens, isNewUser }
+    }
+
+    // 웹은 Kakao SDK 없이 authorization code만 받으므로, client_secret을 서버에만
+    // 둔 채 code→id_token 교환을 대신 수행한다. 반환된 idToken은 프론트가 다시
+    // socialLogin(provider=kakao)로 넘겨 실제 로그인을 완료한다.
+    async kakaoExchange(
+        code: string,
+        redirectUri: string,
+    ): Promise<{ idToken: string }> {
+        const idToken = await this.kakaoProvider.exchangeCodeForIdToken(
+            code,
+            redirectUri,
+        )
+        return { idToken }
     }
 
     async refresh(rawRefreshToken: string): Promise<TokenPair> {
@@ -138,8 +156,8 @@ export class AuthService {
     private getProvider(provider: SupportedProvider): SocialProvider {
         const providerMap: Record<string, SocialProvider> = {
             google: this.googleProvider,
-            // TODO: 카카오 provider 추가 필요
-            // kakao: this.kakaoProvider,
+            kakao: this.kakaoProvider,
+            apple: this.appleProvider,
         }
 
         const resolved = providerMap[provider]

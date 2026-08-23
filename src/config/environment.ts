@@ -42,6 +42,10 @@ const appEnvSchema = z
         JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
         JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
         GOOGLE_CLIENT_ID: z.string().min(1),
+        KAKAO_CLIENT_ID: z.string().min(1),
+        // 카카오 로그인 콘솔에서 Client Secret 사용을 켠 경우에만 필요 (기본값 OFF)
+        KAKAO_CLIENT_SECRET: z.string().min(1).optional(),
+        APPLE_CLIENT_ID: z.string().min(1),
         MASTER_ACCESS_TOKEN: z.string().optional(),
         MASTER_USER_ID: z.coerce.number().int().positive().optional(),
         LLM_DEFAULT_MODEL: z.enum(LLM_MODEL).default(LLM_MODEL.GPT_5_4_MINI),
