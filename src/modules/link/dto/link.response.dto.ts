@@ -214,6 +214,33 @@ export class UpdateLinkResponseDto {
     updatedAt!: string
 }
 
+export class MoveLinksToFolderResponseDto {
+    @ApiProperty({
+        example: 3,
+        description: '중복 제거 후 요청된 링크 수',
+    })
+    requestedCount!: number
+
+    @ApiProperty({
+        example: 2,
+        description: '목적지 폴더가 달라 실제로 이동한 링크 수',
+    })
+    movedCount!: number
+
+    @ApiProperty({
+        example: 1,
+        description: '이미 목적지에 있어 변경하지 않은 링크 수',
+    })
+    unchangedCount!: number
+
+    @ApiProperty({
+        example: 7,
+        nullable: true,
+        description: '이동한 목적지 폴더 ID (미분류면 null)',
+    })
+    folderId!: number | null
+}
+
 export class RestoreLinkResponseDto {
     @ApiProperty({ example: 42, description: '링크 ID' })
     linkId!: number

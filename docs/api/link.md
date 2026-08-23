@@ -259,6 +259,47 @@ PATCH /links/{linkId}
 }
 ```
 
+## 링크 일괄 폴더 이동
+
+```http
+PATCH /links/folder
+```
+
+선택 출처와 관계없이 사용자가 소유한 활성 링크를 한 사용자 폴더 또는 미분류로 이동한다. 요청에는 링크를 최대 100개까지 전달할 수 있으며, 중복된 ID는 한 번만 처리한다.
+
+**Request Body**
+
+```json
+{
+    "linkIds": [42, 43, 44],
+    "folderId": 7
+}
+```
+
+`folderId=null`이면 미분류로 이동한다. 전체, 즐겨찾기, 최근 삭제는 실제 폴더가 아니므로 목적지로 지정할 수 없다.
+
+**Response `200`**
+
+```json
+{
+    "success": true,
+    "data": {
+        "requestedCount": 3,
+        "movedCount": 2,
+        "unchangedCount": 1,
+        "folderId": 7
+    }
+}
+```
+
+- `requestedCount`: 중복 제거 후 요청된 링크 수
+- `movedCount`: 목적지 폴더가 달라 실제로 이동한 링크 수
+- `unchangedCount`: 이미 목적지에 있어 변경하지 않은 링크 수
+- 같은 목적지인 링크는 `updatedAt`을 변경하지 않는다.
+- 링크 하나라도 없거나, 삭제됐거나, 다른 사용자 소유이면 `404`로 전체 요청을 실패시킨다.
+- 목적지 폴더가 없거나 다른 사용자 소유여도 `404`로 전체 요청을 실패시킨다.
+- 검증과 이동은 하나의 DB transaction으로 실행하며 부분 성공하지 않는다.
+
 ## 링크 삭제
 
 ```http

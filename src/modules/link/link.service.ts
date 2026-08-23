@@ -9,6 +9,7 @@ import { LinkAnalysisInput } from './analysis/link-analysis.type'
 import {
     CreateLinkInput,
     ListLinksQueryInput,
+    MoveLinksToFolderInput,
     UpdateLinkInput,
 } from './dto/link.dto'
 import { CreateLinkTagInput } from './dto/tag.dto'
@@ -127,6 +128,14 @@ export class LinkService {
             isFavorite: row.isFavorite,
             updatedAt: row.updatedAt,
         }
+    }
+
+    moveToFolder(userId: number, input: MoveLinksToFolderInput) {
+        return this.linkRepository.moveToFolder(
+            userId,
+            input.linkIds,
+            input.folderId,
+        )
     }
 
     async remove(userId: number, linkId: number) {

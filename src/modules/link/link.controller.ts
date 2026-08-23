@@ -25,6 +25,8 @@ import {
     linkPreviewQuerySchema,
     ListLinksQueryInput,
     listLinksQuerySchema,
+    MoveLinksToFolderInput,
+    moveLinksToFolderSchema,
     UpdateLinkInput,
     updateLinkSchema,
 } from './dto/link.dto'
@@ -37,6 +39,7 @@ import {
     ApiLinkPreview,
     ApiListLinks,
     ApiMarkLinkViewed,
+    ApiMoveLinksToFolder,
     ApiRemoveLink,
     ApiRemoveLinkTag,
     ApiRestoreLink,
@@ -81,6 +84,17 @@ export class LinkController {
         query: LinkPreviewQueryInput,
     ) {
         return this.linkContentService.preview(query.url)
+    }
+
+    // ':linkId' 파라미터 라우트보다 먼저 선언해 'folder'가 ID로 잡히지 않게 한다.
+    @Patch('folder')
+    @ApiMoveLinksToFolder()
+    moveToFolder(
+        @CurrentUser() user: AuthUser,
+        @Body(new ZodValidationPipe(moveLinksToFolderSchema))
+        body: MoveLinksToFolderInput,
+    ) {
+        return this.linkService.moveToFolder(user.userId, body)
     }
 
     @Get(':linkId')

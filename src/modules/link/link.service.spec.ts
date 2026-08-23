@@ -8,6 +8,29 @@ import { LinkRow } from './link.schema'
 import { LinkService } from './link.service'
 
 describe('LinkService', () => {
+    it('링크 일괄 폴더 이동을 repository에 위임한다', async () => {
+        const result = {
+            requestedCount: 2,
+            movedCount: 1,
+            unchangedCount: 1,
+            folderId: 7,
+        }
+        const linkRepository = {
+            moveToFolder: jest.fn().mockResolvedValue(result),
+        }
+        const service = new LinkService(
+            linkRepository as unknown as LinkRepository,
+            {} as never,
+            {} as never,
+            {} as never,
+        )
+
+        await expect(
+            service.moveToFolder(3, { linkIds: [42, 43], folderId: 7 }),
+        ).resolves.toEqual(result)
+        expect(linkRepository.moveToFolder).toHaveBeenCalledWith(3, [42, 43], 7)
+    })
+
     it('목록 커서에 DB microsecond 정밀도 값을 그대로 사용한다', async () => {
         const first = {
             id: 79,
