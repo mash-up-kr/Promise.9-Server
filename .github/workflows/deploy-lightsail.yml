@@ -89,8 +89,6 @@ jobs:
             printf 'MASTER_USER_ID=%s\n' "$MASTER_USER_ID"
           } > .env.production
 
-          chmod 600 .env.production
-
       - name: Ensure deploy directory
         uses: appleboy/ssh-action@v1.2.0
         with:
