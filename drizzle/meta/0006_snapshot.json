@@ -1,5 +1,5 @@
 {
-  "id": "2d765a67-5338-4975-b1d3-38116bfdc55d",
+  "id": "fae0876f-3092-4d5e-bc23-66a4468e123c",
   "prevId": "9ae86427-472e-498d-bcc0-61e4bd823491",
   "version": "7",
   "dialect": "postgresql",
@@ -642,12 +642,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "reminder_at": {
-          "name": "reminder_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "is_favorite": {
           "name": "is_favorite",
           "type": "boolean",
@@ -789,6 +783,38 @@
           "where": "\"links\".\"deleted_at\" is not null",
           "concurrently": false,
           "method": "btree",
+          "with": {}
+        },
+        "links_title_search_trgm_idx": {
+          "name": "links_title_search_trgm_idx",
+          "columns": [
+            {
+              "expression": "regexp_replace(lower(coalesce(\"title\"::text, '')), '[[:space:]]', '', 'g') gin_trgm_ops",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"links\".\"deleted_at\" is null",
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        },
+        "links_content_search_trgm_idx": {
+          "name": "links_content_search_trgm_idx",
+          "columns": [
+            {
+              "expression": "regexp_replace(lower(coalesce(\"ai_summary\"::text, '') || ' ' || coalesce(\"memo\"::text, '') || ' ' || coalesce(\"domain\"::text, '') || ' ' || coalesce(\"original_url\"::text, '') || ' ' || coalesce(\"final_url\"::text, '') || ' ' || coalesce(\"metadata\"->>'description'::text, '')), '[[:space:]]', '', 'g') gin_trgm_ops",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"links\".\"deleted_at\" is null",
+          "concurrently": false,
+          "method": "gin",
           "with": {}
         }
       },
@@ -935,6 +961,21 @@
           "isUnique": false,
           "concurrently": false,
           "method": "btree",
+          "with": {}
+        },
+        "tags_normalized_name_trgm_idx": {
+          "name": "tags_normalized_name_trgm_idx",
+          "columns": [
+            {
+              "expression": "regexp_replace(lower(coalesce(\"normalized_name\"::text, '')), '[[:space:]]', '', 'g') gin_trgm_ops",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
           "with": {}
         }
       },

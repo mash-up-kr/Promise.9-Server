@@ -42,7 +42,7 @@ erDiagram
 | title             | varchar     | N    | 수집된 제목. 수집 실패 시 `NULL` 가능                                                           |
 | metadata          | jsonb       | N    | Open Graph, favicon, description, 이미지 정보, 색상 등 확장 메타데이터. 최상위에 `version` 포함 |
 | ai_summary        | text        | N    | AI 요약 결과                                                                                    |
-| ai_summary_status | varchar     | Y    | AI 요약 대표 상태. 예: `PENDING`, `SUCCESS`, `NEEDS_REVIEW`, `FAILED`                           |
+| ai_summary_status | varchar     | Y    | 비동기 분석 대표 상태. 요약·태그·임베딩이 모두 성공해야 `SUCCESS`                               |
 | memo              | text        | N    | 사용자 메모. 최대 500자                                                                         |
 | reminder_at       | timestamptz | N    | 리마인드를 받을 절대 시각. `NULL`이면 리마인드를 설정하지 않음                                  |
 | is_favorite       | boolean     | Y    | 즐겨찾기 여부. 기본값은 `false`                                                                 |

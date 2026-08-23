@@ -30,7 +30,6 @@ PR 생성 시 본문에 `@stage`를 포함하거나, PR 작성자 또는 저장�
 - Stage는 PR별 인스턴스가 아니라 최신 요청이 기존 인스턴스를 교체하는 하나의 공유 환경입니다.
 - Stage 애플리케이션은 `APP_ENV=development`로 실행하며 `DATABASE_URL_DEVELOPMENT`를 사용합니다.
 - DB migration은 자동 실행하지 않고 수동으로 유지합니다.
-- 같은 저장소의 write 권한 이상 사용자만 배포를 요청할 수 있습니다. 해당 신뢰 범위 안에서 PR 브랜치의 workflow가 repository secrets를 사용하는 현재 방식을 적용했습니다.
 - 첫 실행은 아래 PR 본문의 `@stage`로 시작되며, 이후에는 코멘트에 `@stage`만 남겨 다시 배포할 수 있습니다.
 - 컨테이너는 서버의 `127.0.0.1:3001`에만 노출되고 Nginx를 통해 접근합니다.
 

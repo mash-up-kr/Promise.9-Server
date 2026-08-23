@@ -16,17 +16,18 @@ ALTER TABLE "links" ADD COLUMN "embedding" vector(768);
 ```
 
 확장이 없는 Postgres에서는 이 마이그레이션이 `type "vector" does not exist`로 실패한다.
-로컬은 `pgvector/pgvector:pg18` 이미지처럼 확장이 포함된 이미지를 써야 한다. (DB 준비는 [database/setup.md](../database/setup.md) 참조)
+로컬과 운영은 `pgvector/pgvector:0.8.6-pg18-bookworm` 이미지를 사용한다. DB 준비는
+[Database Setup](../database/setup.md)을 참고한다.
 
 <br>
 
 ## 임베딩 컬럼
 
-| 항목      | 값                                                    |
-| --------- | ----------------------------------------------------- |
-| 컬럼      | `links.embedding` — `vector(768)`, 미생성 시 `null`   |
-| 모델      | OpenAI `text-embedding-3-large` (`EMBEDDING_MODEL`)   |
-| 차원      | `768` (`EMBEDDING_DIMENSIONS`)                        |
+| 항목 | 값                                                  |
+| ---- | --------------------------------------------------- |
+| 컬럼 | `links.embedding` — `vector(768)`, 미생성 시 `null` |
+| 모델 | OpenAI `text-embedding-3-large` (`EMBEDDING_MODEL`) |
+| 차원 | `768` (`EMBEDDING_DIMENSIONS`)                      |
 
 모델과 차원은 `src/common/constants/llm.ts`에 상수로 고정한다. env로 열어두지 않는 이유는 provider·모델을 바꾸면 기존 벡터와 호환되지 않아 전량 재생성해야 하기 때문이다. `vector(N)`의 `N`도 이 상수와 반드시 일치해야 한다.
 
@@ -40,19 +41,19 @@ ALTER TABLE "links" ADD COLUMN "embedding" vector(768);
 
 ```
 title
+tags (sortOrder 순)
 aiSummary
-memo
-domain
-metadata.description
 ```
 
-생성 시점은 세 곳이다.
+생성 시점은 요약·태그 처리가 끝난 뒤다.
 
-- **링크 저장 직후** — 저장 응답을 막지 않도록 `embedLinkSafe`로 best-effort 처리한다. 이 시점엔 아직 제목·요약·메타데이터가 비어 있어 `domain`(+`memo`) 위주로만 임베딩된다.
-- **메모 수정 시** — 임베딩 대상 텍스트가 바뀌므로 재생성한다.
-- **백필 스크립트** — `bun run db:backfill:embeddings`로 기존 링크를 채운다.
+- **요약·태그 처리 후** — 두 작업의 성공 여부와 관계없이 최신 DB 값을 다시 읽어 가능한 부분 결과로 임베딩을 시도한다.
+- **전체 상태 확정 전** — 요약·태그 처리와 임베딩 저장이 모두 성공해야 `processingStatus=SUCCESS`로 변경한다. 하나라도 실패하면 부분 결과는 보존하고 `FAILED`로 기록한다.
 
-`updateEmbedding`은 `UPDATE ... WHERE` 절에 임베딩 대상 컬럼들의 `is not distinct from` 비교를 함께 걸어, 임베딩을 생성하는 동안 링크가 수정됐다면 오래된 텍스트의 벡터를 저장하지 않는다.
+embedding이 없는 링크는 `bun run db:backfill:embeddings`로 채우며, 실행 전에 사용자
+범위와 예상 API 호출 수를 확인한다.
+
+`LinkRepository.updateEmbedding`은 요청 사용자의 활성 링크에만 벡터를 저장한다. 임베딩 생성 중 링크가 삭제돼 갱신된 행이 없으면 임베딩 실패로 처리한다.
 
 <br>
 
@@ -65,24 +66,37 @@ pgvector의 `<=>` 연산자가 코사인 **거리**를 준다. 유사도는 거�
 코사인 유사도 = 1 - (embedding <=> :queryEmbedding)  -- 1에 가까울수록 유사
 ```
 
-`findVectorCandidates`(`link.repository.ts`)가 이 계산을 담당한다. drizzle의 `cosineDistance()`가 `<=>`로 컴파일된다.
+`SearchRepository`와 `RelatedLinkRepository`의 `findVectorCandidateIds()`는 drizzle의 `cosineDistance()`가 컴파일한 `<=>`로 후보를 정렬해 id만 반환한다. 실제 `1 - cosineDistance` 유사도 값은 후보 합집합을 hydrate하는 각 `findCandidates()`에서 계산한다.
 
-```
-SELECT id, 1 - (embedding <=> :query) AS score
+검색 후보는 요청 scope를 적용한다.
+
+```sql
+SELECT id
 FROM links
 WHERE user_id = :userId
-  AND deleted_at IS NULL          -- deleted=true면 IS NOT NULL
-  AND embedding IS NOT NULL       -- 임베딩 미생성 링크는 벡터 후보에서 제외
-  -- 아래는 요청 필터에 따라 붙는다 (buildScopeConditions)
-  [AND folder_id = :folderId]     -- folderId
+  AND deleted_at IS NULL          -- deleted=true면 이 조건 대신 IS NOT NULL
+  AND embedding IS NOT NULL
+  [AND folder_id = :folderId]
   [AND folder_id IS NULL]         -- unassigned=true
-  [AND is_favorite = true]        -- favorite=true
-  [AND viewed_at IS NOT NULL]     -- sortBy=viewedAt
+  [AND is_favorite = true]
 ORDER BY embedding <=> :query
-LIMIT 50                          -- LINK_SEARCH_CANDIDATE_LIMIT
+LIMIT 30
 ```
 
-정렬은 `score DESC`가 아니라 `거리 ASC`로 한다. 결과 순서는 같지만 거리 계산을 한 번만 하고, 나중에 벡터 인덱스를 도입하면 인덱스가 쓸 수 있는 형태이기도 하다.
+관련 링크 후보는 항상 활성 링크만 대상으로 현재 링크를 제외한다.
+
+```sql
+SELECT id
+FROM links
+WHERE user_id = :userId
+  AND deleted_at IS NULL
+  AND embedding IS NOT NULL
+  AND id <> :sourceLinkId
+ORDER BY embedding <=> :sourceEmbedding
+LIMIT 10
+```
+
+두 쿼리 모두 거리 오름차순으로 정렬한다. 나중에 벡터 인덱스를 도입할 때도 인덱스가 사용할 수 있는 형태다.
 
 <br>
 
@@ -100,12 +114,17 @@ HNSW는 근사 최근접(ANN) 인덱스로, 벡터를 다층 그래프로 연결
 
 인덱스를 걸지 않으면 비용은 **필터를 통과한 행 수**에만 비례한다. 그 필터는 이미 인덱싱돼 있어서, 사용자 한 명의 링크 수가 곧 코사인 계산 횟수다. 정확도는 100%다.
 
-| | 인덱스 있음 | 없음 (현재) |
-| --- | --- | --- |
-| 정확도 | 근사 + 필터에 후보가 걸려 누락 | recall 100% |
-| 예측성 | 플래너 선택에 따라 결과가 달라짐 | 항상 동일 |
-| 속도 | 사용자당 링크가 많아질수록 유리 | 필터 통과 행 수에 비례 |
-| 쓰기 비용 | 임베딩 갱신마다 그래프 삽입 | 없음 |
-| 저장 공간 | 벡터당 3KB(768 × 4바이트) + 그래프 | 없음 |
+|           | HNSW 인덱스                        | Exact scan             |
+| --------- | ---------------------------------- | ---------------------- |
+| 정확도    | 근사 + 필터에 후보가 걸려 누락     | recall 100%            |
+| 예측성    | 플래너 선택에 따라 결과가 달라짐   | 항상 동일              |
+| 속도      | 사용자당 링크가 많아질수록 유리    | 필터 통과 행 수에 비례 |
+| 쓰기 비용 | 임베딩 갱신마다 그래프 삽입        | 없음                   |
+| 저장 공간 | 벡터당 3KB(768 × 4바이트) + 그래프 | 없음                   |
 
-**재도입 기준:** 사용자당 활성 링크가 만 건대에 접근하면 다시 검토한다. 그때는 pgvector 0.8.0+의 `hnsw.iterative_scan`(필터 통과분이 부족하면 인덱스를 더 훑는 옵션)을 함께 켜야 위 후보 누락이 재발하지 않는다.
+사용자당 활성 링크가 만 건대에 접근하면 HNSW 도입을 검토한다. 이 경우 pgvector
+0.8.0+의 `hnsw.iterative_scan`을 함께 사용해 필터 적용 후 후보 부족을 줄인다.
+
+`deleted=true` 검색은 활성 링크(`deleted_at IS NULL`) 전용 trigram partial index의 대상이 아니므로 사용자별 삭제 링크 범위를 스캔한다. 삭제 링크가 장기간 누적되면 별도 보관·정리 정책이나 삭제 링크용 인덱스를 다시 검토한다.
+
+텍스트 GIN 인덱스는 일반 `CREATE INDEX`로 생성되므로 배포 전 운영 행 수와 예상 생성 시간을 확인한다. 현재 규모를 넘어 쓰기 중단이 문제가 되면 transaction 밖의 `CREATE INDEX CONCURRENTLY`를 사용하는 별도 배포 절차로 전환한다.

@@ -158,7 +158,7 @@ export class LinkDetailResponseDto {
     @ApiProperty({
         enum: ['PENDING', 'SUCCESS', 'NEEDS_REVIEW', 'FAILED'],
         example: 'PENDING',
-        description: 'AI 요약 비동기 처리 상태',
+        description: '요약·태그·임베딩 비동기 처리 상태',
     })
     processingStatus!: 'PENDING' | 'SUCCESS' | 'NEEDS_REVIEW' | 'FAILED'
 
@@ -166,7 +166,7 @@ export class LinkDetailResponseDto {
         example: null,
         nullable: true,
         description:
-            'AI 요약. processingStatus로 처리 중·실패·완료 상태를 구분',
+            'AI 요약. 전체 분석 상태와 별개로 부분 결과가 존재할 수 있음',
     })
     aiSummary!: string | null
 

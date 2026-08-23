@@ -38,15 +38,11 @@ export function pickThumbnailUrl(metadata: LinkMetadata | null): string | null {
 
 // 임베딩 대상 텍스트를 조립한다. 의미가 담긴 필드를 우선 결합하며, 빈 값은 제외한다.
 export function buildEmbeddingText(
-    link: Pick<LinkRow, 'title' | 'aiSummary' | 'memo' | 'domain' | 'metadata'>,
+    link: Pick<LinkRow, 'title' | 'aiSummary'> & {
+        tagNames: readonly string[]
+    },
 ): string {
-    return [
-        link.title,
-        link.aiSummary,
-        link.memo,
-        link.domain,
-        link.metadata?.description ?? null,
-    ]
+    return [link.title, ...link.tagNames, link.aiSummary]
         .map((part) => part?.trim())
         .filter((part): part is string => Boolean(part))
         .join('\n')
