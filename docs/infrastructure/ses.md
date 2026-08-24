@@ -9,10 +9,8 @@
 | ------------------ | ---------------------------------- | ------------------------------------- |
 | SES Email identity | `link-ding-dong.com`               | 도메인 내 발신 주소 검증 및 DKIM 서명 |
 | IAM User           | `promise9-email-sender-production` | 운영 이메일 발송                      |
-| IAM User           | `promise9-email-sender-stage`      | Stage 이메일 발송                     |
 
-각 IAM User에는 SES identity의 `ses:SendEmail`만 허용한다. 운영과 Stage access key를
-분리해 환경별 사용 내역과 키 폐기·교체 주기를 독립적으로 관리한다.
+IAM User에는 SES identity의 `ses:SendEmail`만 허용한다.
 
 CDK는 장기 access key를 만들거나 출력하지 않는다. CloudFormation output에 secret access
 key가 남는 것을 방지하기 위해서다.
@@ -49,7 +47,6 @@ IAM access key는 환경별 IAM User에서 한 번 발급하고 다음 GitHub Se
 - `EMAIL_FROM_ADDRESS` (`reminder@link-ding-dong.com` 등 identity 도메인 주소이며 실제
   메일함은 필요하지 않음)
 
-운영 repository secrets와 Stage environment secrets에는 서로 다른 IAM User의 값을 넣는다.
 키 값을 저장소, 로그, PR 또는 CDK output에 기록하지 않는다. 키가 노출되면 즉시 비활성화한
 뒤 교체한다.
 

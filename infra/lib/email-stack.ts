@@ -8,7 +8,7 @@ import {
 } from 'aws-cdk-lib'
 import { Construct } from 'constructs'
 
-import { EMAIL_DOMAIN, EMAIL_SENDER_USER_NAMES } from './constants'
+import { EMAIL_DOMAIN, EMAIL_SENDER_USER_NAME } from './constants'
 
 export class EmailStack extends Stack {
     constructor(scope: Construct, id: string, props?: StackProps) {
@@ -19,27 +19,14 @@ export class EmailStack extends Stack {
         })
         identity.applyRemovalPolicy(RemovalPolicy.RETAIN)
 
-        const senderUsers = [
-            {
-                constructId: 'ProductionEmailSender',
-                userName: EMAIL_SENDER_USER_NAMES.PRODUCTION,
-            },
-            {
-                constructId: 'StageEmailSender',
-                userName: EMAIL_SENDER_USER_NAMES.STAGE,
-            },
-        ] as const
+        const sender = new iam.User(this, 'ProductionEmailSender', {
+            userName: EMAIL_SENDER_USER_NAME,
+        })
+        identity.grant(sender, 'ses:SendEmail')
 
-        for (const { constructId, userName } of senderUsers) {
-            const sender = new iam.User(this, constructId, {
-                userName,
-            })
-            identity.grant(sender, 'ses:SendEmail')
-
-            new CfnOutput(this, `${constructId}UserName`, {
-                value: sender.userName,
-            })
-        }
+        new CfnOutput(this, 'ProductionEmailSenderUserName', {
+            value: sender.userName,
+        })
 
         identity.dkimRecords.forEach((record, index) => {
             const outputNumber = index + 1
