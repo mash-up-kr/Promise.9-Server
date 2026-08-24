@@ -210,7 +210,7 @@ export class ImageFetcherService {
         const status = response.statusCode ?? 502
         // Response 생성자는 204, 205, 304 상태 코드에 body stream을 허용하지 않는다.
         const body = this.canHaveResponseBody(status)
-            ? (Readable.toWeb(response) as ReadableStream)
+            ? (Readable.toWeb(response) as unknown as ReadableStream)
             : null
 
         if (!body) {

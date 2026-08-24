@@ -1,3 +1,6 @@
+import { beforeEach, describe, expect, it, jest } from 'bun:test'
+
+import type { BunMocked } from '../../../test/bun-test.type'
 import { BaseException } from '../../common/exception/base.exception'
 
 import { NodeVibrantImageColorAnalyzer } from './analyzers/node-vibrant-image-color.analyzer'
@@ -19,9 +22,9 @@ import { IMAGE_COLOR_ERROR } from './image-color-error.constant'
 
 describe('ImageColorService', () => {
     let service: ImageColorService
-    let imageFetcher: jest.Mocked<Pick<ImageFetcherService, 'fetch'>>
-    let sharpAnalyzer: jest.Mocked<Pick<SharpImageColorAnalyzer, 'analyze'>>
-    let nodeVibrantAnalyzer: jest.Mocked<
+    let imageFetcher: BunMocked<Pick<ImageFetcherService, 'fetch'>>
+    let sharpAnalyzer: BunMocked<Pick<SharpImageColorAnalyzer, 'analyze'>>
+    let nodeVibrantAnalyzer: BunMocked<
         Pick<NodeVibrantImageColorAnalyzer, 'analyze'>
     >
 

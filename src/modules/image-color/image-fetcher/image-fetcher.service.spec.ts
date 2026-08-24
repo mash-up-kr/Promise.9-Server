@@ -6,7 +6,9 @@ import http, {
 import { PassThrough } from 'node:stream'
 
 import { BadRequestException } from '@nestjs/common'
+import { beforeEach, describe, expect, it, jest } from 'bun:test'
 
+import type { BunMock, BunMocked } from '../../../../test/bun-test.type'
 import {
     ResolvedPublicUrl,
     UrlSecurityService,
@@ -19,10 +21,10 @@ import { ImageResponseReader } from './image-response.reader'
 
 describe('ImageFetcherService', () => {
     let service: ImageFetcherService
-    let urlSecurity: jest.Mocked<
+    let urlSecurity: BunMocked<
         Pick<UrlSecurityService, 'parseHttpUrl' | 'resolvePublicUrl'>
     >
-    let responseReader: jest.Mocked<Pick<ImageResponseReader, 'read'>>
+    let responseReader: BunMocked<Pick<ImageResponseReader, 'read'>>
 
     beforeEach(() => {
         urlSecurity = {
@@ -238,7 +240,7 @@ describe('ImageFetcherService', () => {
 function mockRequest(
     service: ImageFetcherService,
     ...responses: Response[]
-): jest.SpyInstance {
+): BunMock {
     return jest
         .spyOn(
             service as unknown as {

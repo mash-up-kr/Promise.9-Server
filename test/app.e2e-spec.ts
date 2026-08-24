@@ -1,7 +1,9 @@
-import { INestApplication } from '@nestjs/common'
-import { Test, TestingModule } from '@nestjs/testing'
+import type { INestApplication } from '@nestjs/common'
+import type { TestingModule } from '@nestjs/testing'
+import { Test } from '@nestjs/testing'
+import { afterEach, beforeEach, describe, it } from 'bun:test'
 import request from 'supertest'
-import { App } from 'supertest/types'
+import type { App } from 'supertest/types'
 
 import { AppModule } from './../src/app.module'
 import { CommonResponseInterceptor } from './../src/common/interceptor/response.interceptor'

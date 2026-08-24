@@ -4,12 +4,13 @@
     "private": true,
     "packageManager": "bun@1.3.14",
     "scripts": {
-        "cdk": "cdk",
-        "bootstrap": "cdk bootstrap",
-        "synth": "cdk synth",
-        "diff": "cdk diff --no-change-set",
-        "deploy": "cdk deploy --require-approval broadening",
-        "typecheck": "tsc --noEmit"
+        "build": "node ./node_modules/typescript/bin/tsc",
+        "cdk": "node ./node_modules/typescript/bin/tsc && node ./node_modules/aws-cdk/bin/cdk",
+        "bootstrap": "node ./node_modules/typescript/bin/tsc && node ./node_modules/aws-cdk/bin/cdk bootstrap",
+        "synth": "node ./node_modules/typescript/bin/tsc && node ./node_modules/aws-cdk/bin/cdk synth",
+        "diff": "node ./node_modules/typescript/bin/tsc && node ./node_modules/aws-cdk/bin/cdk diff --no-change-set",
+        "deploy": "node ./node_modules/typescript/bin/tsc && node ./node_modules/aws-cdk/bin/cdk deploy --require-approval broadening",
+        "typecheck": "node ./node_modules/typescript/bin/tsc --noEmit"
     },
     "dependencies": {
         "aws-cdk-lib": "2.262.1",

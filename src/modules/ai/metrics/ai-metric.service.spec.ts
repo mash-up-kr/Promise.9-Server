@@ -1,10 +1,13 @@
+import { beforeEach, describe, expect, it, jest } from 'bun:test'
+
+import type { BunMock } from '../../../../test/bun-test.type'
 import { AI_METRIC_STATUS, AI_TASK_TYPE } from '../ai.constants'
 
 import { AiMetricRepository } from './ai-metric.repository'
 import { AiMetricService } from './ai-metric.service'
 
 type RepositoryMock = {
-    insert: jest.Mock
+    insert: BunMock
 }
 
 type MetricInsertPayload = {
@@ -39,7 +42,7 @@ describe('AiMetricService', () => {
     it('성공 메트릭을 기록한다', async () => {
         const row = {
             id: '019886ad-0000-7000-8000-000000000001',
-        }
+        } as unknown as Awaited<ReturnType<AiMetricRepository['insert']>>
         repository.insert.mockResolvedValue(row)
 
         const result = await service.record({
@@ -77,7 +80,7 @@ describe('AiMetricService', () => {
     it('실패 메트릭을 기록한다', async () => {
         const row = {
             id: '019886ad-0000-7000-8000-000000000002',
-        }
+        } as unknown as Awaited<ReturnType<AiMetricRepository['insert']>>
         repository.insert.mockResolvedValue(row)
 
         const result = await service.record({
@@ -131,7 +134,7 @@ describe('AiMetricService', () => {
     })
 })
 
-function getFirstCallArg<T>(mock: jest.Mock): T {
+function getFirstCallArg<T>(mock: BunMock): T {
     const firstCall = (mock.mock.calls as Array<[T]>)[0]
 
     if (!firstCall) {

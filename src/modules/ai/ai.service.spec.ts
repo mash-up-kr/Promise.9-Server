@@ -1,6 +1,8 @@
 import { Logger } from '@nestjs/common'
+import { afterEach, beforeEach, describe, expect, it, jest } from 'bun:test'
 import { z } from 'zod'
 
+import type { BunMock, BunMocked } from '../../../test/bun-test.type'
 import { LLM_MODEL } from '../../common/constants/llm'
 import {
     LlmConfigurationError,
@@ -35,7 +37,7 @@ type InternalAiService = {
 describe('AiService', () => {
     let service: AiService
     let internalService: InternalAiService
-    let llmService: jest.Mocked<
+    let llmService: BunMocked<
         Pick<
             LlmService,
             | 'resolveTarget'
@@ -43,8 +45,8 @@ describe('AiService', () => {
             | 'generateObjectWithResolvedTarget'
         >
     >
-    let aiMetricService: jest.Mocked<Pick<AiMetricService, 'record'>>
-    let loggerErrorSpy: jest.SpyInstance
+    let aiMetricService: BunMocked<Pick<AiMetricService, 'record'>>
+    let loggerErrorSpy: BunMock
 
     beforeEach(() => {
         llmService = {
@@ -62,7 +64,7 @@ describe('AiService', () => {
         }
         loggerErrorSpy = jest
             .spyOn(Logger.prototype, 'error')
-            .mockImplementation()
+            .mockImplementation(() => undefined)
 
         service = new AiService(
             llmService as unknown as LlmService,

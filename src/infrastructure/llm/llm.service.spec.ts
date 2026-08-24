@@ -1,6 +1,8 @@
 import { ConfigService } from '@nestjs/config'
+import { beforeEach, describe, expect, it, jest } from 'bun:test'
 import { z } from 'zod'
 
+import type { BunMock, BunMocked } from '../../../test/bun-test.type'
 import { LLM_MODEL } from '../../common/constants/llm'
 import { ValidatedEnvironment } from '../../config/environment'
 
@@ -17,10 +19,10 @@ import {
 
 describe('LlmService', () => {
     let service: LlmService
-    let openAiProvider: jest.Mocked<LlmProvider>
-    let geminiProvider: jest.Mocked<LlmProvider>
-    let openAiGenerate: jest.Mock
-    let geminiGenerate: jest.Mock
+    let openAiProvider: BunMocked<LlmProvider>
+    let geminiProvider: BunMocked<LlmProvider>
+    let openAiGenerate: BunMock
+    let geminiGenerate: BunMock
 
     beforeEach(() => {
         const config = {
@@ -275,7 +277,7 @@ describe('LlmService', () => {
     })
 })
 
-function getFirstCallArg<T>(mock: jest.Mock): T {
+function getFirstCallArg<T>(mock: BunMock): T {
     const firstCall = (mock.mock.calls as Array<[T]>)[0]
 
     if (!firstCall) {

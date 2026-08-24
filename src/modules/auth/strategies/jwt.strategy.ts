@@ -4,9 +4,10 @@ import { PassportStrategy } from '@nestjs/passport'
 import { ExtractJwt, Strategy } from 'passport-jwt'
 
 import { BaseException } from '../../../common/exception/base.exception'
-import { AuthUser } from '../../../common/guards/jwt-auth.guard'
-import { ValidatedEnvironment } from '../../../config/environment'
-import { TOKEN_TYPE, TokenType } from '../auth.constants'
+import type { AuthUser } from '../../../common/guards/jwt-auth.guard'
+import type { ValidatedEnvironment } from '../../../config/environment'
+import type { TokenType } from '../auth.constants'
+import { TOKEN_TYPE } from '../auth.constants'
 import { AUTH_ERROR } from '../auth-error.constant'
 
 interface JwtPayload {

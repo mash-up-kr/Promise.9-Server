@@ -1,10 +1,12 @@
 import { lookup } from 'node:dns/promises'
 
 import { BadRequestException } from '@nestjs/common'
+import type { Mock } from 'bun:test'
+import { beforeEach, describe, expect, it, jest, mock } from 'bun:test'
 
 import { UrlSecurityService } from './url-security.service'
 
-jest.mock('node:dns/promises', () => ({
+void mock.module('node:dns/promises', () => ({
     lookup: jest.fn(),
 }))
 
@@ -13,7 +15,7 @@ type LookupAll = (
     options: { all: true; verbatim: true },
 ) => Promise<Array<{ address: string; family: number }>>
 
-const lookupMock = lookup as unknown as jest.MockedFunction<LookupAll>
+const lookupMock = lookup as unknown as Mock<LookupAll>
 
 describe('UrlSecurityService', () => {
     let service: UrlSecurityService

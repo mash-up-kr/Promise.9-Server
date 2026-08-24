@@ -18,6 +18,12 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      # 애플리케이션은 Bun을 사용하지만 AWS CDK 도구는 Node.js를 요구한다.
+      - name: Setup Node.js for AWS CDK
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
@@ -25,7 +31,9 @@ jobs:
         run: bun run lint
 
       - name: Test
-        run: bun run test -- --runInBand
+        run: |
+          bun run typecheck:test
+          bun run test
 
       - name: Infrastructure check
         run: |

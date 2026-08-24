@@ -1,4 +1,6 @@
 import { ConfigService } from '@nestjs/config'
+import type { Mock } from 'bun:test'
+import { beforeEach, describe, expect, it, jest } from 'bun:test'
 import type OpenAI from 'openai'
 import { APIError } from 'openai'
 import type {
@@ -18,25 +20,23 @@ import { OPENAI_RESPONSE_STATUS } from './openai.constants'
 import { OpenAiProvider } from './openai.provider'
 
 type OpenAiClientMock = Pick<OpenAI, 'responses' | 'embeddings'>
-type OpenAiCreateMock = jest.Mock<
-    Promise<OpenAiResponse>,
-    [
+type OpenAiCreateMock = Mock<
+    (
         body: ResponseCreateParamsNonStreaming,
         options?: {
             maxRetries?: number
             timeout?: number
         },
-    ]
+    ) => Promise<OpenAiResponse>
 >
-type OpenAiEmbeddingCreateMock = jest.Mock<
-    Promise<CreateEmbeddingResponse>,
-    [
+type OpenAiEmbeddingCreateMock = Mock<
+    (
         body: EmbeddingCreateParams,
         options?: {
             maxRetries?: number
             timeout?: number
         },
-    ]
+    ) => Promise<CreateEmbeddingResponse>
 >
 
 class TestOpenAiProvider extends OpenAiProvider {
@@ -72,8 +72,8 @@ describe('OpenAiProvider', () => {
             }),
         }
 
-        responseCreateMock = jest.fn() as OpenAiCreateMock
-        embeddingCreateMock = jest.fn() as OpenAiEmbeddingCreateMock
+        responseCreateMock = jest.fn()
+        embeddingCreateMock = jest.fn()
         provider = new TestOpenAiProvider(
             config as unknown as ConfigService<ValidatedEnvironment, true>,
             {
