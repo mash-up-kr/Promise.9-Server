@@ -68,8 +68,8 @@ erDiagram
 - 복원 시 `deleted_at`을 `NULL`로 되돌린다.
 - 검색 대상은 `title`, `domain`, `original_url`, `final_url`, `ai_summary`, `memo`이며, `deleted_at IS NULL`인 링크만 포함한다.
 - `ai_summary_status`는 목록/상세 화면에서 사용하는 사용자 저장 링크 단위 대표 상태다.
-- AI 요약 시도의 모델, 프롬프트, 토큰, 비용, TTLB, 에러, 생성 요약문은 `ai_summary_metrics`에 저장한다.
-- `ai_summary_metrics.status`는 개별 요약 시도 상태이며, `user_links.ai_summary_status`와 범위가 다르다.
+- AI 요약·태그 LLM 호출의 모델, 프롬프트, 토큰, TTLB, 에러, 생성 결과는 `ai_metrics`에 저장한다.
+- `ai_metrics.status`는 개별 LLM 호출 결과이며, `links.ai_summary_status`는 링크 분석 전체 상태다.
 - `metadata`는 확장 정보 보관용이며, 목록/검색/정렬에 자주 쓰는 값은 별도 컬럼으로 둔다.
 - 이미지 URL, 이미지 후보 목록, 이미지 색상 정보는 별도 컬럼 없이 `metadata`에 저장한다.
 - `metadata.version`은 JSON 구조 버전이며, 구조가 바뀌면 애플리케이션의 버전별 처리기가 해석한다.
