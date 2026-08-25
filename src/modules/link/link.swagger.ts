@@ -208,6 +208,7 @@ const LINK_DETAIL_RESPONSE_EXAMPLE = {
     folder: {
         folderId: 3,
         folderName: '디자인',
+        color: '#d5d76a',
     },
     thumbnailUrl: THUMBNAIL_EXAMPLE,
     title: '신입 디자이너가 알아야 할 실험 설계 팁',

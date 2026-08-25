@@ -337,7 +337,13 @@ export class LinkService {
 
         const folder = await this.linkRepository.findFolder(folderId)
 
-        return folder ? { folderId: folder.id, folderName: folder.name } : null
+        return folder
+            ? {
+                  folderId: folder.id,
+                  folderName: folder.name,
+                  color: folder.color,
+              }
+            : null
     }
 
     // 링크에 저장된 사용자·규칙·AI 태그를 API 응답 shape으로 바꾼다.
