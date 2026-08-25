@@ -11,6 +11,8 @@ import { ApiTags } from '@nestjs/swagger'
 import { ZodValidationPipe } from '../../common/pipe/zod-validation.pipe'
 
 import {
+    KakaoExchangeInput,
+    kakaoExchangeSchema,
     LogoutInput,
     logoutSchema,
     RefreshInput,
@@ -22,6 +24,7 @@ import {
 } from './dto/auth.dto'
 import { AuthService } from './auth.service'
 import {
+    ApiKakaoExchange,
     ApiLogout,
     ApiRefreshToken,
     ApiSocialLogin,
@@ -40,6 +43,16 @@ export class AuthController {
         @Body(new ZodValidationPipe(socialLoginSchema)) dto: SocialLoginInput,
     ) {
         return this.authService.socialLogin(dto.provider, dto.idToken)
+    }
+
+    @Post('kakao/exchange')
+    @HttpCode(HttpStatus.OK)
+    @ApiKakaoExchange()
+    async kakaoExchange(
+        @Body(new ZodValidationPipe(kakaoExchangeSchema))
+        dto: KakaoExchangeInput,
+    ) {
+        return this.authService.kakaoExchange(dto.code, dto.redirectUri)
     }
 
     @Post('refresh')

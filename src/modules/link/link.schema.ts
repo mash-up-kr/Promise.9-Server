@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm'
+import { AnyColumn, SQL, sql } from 'drizzle-orm'
 import {
     bigint,
     boolean,
@@ -31,6 +31,19 @@ export type LinkMetadata = {
     }>
 }
 
+// 검색 쿼리와 trigram 표현식 인덱스가 반드시 같은 SQL 식을 사용하게 한다.
+// 공백·대소문자를 무시하는 현재 검색 UX는 유지하되, 여러 필드는 한 문서로 합친다.
+export function normalizedSearchText(
+    columns: readonly (AnyColumn | SQL)[],
+): SQL<string> {
+    const document = sql.join(
+        columns.map((column) => sql`coalesce(${column}::text, '')`),
+        sql.raw(" || ' ' || "),
+    )
+
+    return sql<string>`regexp_replace(lower(${document}), '[[:space:]]', '', 'g')`
+}
+
 // 사용자가 저장한 링크. URL·수집 메타데이터·AI 요약·상태를 한 테이블에 통합한다(비정규화).
 // 같은 URL을 여러 사용자가 저장해도 행은 독립적으로 생성한다.
 // 상세 설계는 docs/database/tables/user_links.md 참조.
@@ -53,13 +66,14 @@ export const links = pgTable(
         // OG/favicon/description/이미지/색상 등 확장 메타데이터
         metadata: jsonb().$type<LinkMetadata>(),
         aiSummary: text(),
-        // AI 요약 상태: PENDING | SUCCESS | NEEDS_REVIEW | FAILED
+        // 링크 비동기 분석 상태: PENDING | SUCCESS | NEEDS_REVIEW | FAILED
         aiSummaryStatus: varchar({ length: 20 }).notNull().default('PENDING'),
-        // 의미 검색용 임베딩 벡터. 제목·요약·메모 등으로 생성하며 미생성 시 null.
+        // 의미 검색용 임베딩 벡터. 제목·태그·AI 요약으로 생성하며 미생성 시 null.
         embedding: vector({ dimensions: EMBEDDING_DIMENSIONS }),
         memo: text(),
+        reminderAt: timestamp({ withTimezone: true }),
         isFavorite: boolean().notNull().default(false),
-        // 상세 화면이 실제 노출됐을 때 POST /links/:linkId/view로 갱신한다.
+        // 상세 화면을 5초 이상 본 뒤 POST /links/:linkId/view로 갱신한다.
         viewedAt: timestamp({ withTimezone: true }),
         deletedAt: timestamp({ withTimezone: true }),
         createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -87,6 +101,27 @@ export const links = pgTable(
         index('links_deleted_at_idx')
             .on(table.deletedAt)
             .where(sql`${table.deletedAt} is not null`),
+        // 현재 검색의 '%부분일치%'를 위한 trigram 표현식 인덱스.
+        // 제목과 나머지 콘텐츠는 랭킹 신호가 다르므로 후보 회수도 분리한다.
+        index('links_title_search_trgm_idx')
+            .using(
+                'gin',
+                sql`${normalizedSearchText([table.title])} gin_trgm_ops`,
+            )
+            .where(sql`${table.deletedAt} is null`),
+        index('links_content_search_trgm_idx')
+            .using(
+                'gin',
+                sql`${normalizedSearchText([
+                    table.aiSummary,
+                    table.memo,
+                    table.domain,
+                    table.originalUrl,
+                    table.finalUrl,
+                    sql`${table.metadata}->>'description'`,
+                ])} gin_trgm_ops`,
+            )
+            .where(sql`${table.deletedAt} is null`),
         // embedding에는 벡터 인덱스(HNSW)를 걸지 않는다.
         // HNSW는 embedding 단일 컬럼에만 걸려 user_id·폴더 필터보다 먼저 근사 후보를
         // 뽑으므로, 사용자별 데이터가 전체의 일부인 상황에서 후보가 필터에 걸려 사라진다.

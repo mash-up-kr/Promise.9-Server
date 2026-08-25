@@ -8,6 +8,7 @@
   <a href="./docs/README.md">Docs</a> ·
   <a href="./docs/api/README.md">API</a> ·
   <a href="./docs/database/README.md">Database</a> ·
+  <a href="./docs/deploy/README.md">Deploy</a> ·
   <a href="./docs/convention/README.md">Convention</a>
 </p>
 
@@ -19,41 +20,46 @@
 
 ## Tech Stack
 
-| Area | Stack |
-| --- | --- |
-| Runtime | Bun |
-| Framework | NestJS, TypeScript |
-| Database | PostgreSQL, Drizzle ORM |
-| Validation | Zod |
-| API Docs | Swagger |
-| Test | Jest |
+| Area       | Stack                                |
+| ---------- | ------------------------------------ |
+| Runtime    | Bun                                  |
+| Framework  | NestJS, TypeScript                   |
+| Database   | PostgreSQL 18, pgvector, Drizzle ORM |
+| Validation | Zod                                  |
+| API Docs   | Swagger                              |
+| Test       | Jest                                 |
 
 ## Project Structure
 
 ```text
 .
+├── .github/workflows/     # CI와 Lightsail 운영 배포 workflow
+├── deploy/                # Nginx 등 운영 서버 설정
 ├── docs/                  # API, DB, 컨벤션, 정책 문서
 ├── infra/                 # AWS CDK 인프라 코드
+├── script/                # DB 백업·복구·운영 터널 등 보조 명령
 ├── src/
 │   ├── common/            # 공통 DTO, 예외, 필터, 인터셉터
 │   ├── config/            # 환경변수, Swagger, 데이터베이스 설정
 │   ├── app.module.ts      # 루트 NestJS 모듈
 │   └── main.ts            # 애플리케이션 부트스트랩
 ├── test/                  # e2e 테스트
+├── docker-compose.prod.yml # Lightsail API·PostgreSQL 구성
 ├── drizzle.config.ts      # Drizzle Kit 설정
 └── package.json
 ```
 
 ## Documentation
 
-| 문서 | 내용 |
-| --- | --- |
-| [Docs](./docs/README.md) | 서버 문서의 시작점입니다. |
-| [API](./docs/api/README.md) | API 명세와 연동 기준입니다. |
-| [Database](./docs/database/README.md) | DB 설정, 마이그레이션, 테이블 설계 문서입니다. |
-| [Convention](./docs/convention/README.md) | 이슈, 브랜치, PR, 머지, 커밋 규칙입니다. |
-| [Policy](./docs/policy/README.md) | 도메인 정책 문서입니다. |
-| [Infrastructure](./docs/infrastructure/README.md) | AWS CLI, IAM, CDK와 팀 인프라 운영 기준입니다. |
+| 문서                                              | 내용                                                |
+| ------------------------------------------------- | --------------------------------------------------- |
+| [Docs](./docs/README.md)                          | 서버 문서의 시작점입니다.                           |
+| [API](./docs/api/README.md)                       | API 명세와 연동 기준입니다.                         |
+| [Database](./docs/database/README.md)             | DB 설정, 마이그레이션, 테이블 설계 문서입니다.      |
+| [Deploy](./docs/deploy/README.md)                 | Lightsail의 API·PostgreSQL 배포 및 운영 문서입니다. |
+| [Convention](./docs/convention/README.md)         | 이슈, 브랜치, PR, 머지, 커밋 규칙입니다.            |
+| [Policy](./docs/policy/README.md)                 | 도메인 정책 문서입니다.                             |
+| [Infrastructure](./docs/infrastructure/README.md) | AWS CLI, IAM, CDK와 팀 인프라 운영 기준입니다.      |
 
 ## Team
 

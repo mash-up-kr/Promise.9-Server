@@ -42,9 +42,21 @@ bun run db:restore -- --env=development --file=backups/database/example.dump --c
 
 ## 운영 DB 복구
 
+먼저 별도 터미널에서 운영 DB SSH 터널을 연다.
+
 ```bash
-bun run db:restore -- --env=production --file=backups/database/example.dump --allow-production --confirm=RESTORE_PRODUCTION
+bun run db:tunnel
+```
+
+백업 파일을 검증한 뒤 터널이 열린 동안 복구를 실행한다.
+
+```bash
+bun run db:backup:verify -- --file=backups/database/example.dump
+bun run db:restore -- --env=production --file=backups/database/example.dump --sslmode=disable --allow-production --confirm=RESTORE_PRODUCTION
 ```
 
 - 운영 DB 복구는 `--allow-production`과 `--confirm=RESTORE_PRODUCTION`이 모두 필요하다.
+- `.env`의 `DATABASE_URL_PRODUCTION`은 SSH 터널 주소인 `127.0.0.1:15432`를 사용한다.
 - 운영 복구 전에는 대상 DB, 백업 파일 생성 시점, 백업 파일 검증 결과, 복구 전 현재 DB 백업 위치를 먼저 확인한다.
+- 복구 스크립트가 만드는 `backups/database/pre-restore` 백업도 Lightsail Instance 외부에 보관한다.
+- 복구가 끝나면 `db:health`와 API health endpoint를 확인한 뒤 터널을 종료한다.

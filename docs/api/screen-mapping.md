@@ -51,8 +51,8 @@
 
 | 화면 영역         | API                                                        | 상태 | 남은 작업                               |
 | ----------------- | ---------------------------------------------------------- | :--: | --------------------------------------- |
-| 검색 결과         | `GET /links?q={keyword}`                                   |  △   | cursor 페이지네이션 연결                |
-| 필터 범위 내 검색 | `GET /links?folderId={folderId}&favorite=true&q={keyword}` |  △   | 즐겨찾기 필터·cursor 페이지네이션 연결  |
+| 검색 결과         | `GET /links?q={keyword}`                                   |  O   | -                                       |
+| 필터 범위 내 검색 | `GET /links?folderId={folderId}&favorite=true&q={keyword}` |  O   | -                                       |
 | 최근 본 링크      | `GET /links?sortBy=viewedAt&order=desc&limit=9`            |  △   | 조회 시각 정렬·cursor 페이지네이션 연결 |
 | 최근 검색어       | 현재 정책 결정 필요                                        |  X   | 기기 로컬 저장 또는 서버 저장 여부 결정 |
 
@@ -60,12 +60,18 @@
 
 <img src="./screens/link-detail.png" alt="링크 상세 화면" width="240" />
 
-| 화면 동작              | API                                   | 상태 | 비고                                                  |
-| ---------------------- | ------------------------------------- | :--: | ----------------------------------------------------- |
-| 상세 정보 조회         | `GET /links/{linkId}`                 |  △   | 발행일·태그·연관 링크 조회 연결 필요                  |
-| 화면 노출 시 조회 기록 | `POST /links/{linkId}/view`           |  O   | Request Body 없이 서버 현재 시각을 `viewedAt`에 저장  |
-| 즐겨찾기 설정·해제     | `PATCH /links/{linkId}`               |  O   | `{ "isFavorite": true }` 또는 `false`                 |
-| 폴더 이동·미분류 이동  | `PATCH /links/{linkId}`               |  O   | `folderId` 지정, 미분류 이동은 `{ "folderId": null }` |
-| 사용자 태그 추가       | `POST /links/{linkId}/tags`           |  △   | Endpoint·계약만 존재, 현재 501·DB 저장 TODO           |
-| 사용자 태그 삭제       | `DELETE /links/{linkId}/tags/{tagId}` |  △   | Endpoint·계약만 존재, 현재 501·DB 삭제 TODO           |
-| 폴더 선택 목록         | `GET /folders`                        |  O   | 전체 사용자 폴더 반환                                 |
+| 화면 동작                  | API                                   | 상태 | 비고                                                  |
+| -------------------------- | ------------------------------------- | :--: | ----------------------------------------------------- |
+| 상세 정보 조회             | `GET /links/{linkId}`                 |  △   | 발행일 수집 TODO                                      |
+| 5초 이상 조회 시 열람 기록 | `POST /links/{linkId}/view`           |  O   | `viewedAt` 갱신 및 현재 폴더 `viewCount` 1 증가       |
+| 즐겨찾기 설정·해제         | `PATCH /links/{linkId}`               |  O   | `{ "isFavorite": true }` 또는 `false`                 |
+| 폴더 이동·미분류 이동      | `PATCH /links/{linkId}`               |  O   | `folderId` 지정, 미분류 이동은 `{ "folderId": null }` |
+| 사용자 태그 추가           | `POST /links/{linkId}/tags`           |  △   | Endpoint·계약만 존재, 현재 501·DB 저장 TODO           |
+| 사용자 태그 삭제           | `DELETE /links/{linkId}/tags/{tagId}` |  △   | Endpoint·계약만 존재, 현재 501·DB 삭제 TODO           |
+| 폴더 선택 목록             | `GET /folders`                        |  O   | 전체 사용자 폴더 반환                                 |
+
+## 카테고리 둘러보기
+
+<img src="./screens/category-browse.png" alt="카테고리 둘러보기 화면" width="240" />
+
+현재는 API와 데이터 정책이 정해지지 않았습니다. AI 태그를 카테고리로 사용할지, 별도 카테고리 사전을 둘지 결정한 후 목록 Query 또는 전용 카테고리 API를 확정해야 합니다.

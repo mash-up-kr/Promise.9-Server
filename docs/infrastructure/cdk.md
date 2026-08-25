@@ -17,7 +17,7 @@ CDK 도입 이유는 [왜 AWS CDK를 사용하는가?](./why-cdk.md)를 참고�
 - GitHub Actions는 `main` 대상 PR에서 `typecheck`, `synth`만 실행하며 AWS 자격 증명을
   사용하지 않는다.
 - CDK 자동 배포 workflow는 구성하지 않는다.
-- 기존 Stage와 운영 Lightsail workflow는 애플리케이션 배포이며 CDK 배포와 별개다.
+- 운영 Lightsail workflow는 API·PostgreSQL 컨테이너 배포이며 CDK 배포와 별개다.
 
 ## 변경 절차
 
@@ -46,7 +46,7 @@ bun run infra:synth --profile <초기-관리자-profile>
 bun run infra:diff Promise9AccessStack --profile <초기-관리자-profile>
 bun run infra:bootstrap \
   --profile <초기-관리자-profile> \
-  aws://743070678932/ap-northeast-2
+  aws://<팀-AWS-Account-ID>/ap-northeast-2
 bun run infra:deploy Promise9AccessStack \
   --profile <초기-관리자-profile>
 ```
