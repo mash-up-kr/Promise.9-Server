@@ -1,3 +1,6 @@
+import { beforeEach, describe, expect, it, jest } from 'bun:test'
+
+import type { BunMocked } from '../../../../test/bun-test.type'
 import { buildCursorPage } from '../../../common/pagination/cursor'
 import { ListLinksQueryInput } from '../dto/link.dto'
 import { EmbeddingService } from '../embedding/embedding.service'
@@ -6,7 +9,7 @@ import { SearchLinkCandidate, SearchRepository } from './search.repository'
 import { SearchService } from './search.service'
 import { toSearchCursorPayload } from './search.util'
 
-type RepositoryMock = jest.Mocked<
+type RepositoryMock = BunMocked<
     Pick<
         SearchRepository,
         | 'findTitleCandidateIds'
@@ -59,7 +62,7 @@ const deferred = <T>() => {
 
 describe('SearchService', () => {
     let repository: RepositoryMock
-    let embeddingService: jest.Mocked<Pick<EmbeddingService, 'embedQuery'>>
+    let embeddingService: BunMocked<Pick<EmbeddingService, 'embedQuery'>>
     let service: SearchService
 
     beforeEach(() => {

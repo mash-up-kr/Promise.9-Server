@@ -1,13 +1,17 @@
+import type { Mock } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, it, jest } from 'bun:test'
+
+import type { BunMocked } from '../../../../test/bun-test.type'
 import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
 
 import { LinkContentService } from './link-content.service'
 
 describe('LinkContentService', () => {
     let service: LinkContentService
-    let urlSecurity: jest.Mocked<
+    let urlSecurity: BunMocked<
         Pick<UrlSecurityService, 'parseHttpUrl' | 'resolvePublicUrl'>
     >
-    let fetchSpy: jest.SpiedFunction<typeof fetch>
+    let fetchSpy: Mock<typeof fetch>
 
     beforeEach(() => {
         urlSecurity = {

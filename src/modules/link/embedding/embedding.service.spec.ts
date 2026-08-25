@@ -1,3 +1,6 @@
+import { beforeEach, describe, expect, it, jest } from 'bun:test'
+
+import type { BunMocked } from '../../../../test/bun-test.type'
 import { AiService } from '../../ai/ai.service'
 import { LinkEmbeddingSource, LinkRepository } from '../link.repository'
 
@@ -5,8 +8,8 @@ import { EmbeddingService } from './embedding.service'
 
 describe('EmbeddingService', () => {
     let service: EmbeddingService
-    let aiService: jest.Mocked<Pick<AiService, 'embedText'>>
-    let linkRepository: jest.Mocked<
+    let aiService: BunMocked<Pick<AiService, 'embedText'>>
+    let linkRepository: BunMocked<
         Pick<LinkRepository, 'findEmbeddingSource' | 'updateEmbedding'>
     >
 

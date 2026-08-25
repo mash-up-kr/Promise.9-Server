@@ -1,5 +1,7 @@
 import { Logger } from '@nestjs/common'
+import { afterEach, beforeEach, describe, expect, it, jest } from 'bun:test'
 
+import type { BunMock, BunMocked } from '../../../../test/bun-test.type'
 import { AiService } from '../../ai/ai.service'
 import { LinkContentService } from '../content/link-content.service'
 import { EmbeddingService } from '../embedding/embedding.service'
@@ -9,19 +11,19 @@ import { LinkAnalysisService } from './link-analysis.service'
 
 describe('LinkAnalysisService', () => {
     let service: LinkAnalysisService
-    let linkRepository: jest.Mocked<
+    let linkRepository: BunMocked<
         Pick<
             LinkRepository,
             'findAnalysisMetadata' | 'updateActive' | 'replaceAiTags'
         >
     >
-    let linkContentService: jest.Mocked<Pick<LinkContentService, 'collect'>>
-    let aiService: jest.Mocked<
+    let linkContentService: BunMocked<Pick<LinkContentService, 'collect'>>
+    let aiService: BunMocked<
         Pick<AiService, 'generateSummary' | 'generateTags'>
     >
-    let embeddingService: jest.Mocked<Pick<EmbeddingService, 'embedLink'>>
+    let embeddingService: BunMocked<Pick<EmbeddingService, 'embedLink'>>
     let updatePatches: Array<Record<string, unknown>>
-    let loggerErrorSpy: jest.SpyInstance
+    let loggerErrorSpy: BunMock
 
     beforeEach(() => {
         updatePatches = []
@@ -53,7 +55,7 @@ describe('LinkAnalysisService', () => {
         }
         loggerErrorSpy = jest
             .spyOn(Logger.prototype, 'error')
-            .mockImplementation()
+            .mockImplementation(() => undefined)
 
         service = new LinkAnalysisService(
             linkRepository as unknown as LinkRepository,

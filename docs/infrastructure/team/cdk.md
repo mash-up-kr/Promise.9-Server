@@ -5,6 +5,8 @@
 - `Promise9AccessStack`과 CDK bootstrap 적용이 완료되어 있어야 한다.
 - 저장소를 clone한 뒤 모든 명령을 저장소 루트에서 실행한다.
 - 저장소가 지정한 Bun `1.3.14`를 사용한다. `bun --version`으로 확인한다.
+- AWS CDK CLI와 CDK 앱 실행을 위해 Node.js `22`를 사용한다. `node --version`으로
+  확인한다.
 - CDK를 전역 설치하지 않는다. `bun install`이 `infra/` workspace에 고정된 CDK CLI를
   함께 설치한다.
 - [AWS CLI Setup](./aws-cli.md)에 따라 `promise9` profile로 로그인한다.

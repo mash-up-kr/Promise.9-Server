@@ -27,7 +27,7 @@
 | Database   | PostgreSQL 18, pgvector, Drizzle ORM |
 | Validation | Zod                                  |
 | API Docs   | Swagger                              |
-| Test       | Jest                                 |
+| Test       | Bun test                             |
 
 ## Project Structure
 

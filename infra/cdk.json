@@ -1,5 +1,5 @@
 {
-    "app": "bun run bin/promise9-infra.ts",
+    "app": "node dist/bin/promise9-infra.js",
     "context": {
         "@aws-cdk/aws-signer:signingProfileNamePassedToCfn": true,
         "@aws-cdk/core:newStyleStackSynthesis": true,

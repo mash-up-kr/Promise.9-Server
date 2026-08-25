@@ -15,17 +15,20 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
-import { AuthUser, JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
+import type { AuthUser } from '../../common/guards/jwt-auth.guard'
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ZodValidationPipe } from '../../common/pipe/zod-validation.pipe'
 
-import {
+import type {
     CreateFolderInput,
-    createFolderSchema,
     ListFoldersQueryInput,
-    listFoldersQuerySchema,
     ReorderFoldersInput,
-    reorderFoldersSchema,
     UpdateFolderInput,
+} from './dto/folder.dto'
+import {
+    createFolderSchema,
+    listFoldersQuerySchema,
+    reorderFoldersSchema,
     updateFolderSchema,
 } from './dto/folder.dto'
 import { FolderService } from './folder.service'

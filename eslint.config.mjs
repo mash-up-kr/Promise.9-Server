@@ -22,7 +22,6 @@ export default tseslint.config(
         languageOptions: {
             globals: {
                 ...globals.node,
-                ...globals.jest,
             },
             ecmaVersion: 5,
             sourceType: 'module',
@@ -63,6 +62,20 @@ export default tseslint.config(
                     ],
                 },
             ],
+        },
+    },
+    {
+        files: ['**/*.spec.ts', 'test/**/*.ts'],
+        languageOptions: {
+            parserOptions: {
+                projectService: false,
+                project: './tsconfig.test.json',
+                tsconfigRootDir: import.meta.dirname,
+            },
+        },
+        rules: {
+            // Bun matcher 타입은 resolves/rejects 체인을 Thenable로 표현하지 않는다.
+            '@typescript-eslint/await-thenable': 'off',
         },
     },
 )

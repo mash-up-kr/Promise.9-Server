@@ -1,10 +1,14 @@
+import { beforeEach, describe, expect, it, jest } from 'bun:test'
+
+import type { BunMocked } from '../../../../test/bun-test.type'
+
 import {
     RelatedLinkCandidate,
     RelatedLinkRepository,
 } from './related-link.repository'
 import { RelatedLinkService, RelatedLinkSource } from './related-link.service'
 
-type RepositoryMock = jest.Mocked<
+type RepositoryMock = BunMocked<
     Pick<
         RelatedLinkRepository,
         | 'findFolderCandidateIds'

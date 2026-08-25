@@ -5,6 +5,8 @@ import type {
     GoogleGenAI,
 } from '@google/genai'
 import { ApiError, FinishReason } from '@google/genai'
+import type { Mock } from 'bun:test'
+import { beforeEach, describe, expect, it, jest } from 'bun:test'
 
 import { LLM_MODEL } from '../../../../common/constants/llm'
 import { ValidatedEnvironment } from '../../../../config/environment'
@@ -13,9 +15,8 @@ import { LlmProviderError } from '../../llm.exception'
 import { GeminiProvider } from './gemini.provider'
 
 type GeminiClientMock = Pick<GoogleGenAI, 'models'>
-type GenerateContentMock = jest.Mock<
-    Promise<GenerateContentResponse>,
-    [request: GenerateContentParameters]
+type GenerateContentMock = Mock<
+    (request: GenerateContentParameters) => Promise<GenerateContentResponse>
 >
 
 class TestGeminiProvider extends GeminiProvider {
@@ -50,7 +51,7 @@ describe('GeminiProvider', () => {
             }),
         }
 
-        generateContentMock = jest.fn() as GenerateContentMock
+        generateContentMock = jest.fn()
         provider = new TestGeminiProvider(
             config as unknown as ConfigService<ValidatedEnvironment, true>,
             {

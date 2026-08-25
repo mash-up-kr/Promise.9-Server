@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'bun:test'
+
 import { BaseException } from '../../common/exception/base.exception'
 import { encodeCursor } from '../../common/pagination/cursor'
 import { DatabaseService } from '../../config/database/database.service'

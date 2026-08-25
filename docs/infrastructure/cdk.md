@@ -2,6 +2,10 @@
 
 CDK 도입 이유는 [왜 AWS CDK를 사용하는가?](./why-cdk.md)를 참고한다.
 
+애플리케이션과 저장소 명령은 Bun을 사용한다. 단, 공식 런타임 요구사항에 맞춰 AWS CDK
+CLI와 CDK 앱은 Node.js 22로 실행한다. TypeScript CDK 앱은 명령 실행 전에 JavaScript로
+컴파일된다.
+
 ## 명령
 
 | 명령                      | 권한          | AWS 변경 |

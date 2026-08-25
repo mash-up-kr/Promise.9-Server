@@ -10,16 +10,18 @@ import { ApiTags } from '@nestjs/swagger'
 
 import { ZodValidationPipe } from '../../common/pipe/zod-validation.pipe'
 
-import {
+import type {
     KakaoExchangeInput,
-    kakaoExchangeSchema,
     LogoutInput,
-    logoutSchema,
     RefreshInput,
-    refreshSchema,
     SocialLoginInput,
-    socialLoginSchema,
     WithdrawInput,
+} from './dto/auth.dto'
+import {
+    kakaoExchangeSchema,
+    logoutSchema,
+    refreshSchema,
+    socialLoginSchema,
     withdrawSchema,
 } from './dto/auth.dto'
 import { AuthService } from './auth.service'

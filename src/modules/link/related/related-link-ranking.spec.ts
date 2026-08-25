@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'bun:test'
+
 import { RELATED_LINK_RANKING_WEIGHTS } from './related-link.constant'
 import {
     calculateRelatedLinkSignals,

@@ -14,21 +14,25 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
-import { AuthUser, JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
+import type { AuthUser } from '../../common/guards/jwt-auth.guard'
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ZodValidationPipe } from '../../common/pipe/zod-validation.pipe'
 
 import { LinkContentService } from './content/link-content.service'
-import {
+import type {
     CreateLinkInput,
-    createLinkSchema,
     LinkPreviewQueryInput,
-    linkPreviewQuerySchema,
     ListLinksQueryInput,
-    listLinksQuerySchema,
     UpdateLinkInput,
+} from './dto/link.dto'
+import {
+    createLinkSchema,
+    linkPreviewQuerySchema,
+    listLinksQuerySchema,
     updateLinkSchema,
 } from './dto/link.dto'
-import { CreateLinkTagInput, createLinkTagSchema } from './dto/tag.dto'
+import type { CreateLinkTagInput } from './dto/tag.dto'
+import { createLinkTagSchema } from './dto/tag.dto'
 import { LinkService } from './link.service'
 import {
     ApiCreateLink,

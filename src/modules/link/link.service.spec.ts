@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common'
+import { describe, expect, it, jest } from 'bun:test'
 
 import { decodeCursor } from '../../common/pagination/cursor'
 
@@ -139,7 +140,7 @@ describe('LinkService', () => {
         }
         const loggerWarnSpy = jest
             .spyOn(Logger.prototype, 'warn')
-            .mockImplementation()
+            .mockImplementation(() => undefined)
         const service = new LinkService(
             linkRepository as unknown as LinkRepository,
             {} as never,
