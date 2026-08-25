@@ -75,6 +75,14 @@ export function swaggerConfig(app: INestApplication) {
                 url: `${GITHUB_API_DOCS_BASE_URL}/folder.md`,
             },
         )
+        .addTag(
+            'Recommendation',
+            '홈 화면에 노출할 폴더·태그 추천을 조회합니다.',
+            {
+                description: 'GitHub에서 추천 API 상세 명세 보기',
+                url: `${GITHUB_API_DOCS_BASE_URL}/recommendation.md`,
+            },
+        )
         .addBearerAuth()
         .build()
 
