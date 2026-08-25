@@ -12,14 +12,16 @@ RDS 같은 managed DB를 쓰지 않기 때문에 snapshot이나 백업을 로컬
 
 ## 명령어
 
-| 목적         | 명령어                                                                         |
-| ------------ | ------------------------------------------------------------------------------ |
-| 백업         | `bun run db:backup -- --env=development`                                       |
-| 백업 검증    | `bun run db:backup:verify -- --file=backups/database/example.dump`             |
-| 복구         | `bun run db:restore -- --env=development --file=backups/database/example.dump` |
-| 상태 확인    | `bun run db:health -- --env=development`                                       |
-| 운영 DB 터널 | `bun run db:tunnel`                                                            |
-| Mermaid ERD  | `bun run db:visualize_mermaid -- --env=development`                            |
+| 목적                | 명령어                                                                         |
+| ------------------- | ------------------------------------------------------------------------------ |
+| 백업                | `bun run db:backup -- --env=development`                                       |
+| 백업 검증           | `bun run db:backup:verify -- --file=backups/database/example.dump`             |
+| 복구                | `bun run db:restore -- --env=development --file=backups/database/example.dump` |
+| 상태 확인           | `bun run db:health -- --env=development`                                       |
+| 운영 DB 터널        | `bun run db:tunnel`                                                            |
+| 마스터 폴더 배포    | `bun run db:distribute:master-folder -- --help`                                |
+| 마스터 DB 간 동기화 | `bun run db:sync:master-links -- --help`                                       |
+| Mermaid ERD         | `bun run db:visualize_mermaid -- --env=development`                            |
 
 `--env`를 지정하지 않으면 `APP_ENV`를 사용하고, 없으면 `development`로 동작한다.
 백업 기본 저장 위치는 `backups/database`이며 `.gitignore` 대상이다.
@@ -83,6 +85,50 @@ private key와 certificate도 출력하지 않는다. AWS 로그인이 만료됐
 
 ```bash
 aws login --profile promise9
+```
+
+## 마스터 링크 배포
+
+상세 정책과 단계별 운영 절차는
+[마스터 링크 배포](./master-link-distribution.md)를 참고한다.
+
+UT용 링크는 마스터 계정의 실제 폴더에 먼저 저장해 요약·태그·임베딩 생성을 완료한다.
+이후 폴더 단위 배포 스크립트로 같은 DB 환경의 대상 유저에게 복제한다.
+
+```bash
+# dry-run
+bun run db:distribute:master-folder -- \
+  --env=production \
+  --folder-name="2차 UT" \
+  --target-user-email="user@example.com"
+
+# 실제 반영
+bun run db:distribute:master-folder -- \
+  --env=production \
+  --folder-name="2차 UT" \
+  --target-user-email="user@example.com" \
+  --apply \
+  --force-production
+```
+
+- 원본은 `MASTER_USER_ID`가 소유한 활성 폴더여야 한다.
+- 대상 유저는 미리 존재해야 하며 `--target-user-id` 또는 `--target-user-email`로 지정한다.
+- 대상에 동명 폴더가 있으면 재사용하고, 없으면 같은 이름·색상으로 생성한다.
+- 링크의 URL·수집 메타데이터·AI 요약·임베딩과 모든 태그를 복사한다.
+- 즐겨찾기·조회 시각·메모·리마인더 같은 유저 상태는 복사하지 않는다.
+- 대상 유저의 활성 중복 URL은 덮어쓰거나 이동하지 않고 건너뛴다.
+- 요약 또는 임베딩이 완료되지 않은 원본 링크가 하나라도 있으면 중단한다.
+- 실제 삽입은 한 트랜잭션으로 처리하며 기본 실행은 변경 없는 dry-run이다.
+
+개발 마스터의 모든 활성 폴더와 미분류 링크를 운영 마스터로 동기화하는 명령은
+별도 운영 작업에만 사용한다. 운영 마스터는 개발 마스터와 같은 이메일로 찾는다.
+
+```bash
+# dry-run
+bun run db:sync:master-links
+
+# 실제 반영
+bun run db:sync:master-links -- --apply --force-production
 ```
 
 ## 운영 환경 주의사항
