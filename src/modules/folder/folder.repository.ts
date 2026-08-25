@@ -41,6 +41,7 @@ export class FolderRepository {
                 id: folders.id,
                 name: folders.name,
                 color: folders.color,
+                viewCount: folders.viewCount,
             })
             .from(folders)
             .where(eq(folders.userId, userId))

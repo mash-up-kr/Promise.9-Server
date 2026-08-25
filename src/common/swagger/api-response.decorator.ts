@@ -19,13 +19,31 @@ export const ApiCommonResponse = <TModel extends Type<unknown>>(
         status?: number
         description?: string
         isArray?: boolean
+        dataNullable?: boolean
         dataExample?: unknown
     } = {},
 ) => {
-    const { status = 200, description, isArray = false, dataExample } = options
+    const {
+        status = 200,
+        description,
+        isArray = false,
+        dataNullable = false,
+        dataExample,
+    } = options
     const dataSchema = isArray
-        ? { type: 'array', items: { $ref: getSchemaPath(dataDto) } }
-        : { $ref: getSchemaPath(dataDto) }
+        ? {
+              type: 'array',
+              items: { $ref: getSchemaPath(dataDto) },
+              ...(dataNullable ? { nullable: true } : {}),
+          }
+        : dataNullable
+          ? {
+                oneOf: [
+                    { $ref: getSchemaPath(dataDto) },
+                    { type: 'object', nullable: true, enum: [null] },
+                ],
+            }
+          : { $ref: getSchemaPath(dataDto) }
 
     return applyDecorators(
         ApiExtraModels(dataDto),

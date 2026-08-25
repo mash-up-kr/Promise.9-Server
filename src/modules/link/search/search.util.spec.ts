@@ -2,67 +2,9 @@ import { encodeCursor } from '../../../common/pagination/cursor'
 
 import {
     parseSearchCursor,
-    scoreSearchCandidates,
     takeSearchPage,
     toSearchCursorPayload,
 } from './search.util'
-
-describe('scoreSearchCandidates', () => {
-    it('벡터 유사도와 키워드 가산점을 합쳐 내림차순으로 정렬한다', () => {
-        const result = scoreSearchCandidates(
-            [
-                { id: 1, score: 0.8 },
-                { id: 2, score: 0.6 },
-            ],
-            [2, 3],
-        )
-
-        expect(result.map(({ id }) => id)).toEqual([2, 1, 3])
-        expect(result[0].score).toBeCloseTo(0.9)
-        expect(result[1].score).toBeCloseTo(0.8)
-        expect(result[2].score).toBeCloseTo(0.3)
-    })
-
-    it('점수를 1로 제한한다', () => {
-        expect(scoreSearchCandidates([{ id: 1, score: 0.9 }], [1])).toEqual([
-            { id: 1, score: 1 },
-        ])
-    })
-
-    it('후보를 자르지 않고 전체를 반환한다', () => {
-        const result = scoreSearchCandidates(
-            [
-                { id: 1, score: 0.8 },
-                { id: 2, score: 0.6 },
-            ],
-            [3],
-        )
-
-        expect(result).toHaveLength(3)
-    })
-
-    it('점수가 같으면 id 내림차순으로 정렬한다', () => {
-        const result = scoreSearchCandidates(
-            [
-                { id: 1, score: 0.5 },
-                { id: 3, score: 0.5 },
-                { id: 2, score: 0.5 },
-            ],
-            [],
-        )
-
-        expect(result.map(({ id }) => id)).toEqual([3, 2, 1])
-    })
-
-    it('점수를 소수점 5자리로 반올림한다', () => {
-        const [candidate] = scoreSearchCandidates(
-            [{ id: 1, score: 0.123456789 }],
-            [],
-        )
-
-        expect(candidate.score).toBe(0.12346)
-    })
-})
 
 describe('takeSearchPage', () => {
     const candidates = [

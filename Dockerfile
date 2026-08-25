@@ -3,7 +3,8 @@ FROM oven/bun:1.3.14-alpine AS deps
 WORKDIR /app
 
 COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile
+COPY infra/package.json ./infra/package.json
+RUN bun install --frozen-lockfile --filter promise9
 
 FROM deps AS builder
 
@@ -17,8 +18,9 @@ FROM oven/bun:1.3.14-alpine AS prod-deps
 WORKDIR /app
 
 COPY package.json bun.lock ./
+COPY infra/package.json ./infra/package.json
 RUN bun -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8')); if (pkg.scripts) delete pkg.scripts.prepare; fs.writeFileSync('package.json', JSON.stringify(pkg));"
-RUN bun install --frozen-lockfile --production
+RUN bun install --frozen-lockfile --production --filter promise9
 
 FROM node:22-alpine AS runner
 

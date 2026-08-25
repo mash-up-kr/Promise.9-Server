@@ -49,6 +49,7 @@ erDiagram
     bigint user_id FK
     varchar name
     integer sort_order
+    integer view_count
     timestamptz created_at
     timestamptz updated_at
     timestamptz deleted_at
@@ -67,6 +68,7 @@ erDiagram
     text ai_summary
     varchar ai_summary_status
     text memo
+    timestamptz reminder_at
     timestamptz deleted_at
     timestamptz created_at
     timestamptz updated_at
@@ -110,13 +112,11 @@ erDiagram
 - `ai_metrics`는 LLM 호출 성공·실패를 append-only로 기록하며, **물리 FK 없이** `user_link_id`로 `links.id`를 논리 참조한다.
 - 화면에서 폴더처럼 표시되는 전체·미분류·즐겨찾기·최근 삭제는 `folders` 행으로 저장하지 않고 링크 조회 조건으로 표현한다. 최근 삭제는 삭제된 폴더가 아니라 soft delete된 링크 목록이다.
 - `tags`는 `(link_id, user_id)` 복합 FK로 `links(id, user_id)`를 참조해 태그·링크의 소유자 정합성을 DB에서 강제한다. 이를 위해 `links`에 `(id, user_id)` 유니크 제약을 둔다. `tags`는 `users`를 직접 참조하지 않고(단독 FK 제거), 소유자·사용자 존재는 `links`를 통해 커버한다.
-- `refresh_tokens`는 토큰 원문 대신 해시만 저장하고 RTR(rotation) 방식으로 재사용을 탐지한다. (인증 파이프라인은 후속 작업)
+- `refresh_tokens`는 토큰 원문 대신 해시만 저장하고 RTR(rotation) 방식으로 재사용을 탐지한다.
 - 세부 컬럼·제약·인덱스는 `docs/database/tables/`의 테이블별 문서를 참조한다.
 
 <br>
 
-## 미확정 / 다음 단계
+## 비동기 처리
 
-- `folders`는 활성(`deleted_at IS NULL`) 폴더 기준 `(user_id, name)` partial unique index로 폴더명 유일성을 DB에서 보장한다. `sort_order`, `deleted_at` 컬럼을 추가했다.
-- 기존 `links` 테이블은 위 비정규화 구조로 **교체**했고, `LinkService`/`FolderService`도 새 컬럼에 맞춰 재작성했다.
 - 링크 저장 후 현재 프로세스에서 메타데이터 수집과 AI 요약·태그 생성을 비동기로 실행한다. 큐와 재시도 정책은 후속 작업이다.
