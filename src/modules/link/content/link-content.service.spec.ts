@@ -58,6 +58,7 @@ describe('LinkContentService', () => {
                     <html>
                         <head>
                             <meta property="og:title" content="링크 제목" />
+                            <meta property="og:image" content="/thumbnail.png" />
                             <meta name="description" content="링크 설명" />
                             <script>제외할 코드</script>
                         </head>
@@ -72,6 +73,32 @@ describe('LinkContentService', () => {
             title: '링크 제목',
             description: '링크 설명',
             content: '본문 & 내용',
+            image: {
+                url: 'https://example.com/thumbnail.png',
+                source: 'og:image',
+            },
+        })
+    })
+
+    it('twitter:image만 있는 페이지도 대표 이미지 출처와 함께 수집한다', async () => {
+        fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 404 }))
+            .mockResolvedValueOnce(
+                htmlResponse(`
+                    <meta name="twitter:image" content="/twitter.png" />
+                `),
+            )
+
+        const result = await service.collect('https://example.com/article')
+
+        expect(result).toEqual({
+            title: null,
+            description: null,
+            content: null,
+            image: {
+                url: 'https://example.com/twitter.png',
+                source: 'twitter:image',
+            },
         })
     })
 

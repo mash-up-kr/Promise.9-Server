@@ -101,6 +101,8 @@ erDiagram
 - `images`: 수집된 이미지 후보 목록.
 - `images[].source`: 이미지 출처. 예: `og:image`, `twitter:image`.
 - `images[].dominantColor`: 이미지 대표 색상.
+- 링크 분석은 `og:image` → `twitter:image` 순으로 대표 이미지 하나를 선택해 `images[0]`에 저장한다.
+- 색상 추출에 실패하면 `url`과 `source`는 보존하고 `dominantColor`만 생략한다. 이 실패는 `ai_summary_status`를 `FAILED`로 변경하지 않는다.
 
 ## 인덱스 설계
 
