@@ -75,6 +75,9 @@ export class LinkFolderRefDto {
 
     @ApiProperty({ example: '개발 블로그', description: '폴더 이름' })
     folderName!: string
+
+    @ApiProperty({ example: '#d5d76a', description: '폴더 색상 hex' })
+    color!: string
 }
 
 export class RelatedLinkDto {

@@ -554,12 +554,16 @@ export class LinkRepository {
             .groupBy(links.folderId)
     }
 
-    // 링크에 연결된 폴더 참조를 조회한다 (소유권 확인 없이 id·name만).
+    // 링크에 연결된 폴더 참조를 조회한다 (소유권 확인 없이 id·name·color만).
     async findFolder(
         folderId: number,
-    ): Promise<Pick<FolderRow, 'id' | 'name'> | undefined> {
+    ): Promise<Pick<FolderRow, 'id' | 'name' | 'color'> | undefined> {
         const [row] = await this.db
-            .select({ id: folders.id, name: folders.name })
+            .select({
+                id: folders.id,
+                name: folders.name,
+                color: folders.color,
+            })
             .from(folders)
             .where(eq(folders.id, folderId))
             .limit(1)

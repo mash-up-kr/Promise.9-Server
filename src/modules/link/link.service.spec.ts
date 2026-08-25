@@ -53,11 +53,11 @@ describe('LinkService', () => {
         })
     })
 
-    it('상세 링크와 태그를 관련 링크 입력으로 전달하고 결과를 응답에 포함한다', async () => {
+    it('상세 링크의 폴더 색상과 관련 링크를 응답에 포함한다', async () => {
         const link = {
             id: 10,
             userId: 7,
-            folderId: null,
+            folderId: 3,
             originalUrl: 'https://example.com/source',
             title: '원본 링크',
             domain: 'example.com',
@@ -81,6 +81,11 @@ describe('LinkService', () => {
         ]
         const linkRepository = {
             findOwned: jest.fn().mockResolvedValue(link),
+            findFolder: jest.fn().mockResolvedValue({
+                id: 3,
+                name: '디자인',
+                color: '#d5d76a',
+            }),
             findTags: jest.fn().mockResolvedValue(tagRows),
         }
         const relatedLinkService = {
@@ -103,10 +108,15 @@ describe('LinkService', () => {
 
         expect(relatedLinkService.relatedLinks).toHaveBeenCalledWith(7, {
             id: 10,
-            folderId: null,
+            folderId: 3,
             title: '원본 링크',
             embedding: [1, 0],
             normalizedTags: ['ai'],
+        })
+        expect(result.folder).toEqual({
+            folderId: 3,
+            folderName: '디자인',
+            color: '#d5d76a',
         })
         expect(result.relatedLinks).toEqual([
             { linkId: 11, title: '관련 링크', thumbnailUrl: null },

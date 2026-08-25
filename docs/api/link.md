@@ -172,7 +172,8 @@ GET /links/{linkId}
         "url": "https://toss.tech/article/example",
         "folder": {
             "folderId": 3,
-            "folderName": "디자인"
+            "folderName": "디자인",
+            "color": "#d5d76a"
         },
         "thumbnailUrl": "https://static.example.com/thumbnail.png",
         "title": "신입 디자이너가 알아야 할 실험 설계 팁",
