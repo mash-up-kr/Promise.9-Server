@@ -18,10 +18,17 @@ export class KakaoProvider implements SocialProvider {
     private readonly jwks = createRemoteJWKSet(new URL(KAKAO_JWKS_URI))
     private readonly clientId: string
     private readonly clientSecret?: string
+    // 네이티브 SDK가 발급하는 id_token의 aud는 REST API 키가 아니라 네이티브
+    // 앱 키라서, 검증 시에는 두 값을 모두 허용해야 한다.
+    private readonly verifyAudiences: string[]
 
     constructor(config: ConfigService<ValidatedEnvironment, true>) {
         this.clientId = config.getOrThrow('KAKAO_CLIENT_ID', { infer: true })
         this.clientSecret = config.get('KAKAO_CLIENT_SECRET', { infer: true })
+        const nativeAppKey = config.getOrThrow('KAKAO_NATIVE_APP_KEY', {
+            infer: true,
+        })
+        this.verifyAudiences = [this.clientId, nativeAppKey]
     }
 
     // 웹은 카카오 SDK 없이 authorization code만 받을 수 있어, 서버가 대신
@@ -86,7 +93,7 @@ export class KakaoProvider implements SocialProvider {
         try {
             const { payload } = await jwtVerify(idToken, this.jwks, {
                 issuer: KAKAO_ISSUER,
-                audience: this.clientId,
+                audience: this.verifyAudiences,
             })
 
             if (!payload.sub || typeof payload.email !== 'string') {
