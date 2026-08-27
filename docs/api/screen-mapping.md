@@ -41,6 +41,7 @@
 | 즐겨찾기                     | `GET /links?favorite=true`                            |  △   | 즐겨찾기 필터·cursor 페이지네이션 연결  |
 | 최근 삭제                    | `GET /links?deleted=true&sortBy=deletedAt&order=desc` |  △   | 삭제 시각 정렬·cursor 페이지네이션 연결 |
 | 사용자 폴더 상세             | `GET /links?folderId={folderId}`                      |  △   | cursor 페이지네이션 연결                |
+| 선택 링크 일괄 폴더 이동     | `PATCH /links/folder`                                 |  O   | 출처 화면과 무관하게 활성 링크만 이동   |
 
 전체·미분류·즐겨찾기·최근 삭제는 화면에서는 폴더처럼 표시되지만 DB의 `folders` row가 아닙니다. `folderId`가 없고 폴더 CRUD 대상도 아닙니다. `GET /folders`는 각 링크 상태의 개수만 제공하며, 항목을 눌렀을 때는 위 표처럼 `GET /links` Query를 조합합니다. 최근 삭제는 삭제된 폴더가 아니라 soft delete된 링크 목록입니다.
 

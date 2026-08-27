@@ -19,18 +19,23 @@ import {
 import { AUTH_ERROR } from '../auth/auth-error.constant'
 import { FOLDER_ERROR } from '../folder/folder-error.constant'
 
-import { CreateLinkDto, UpdateLinkDto } from './dto/link.dto'
+import {
+    CreateLinkDto,
+    MoveLinksToFolderDto,
+    UpdateLinkDto,
+} from './dto/link.dto'
 import {
     CreateLinkResponseDto,
     LinkDetailResponseDto,
     LinkPreviewResponseDto,
     ListLinksResponseDto,
+    MoveLinksToFolderResponseDto,
     RestoreLinkResponseDto,
     UpdateLinkResponseDto,
 } from './dto/link.response.dto'
 import { CreateLinkTagDto } from './dto/tag.dto'
 import { LinkTagResponseDto } from './dto/tag.response.dto'
-import { LINK_MEMO_MAX_LENGTH } from './link.constants'
+import { LINK_MEMO_MAX_LENGTH, MAX_BULK_MOVE_LINKS } from './link.constants'
 import { LINK_ERROR } from './link-error.constant'
 
 const LIST_LINKS_DESCRIPTION = `
@@ -132,6 +137,17 @@ const UPDATE_LINK_DESCRIPTION = `
 ### 현재 구현 상태
 
 - 폴더 이동, 메모 변경, 리마인드 설정·해제, 즐겨찾기 설정·해제가 모두 저장됩니다.
+`
+
+const MOVE_LINKS_TO_FOLDER_DESCRIPTION = `
+여러 활성 링크를 한 사용자 폴더 또는 미분류로 원자적으로 이동합니다. 링크가 전체·미분류·즐겨찾기·사용자 폴더·검색 중 어느 화면에서 선택됐는지는 구분하지 않습니다.
+
+- 요청은 최대 ${MAX_BULK_MOVE_LINKS}개이며 중복 \`linkIds\`는 한 번만 처리합니다.
+- \`folderId=null\`이면 미분류로 이동합니다.
+- 이미 목적지에 있는 링크는 변경하지 않으며 \`unchangedCount\`에 포함합니다. 해당 링크의 \`updatedAt\`도 유지됩니다.
+- 링크 하나라도 없거나, 삭제됐거나, 다른 사용자 소유라면 전체 요청을 실패시킵니다.
+- 목적지 폴더가 없거나 다른 사용자 소유여도 전체 요청을 실패시킵니다.
+- 검증과 이동은 하나의 DB transaction에서 실행해 부분 이동을 허용하지 않습니다.
 `
 
 const REMOVE_LINK_DESCRIPTION = `
@@ -241,6 +257,13 @@ const UPDATE_LINK_RESPONSE_EXAMPLE = {
     reminderAt: '2026-08-20T12:00:00.000Z',
     isFavorite: true,
     updatedAt: TIMESTAMP_EXAMPLE,
+}
+
+const MOVE_LINKS_TO_FOLDER_RESPONSE_EXAMPLE = {
+    requestedCount: 3,
+    movedCount: 2,
+    unchangedCount: 1,
+    folderId: 7,
 }
 
 const RESTORE_LINK_RESPONSE_EXAMPLE = {
@@ -464,6 +487,29 @@ export const ApiUpdateLink = () =>
         ApiCommonResponse(UpdateLinkResponseDto, {
             description: '수정 성공',
             dataExample: UPDATE_LINK_RESPONSE_EXAMPLE,
+        }),
+        ApiCommonErrorResponses(
+            COMMON_ERROR.VALIDATION,
+            AUTH_ERROR.INVALID_TOKEN,
+            LINK_ERROR.NOT_FOUND,
+            FOLDER_ERROR.NOT_FOUND,
+        ),
+    )
+
+export const ApiMoveLinksToFolder = () =>
+    applyDecorators(
+        ApiOperation({
+            summary: '링크 일괄 폴더 이동',
+            description: MOVE_LINKS_TO_FOLDER_DESCRIPTION,
+        }),
+        ApiBody({
+            type: MoveLinksToFolderDto,
+            description:
+                '`linkIds`의 활성 링크를 `folderId`로 이동합니다. `folderId=null`이면 미분류로 이동합니다.',
+        }),
+        ApiCommonResponse(MoveLinksToFolderResponseDto, {
+            description: '일괄 이동 성공',
+            dataExample: MOVE_LINKS_TO_FOLDER_RESPONSE_EXAMPLE,
         }),
         ApiCommonErrorResponses(
             COMMON_ERROR.VALIDATION,
