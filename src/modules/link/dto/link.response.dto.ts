@@ -53,6 +53,15 @@ export class CreateLinkResponseDto {
     savedAt!: string
 
     @ApiProperty({
+        type: String,
+        format: 'date-time',
+        example: '2026-08-20T12:00:00.000Z',
+        nullable: true,
+        description: '리마인드 시각. 설정하지 않았으면 null',
+    })
+    reminderAt!: string | null
+
+    @ApiProperty({
         example: 0.87342,
         nullable: true,
         description: '검색 결과 점수. 검색하지 않은 일반 목록에서는 null',
@@ -66,6 +75,9 @@ export class LinkFolderRefDto {
 
     @ApiProperty({ example: '개발 블로그', description: '폴더 이름' })
     folderName!: string
+
+    @ApiProperty({ example: '#d5d76a', description: '폴더 색상 hex' })
+    color!: string
 }
 
 export class RelatedLinkDto {
@@ -175,6 +187,15 @@ export class LinkDetailResponseDto {
     memo!: string | null
 
     @ApiProperty({
+        type: String,
+        format: 'date-time',
+        example: '2026-08-20T12:00:00.000Z',
+        nullable: true,
+        description: '리마인드 시각. 설정하지 않았으면 null',
+    })
+    reminderAt!: string | null
+
+    @ApiProperty({
         type: [RelatedLinkDto],
         description: '연관 링크. 결과가 없으면 빈 배열',
     })
@@ -198,6 +219,15 @@ export class UpdateLinkResponseDto {
         description: '메모',
     })
     memo!: string | null
+
+    @ApiProperty({
+        type: String,
+        format: 'date-time',
+        example: '2026-08-20T12:00:00.000Z',
+        nullable: true,
+        description: '변경 후 리마인드 시각. 해제되었으면 null',
+    })
+    reminderAt!: string | null
 
     @ApiProperty({
         example: true,

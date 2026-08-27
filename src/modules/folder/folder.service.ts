@@ -53,6 +53,7 @@ export class FolderService {
         const folderList = folderRows.map((folder) => ({
             ...this.toFolderSummary(folder),
             linkCount: linkCounts.get(folder.id) ?? 0,
+            viewCount: folder.viewCount,
             lastSavedAt: lastSavedAtByFolder.get(folder.id) ?? null,
         }))
 
@@ -94,7 +95,7 @@ export class FolderService {
     async get(userId: number, folderId: number) {
         const folder = await this.getOwnedFolder(userId, folderId)
 
-        return this.toFolderSummary(folder)
+        return { ...this.toFolderSummary(folder), viewCount: folder.viewCount }
     }
 
     // 이름·색상 중 넘어온 값만 부분 수정. (이름을 바꿀 때만 중복 검사)

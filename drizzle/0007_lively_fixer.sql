@@ -1,0 +1,1 @@
+ALTER TABLE "links" ADD COLUMN "reminder_at" timestamp with time zone;

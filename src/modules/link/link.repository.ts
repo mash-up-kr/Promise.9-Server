@@ -209,7 +209,6 @@ export class LinkRepository {
                     )
                     .for('update')
                     .limit(1)
-
                 if (!folder) {
                     throw new BaseException(FOLDER_ERROR.NOT_FOUND)
                 }
@@ -256,6 +255,72 @@ export class LinkRepository {
                 unchangedCount: linkIds.length - movedIds.length,
                 folderId,
             }
+        })
+    }
+
+    async markViewed(userId: number, linkId: number, viewedAt: Date) {
+        return this.db.transaction(async (tx) => {
+            const [source] = await tx
+                .select({ folderId: links.folderId })
+                .from(links)
+                .where(
+                    and(
+                        eq(links.id, linkId),
+                        eq(links.userId, userId),
+                        isNull(links.deletedAt),
+                    ),
+                )
+                .limit(1)
+
+            if (!source) {
+                return undefined
+            }
+
+            if (source.folderId !== null) {
+                await tx
+                    .select({ id: folders.id })
+                    .from(folders)
+                    .where(
+                        and(
+                            eq(folders.id, source.folderId),
+                            eq(folders.userId, userId),
+                            isNull(folders.deletedAt),
+                        ),
+                    )
+                    .for('update')
+                    .limit(1)
+            }
+
+            const [link] = await tx
+                .update(links)
+                .set({ viewedAt, updatedAt: viewedAt })
+                .where(
+                    and(
+                        eq(links.id, linkId),
+                        eq(links.userId, userId),
+                        isNull(links.deletedAt),
+                    ),
+                )
+                .returning({ id: links.id })
+
+            if (!link) {
+                return undefined
+            }
+
+            if (source.folderId !== null) {
+                await tx
+                    .update(folders)
+                    .set({ viewCount: sql`${folders.viewCount} + 1` })
+                    .where(
+                        and(
+                            eq(folders.id, source.folderId),
+                            eq(folders.userId, userId),
+                            isNull(folders.deletedAt),
+                        ),
+                    )
+            }
+
+            return link
         })
     }
 
@@ -566,12 +631,16 @@ export class LinkRepository {
             .groupBy(links.folderId)
     }
 
-    // 링크에 연결된 폴더 참조를 조회한다 (소유권 확인 없이 id·name만).
+    // 링크에 연결된 폴더 참조를 조회한다 (소유권 확인 없이 id·name·color만).
     async findFolder(
         folderId: number,
-    ): Promise<Pick<FolderRow, 'id' | 'name'> | undefined> {
+    ): Promise<Pick<FolderRow, 'id' | 'name' | 'color'> | undefined> {
         const [row] = await this.db
-            .select({ id: folders.id, name: folders.name })
+            .select({
+                id: folders.id,
+                name: folders.name,
+                color: folders.color,
+            })
             .from(folders)
             .where(eq(folders.id, folderId))
             .limit(1)

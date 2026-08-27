@@ -16,17 +16,18 @@ ALTER TABLE "links" ADD COLUMN "embedding" vector(768);
 ```
 
 확장이 없는 Postgres에서는 이 마이그레이션이 `type "vector" does not exist`로 실패한다.
-로컬은 `pgvector/pgvector:pg18` 이미지처럼 확장이 포함된 이미지를 써야 한다. (DB 준비는 [database/setup.md](../database/setup.md) 참조)
+로컬과 운영은 `pgvector/pgvector:0.8.6-pg18-bookworm` 이미지를 사용한다. DB 준비는
+[Database Setup](../database/setup.md)을 참고한다.
 
 <br>
 
 ## 임베딩 컬럼
 
-| 항목      | 값                                                    |
-| --------- | ----------------------------------------------------- |
-| 컬럼      | `links.embedding` — `vector(768)`, 미생성 시 `null`   |
-| 모델      | OpenAI `text-embedding-3-large` (`EMBEDDING_MODEL`)   |
-| 차원      | `768` (`EMBEDDING_DIMENSIONS`)                        |
+| 항목 | 값                                                  |
+| ---- | --------------------------------------------------- |
+| 컬럼 | `links.embedding` — `vector(768)`, 미생성 시 `null` |
+| 모델 | OpenAI `text-embedding-3-large` (`EMBEDDING_MODEL`) |
+| 차원 | `768` (`EMBEDDING_DIMENSIONS`)                      |
 
 모델과 차원은 `src/common/constants/llm.ts`에 상수로 고정한다. env로 열어두지 않는 이유는 provider·모델을 바꾸면 기존 벡터와 호환되지 않아 전량 재생성해야 하기 때문이다. `vector(N)`의 `N`도 이 상수와 반드시 일치해야 한다.
 
@@ -49,7 +50,8 @@ aiSummary
 - **요약·태그 처리 후** — 두 작업의 성공 여부와 관계없이 최신 DB 값을 다시 읽어 가능한 부분 결과로 임베딩을 시도한다.
 - **전체 상태 확정 전** — 요약·태그 처리와 임베딩 저장이 모두 성공해야 `processingStatus=SUCCESS`로 변경한다. 하나라도 실패하면 부분 결과는 보존하고 `FAILED`로 기록한다.
 
-기존 링크는 `bun run db:backfill:embeddings`로 채우며, 실행 전에 사용자 범위와 예상 API 호출 수를 확인한다.
+embedding이 없는 링크는 `bun run db:backfill:embeddings`로 채우며, 실행 전에 사용자
+범위와 예상 API 호출 수를 확인한다.
 
 `LinkRepository.updateEmbedding`은 요청 사용자의 활성 링크에만 벡터를 저장한다. 임베딩 생성 중 링크가 삭제돼 갱신된 행이 없으면 임베딩 실패로 처리한다.
 
@@ -112,15 +114,16 @@ HNSW는 근사 최근접(ANN) 인덱스로, 벡터를 다층 그래프로 연결
 
 인덱스를 걸지 않으면 비용은 **필터를 통과한 행 수**에만 비례한다. 그 필터는 이미 인덱싱돼 있어서, 사용자 한 명의 링크 수가 곧 코사인 계산 횟수다. 정확도는 100%다.
 
-| | 인덱스 있음 | 없음 (현재) |
-| --- | --- | --- |
-| 정확도 | 근사 + 필터에 후보가 걸려 누락 | recall 100% |
-| 예측성 | 플래너 선택에 따라 결과가 달라짐 | 항상 동일 |
-| 속도 | 사용자당 링크가 많아질수록 유리 | 필터 통과 행 수에 비례 |
-| 쓰기 비용 | 임베딩 갱신마다 그래프 삽입 | 없음 |
-| 저장 공간 | 벡터당 3KB(768 × 4바이트) + 그래프 | 없음 |
+|           | HNSW 인덱스                        | Exact scan             |
+| --------- | ---------------------------------- | ---------------------- |
+| 정확도    | 근사 + 필터에 후보가 걸려 누락     | recall 100%            |
+| 예측성    | 플래너 선택에 따라 결과가 달라짐   | 항상 동일              |
+| 속도      | 사용자당 링크가 많아질수록 유리    | 필터 통과 행 수에 비례 |
+| 쓰기 비용 | 임베딩 갱신마다 그래프 삽입        | 없음                   |
+| 저장 공간 | 벡터당 3KB(768 × 4바이트) + 그래프 | 없음                   |
 
-**재도입 기준:** 사용자당 활성 링크가 만 건대에 접근하면 다시 검토한다. 그때는 pgvector 0.8.0+의 `hnsw.iterative_scan`(필터 통과분이 부족하면 인덱스를 더 훑는 옵션)을 함께 켜야 위 후보 누락이 재발하지 않는다.
+사용자당 활성 링크가 만 건대에 접근하면 HNSW 도입을 검토한다. 이 경우 pgvector
+0.8.0+의 `hnsw.iterative_scan`을 함께 사용해 필터 적용 후 후보 부족을 줄인다.
 
 `deleted=true` 검색은 활성 링크(`deleted_at IS NULL`) 전용 trigram partial index의 대상이 아니므로 사용자별 삭제 링크 범위를 스캔한다. 삭제 링크가 장기간 누적되면 별도 보관·정리 정책이나 삭제 링크용 인덱스를 다시 검토한다.
 

@@ -19,6 +19,7 @@ erDiagram
     text ai_summary
     varchar ai_summary_status
     text memo
+    timestamptz reminder_at
     boolean is_favorite
     timestamptz viewed_at
     timestamptz deleted_at
@@ -43,6 +44,7 @@ erDiagram
 | ai_summary        | text        | N    | AI 요약 결과                                                                                    |
 | ai_summary_status | varchar     | Y    | 비동기 분석 대표 상태. 요약·태그·임베딩이 모두 성공해야 `SUCCESS`                               |
 | memo              | text        | N    | 사용자 메모. 최대 500자                                                                         |
+| reminder_at       | timestamptz | N    | 리마인드를 받을 절대 시각. `NULL`이면 리마인드를 설정하지 않음                                  |
 | is_favorite       | boolean     | Y    | 즐겨찾기 여부. 기본값은 `false`                                                                 |
 | viewed_at         | timestamptz | N    | 링크 상세 화면을 마지막으로 조회한 시각. 조회 전에는 `NULL`                                     |
 | deleted_at        | timestamptz | N    | 최근 삭제된 항목으로 이동한 일시                                                                |
@@ -59,14 +61,15 @@ erDiagram
 - 폴더 미선택 상태와 복원 후 미분류 상태는 `folder_id IS NULL`로 표현한다.
 - 링크 저장 최신순 정렬은 `created_at`을 기준으로 한다.
 - 즐겨찾기 설정·해제는 `is_favorite`을 갱신한다.
-- 상세 화면 조회 기록은 `POST /links/{linkId}/view` 호출 시 `viewed_at`을 서버 현재 시각으로 갱신한다.
-- 조회 횟수나 이력은 저장하지 않고 마지막 조회 시각만 보관한다.
+- 리마인드 시각은 타임존이 포함된 ISO 8601 미래 시각으로 받아 `reminder_at`에 저장하며, `NULL`로 설정하면 해제한다.
+- 상세 화면을 5초 이상 본 뒤 `POST /links/{linkId}/view`를 호출하면 `viewed_at`을 서버 현재 시각으로 갱신한다.
+- 링크별 조회 횟수나 이력은 저장하지 않고, 폴더별 누적 조회수는 `folders.view_count`에 저장한다.
 - 영구 삭제 대상은 별도 컬럼 없이 `deleted_at <= now() - interval '30 days'` 조건으로 판단한다.
 - 복원 시 `deleted_at`을 `NULL`로 되돌린다.
 - 검색 대상은 `title`, `domain`, `original_url`, `final_url`, `ai_summary`, `memo`이며, `deleted_at IS NULL`인 링크만 포함한다.
 - `ai_summary_status`는 목록/상세 화면에서 사용하는 사용자 저장 링크 단위 대표 상태다.
-- AI 요약 시도의 모델, 프롬프트, 토큰, 비용, TTLB, 에러, 생성 요약문은 `ai_summary_metrics`에 저장한다.
-- `ai_summary_metrics.status`는 개별 요약 시도 상태이며, `user_links.ai_summary_status`와 범위가 다르다.
+- AI 요약·태그 LLM 호출의 모델, 프롬프트, 토큰, TTLB, 에러, 생성 결과는 `ai_metrics`에 저장한다.
+- `ai_metrics.status`는 개별 LLM 호출 결과이며, `links.ai_summary_status`는 링크 분석 전체 상태다.
 - `metadata`는 확장 정보 보관용이며, 목록/검색/정렬에 자주 쓰는 값은 별도 컬럼으로 둔다.
 - 이미지 URL, 이미지 후보 목록, 이미지 색상 정보는 별도 컬럼 없이 `metadata`에 저장한다.
 - `metadata.version`은 JSON 구조 버전이며, 구조가 바뀌면 애플리케이션의 버전별 처리기가 해석한다.

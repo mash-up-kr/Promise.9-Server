@@ -26,6 +26,9 @@ export class GetFolderResponseDto {
 
     @ApiProperty({ example: COLOR_EXAMPLE, description: '폴더 색상 hex' })
     color!: string
+
+    @ApiProperty({ example: 24, description: '폴더 누적 조회수' })
+    viewCount!: number
 }
 
 export class CreateFolderResponseDto {
@@ -111,6 +114,9 @@ export class FolderListItemDto {
 
     @ApiProperty({ example: 5, description: '폴더 내 링크 수' })
     linkCount!: number
+
+    @ApiProperty({ example: 24, description: '폴더 누적 조회수' })
+    viewCount!: number
 
     @ApiProperty({
         type: String,
