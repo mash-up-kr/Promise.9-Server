@@ -6,6 +6,7 @@ import { LINK_ERROR } from '../link-error.constant'
 
 import {
     LINK_CONTENT_FETCH,
+    LINK_CONTENT_IMAGE_URL_MAX_LENGTH,
     LINK_CONTENT_REDIRECT_STATUSES,
     LINK_CONTENT_REQUEST_HEADERS,
     LINK_CONTENT_TEXT_LIMIT,
@@ -33,7 +34,7 @@ export class LinkContentService {
 
         return {
             title,
-            thumbnailUrl: this.toAbsoluteImage(image, finalUrl),
+            thumbnailUrl: await this.toSafeAbsoluteImage(image, finalUrl),
             source: this.toSource(finalUrl),
         }
     }
@@ -46,7 +47,10 @@ export class LinkContentService {
             })
             const information = parseLinkInformation(html)
             const preview = parseLinkPreview(html)
-            const imageUrl = this.toAbsoluteImage(preview.image, finalUrl)
+            const imageUrl = await this.toSafeAbsoluteImage(
+                preview.image,
+                finalUrl,
+            )
             const collected = {
                 title: this.limitText(
                     information.title,
@@ -151,12 +155,25 @@ export class LinkContentService {
         }
     }
 
-    // 대표 이미지 상대 경로를 최종 링크 URL 기준의 절대 경로로 변환한다.
-    private toAbsoluteImage(image: string | null, baseUrl: URL): string | null {
+    // 대표 이미지는 공개 HTTP(S) URL만 허용하고, 저장·응답 가능한 길이로 제한한다.
+    private async toSafeAbsoluteImage(
+        image: string | null,
+        baseUrl: URL,
+    ): Promise<string | null> {
         if (!image) return null
+        if (image.length > LINK_CONTENT_IMAGE_URL_MAX_LENGTH) return null
 
         try {
-            return new URL(image, baseUrl).toString()
+            const imageUrl = this.urlSecurity.parseHttpUrl(image, baseUrl)
+            const normalizedUrl = imageUrl.toString()
+
+            if (normalizedUrl.length > LINK_CONTENT_IMAGE_URL_MAX_LENGTH) {
+                return null
+            }
+
+            await this.urlSecurity.resolvePublicUrl(imageUrl)
+
+            return normalizedUrl
         } catch {
             return null
         }
