@@ -5,7 +5,7 @@ import {
     DEFAULT_PAGINATION_LIMIT,
     MAX_PAGINATION_LIMIT,
 } from '../../../common/pagination/pagination.constants'
-import { LINK_MEMO_MAX_LENGTH } from '../link.constants'
+import { LINK_MEMO_MAX_LENGTH, MAX_BULK_MOVE_LINKS } from '../link.constants'
 
 const booleanQuerySchema = z.preprocess((value) => {
     if (value === 'true') return true
@@ -51,6 +51,17 @@ export const updateLinkSchema = z
         },
     )
 export type UpdateLinkInput = z.infer<typeof updateLinkSchema>
+
+export const moveLinksToFolderSchema = z.object({
+    linkIds: z
+        .array(z.number().int().positive())
+        .min(1)
+        .max(MAX_BULK_MOVE_LINKS)
+        // UI에서는 중복이 생기지 않지만 API는 중복 입력도 한 번만 처리한다.
+        .transform((linkIds) => [...new Set(linkIds)]),
+    folderId: z.number().int().positive().nullable(),
+})
+export type MoveLinksToFolderInput = z.infer<typeof moveLinksToFolderSchema>
 
 export const listLinksQuerySchema = z
     .object({
@@ -148,4 +159,23 @@ export class UpdateLinkDto {
         description: '[선택] 즐겨찾기 설정(true) 또는 해제(false)',
     })
     isFavorite?: boolean
+}
+
+export class MoveLinksToFolderDto {
+    @ApiProperty({
+        type: [Number],
+        example: [42, 43, 44],
+        minItems: 1,
+        maxItems: MAX_BULK_MOVE_LINKS,
+        description: `[필수] 이동할 활성 링크 ID 목록 (최대 ${MAX_BULK_MOVE_LINKS}개, 중복은 한 번만 처리)`,
+    })
+    linkIds!: number[]
+
+    @ApiProperty({
+        example: 7,
+        nullable: true,
+        type: Number,
+        description: '[필수] 목적지 폴더 ID (null이면 미분류)',
+    })
+    folderId!: number | null
 }

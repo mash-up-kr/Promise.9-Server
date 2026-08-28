@@ -8,6 +8,7 @@ import {
     eq,
     getTableColumns,
     gt,
+    inArray,
     isNotNull,
     isNull,
     lt,
@@ -21,6 +22,7 @@ import { BaseException } from '../../common/exception/base.exception'
 import { CursorPayload, decodeCursor } from '../../common/pagination/cursor'
 import { DatabaseService } from '../../config/database/database.service'
 import { FolderRow, folders } from '../folder/folder.schema'
+import { FOLDER_ERROR } from '../folder/folder-error.constant'
 
 import { ListLinksQueryInput } from './dto/link.dto'
 import { LinkRow, links } from './link.schema'
@@ -179,6 +181,81 @@ export class LinkRepository {
             .returning()
 
         return row
+    }
+
+    // 목적지와 모든 링크를 같은 transaction에서 검증·잠금해 부분 이동을 막는다.
+    // 이미 목적지에 있는 링크는 갱신하지 않아 updatedAt도 유지한다.
+    async moveToFolder(
+        userId: number,
+        linkIds: number[],
+        folderId: number | null,
+    ): Promise<{
+        requestedCount: number
+        movedCount: number
+        unchangedCount: number
+        folderId: number | null
+    }> {
+        return this.db.transaction(async (tx) => {
+            if (folderId !== null) {
+                const [folder] = await tx
+                    .select({ id: folders.id })
+                    .from(folders)
+                    .where(
+                        and(
+                            eq(folders.id, folderId),
+                            eq(folders.userId, userId),
+                            isNull(folders.deletedAt),
+                        ),
+                    )
+                    .for('update')
+                    .limit(1)
+                if (!folder) {
+                    throw new BaseException(FOLDER_ERROR.NOT_FOUND)
+                }
+            }
+
+            const rows = await tx
+                .select({ id: links.id, folderId: links.folderId })
+                .from(links)
+                .where(
+                    and(
+                        eq(links.userId, userId),
+                        inArray(links.id, linkIds),
+                        isNull(links.deletedAt),
+                    ),
+                )
+                // 겹치는 벌크 요청도 항상 같은 순서로 row lock을 획득해 deadlock을 피한다.
+                .orderBy(asc(links.id))
+                .for('update')
+
+            if (rows.length !== linkIds.length) {
+                throw new BaseException(LINK_ERROR.NOT_FOUND)
+            }
+
+            const movedIds = rows
+                .filter((row) => row.folderId !== folderId)
+                .map((row) => row.id)
+
+            if (movedIds.length > 0) {
+                await tx
+                    .update(links)
+                    .set({ folderId, updatedAt: new Date() })
+                    .where(
+                        and(
+                            eq(links.userId, userId),
+                            inArray(links.id, movedIds),
+                            isNull(links.deletedAt),
+                        ),
+                    )
+            }
+
+            return {
+                requestedCount: linkIds.length,
+                movedCount: movedIds.length,
+                unchangedCount: linkIds.length - movedIds.length,
+                folderId,
+            }
+        })
     }
 
     async markViewed(userId: number, linkId: number, viewedAt: Date) {
