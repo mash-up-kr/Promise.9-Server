@@ -19,12 +19,20 @@ export function parseLinkInformation(html: string): ParsedLinkInformation {
 
 // 링크 저장 전 미리보기에 필요한 제목과 대표 이미지 경로를 HTML에서 추출한다.
 export function parseLinkPreview(html: string): ParsedLinkPreview {
+    const openGraphImage = findMetaContent(html, 'property', 'og:image')
+    const twitterImage = openGraphImage
+        ? null
+        : findMetaContent(html, 'name', 'twitter:image')
+
     return {
         title:
             findMetaContent(html, 'property', 'og:title') ?? extractTitle(html),
-        image:
-            findMetaContent(html, 'property', 'og:image') ??
-            findMetaContent(html, 'name', 'twitter:image'),
+        image: openGraphImage ?? twitterImage,
+        imageSource: openGraphImage
+            ? 'og:image'
+            : twitterImage
+              ? 'twitter:image'
+              : null,
     }
 }
 
