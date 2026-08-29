@@ -34,7 +34,7 @@ Promise9 서버 저장소에 독립된 `infra/` AWS CDK workspace를 추가합�
 
 ## 💬 리뷰어에게
 
-- 대상 계정 `743070678932`와 Region `ap-northeast-2`가 맞는지 확인해 주세요.
+- 팀 AWS 계정과 Region `ap-northeast-2`가 맞는지 확인해 주세요.
 - `CliCredentialsStackSynthesizer`를 사용해 명령에 지정한 profile의 자격 증명으로 Stack 작업을 수행합니다.
 - `cdk.json`의 다수 항목은 AWS 리소스가 아니라 CDK 동작을 고정하는 공식 권장 feature flags입니다.
 - 이 PR의 `AccessStack`은 골격만 포함하며 팀 IAM 리소스는 생성하지 않습니다.

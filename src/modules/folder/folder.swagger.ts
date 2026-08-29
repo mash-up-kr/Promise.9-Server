@@ -44,7 +44,7 @@ const LIST_FOLDERS_DESCRIPTION = `
 보관함 화면에서 링크 목록 항목별 카운트와 사용자가 생성한 실제 폴더 목록을 함께 반환합니다.
 
 - \`systemFolders\`: 전체·미분류·즐겨찾기·최근 삭제 링크 수입니다. 실제 폴더 row 목록이 아닙니다.
-- \`folders\`: 사용자가 생성한 \`folders\` row 목록이며 각 항목에 \`folderId\`가 있습니다.
+- \`folders\`: 사용자가 생성한 \`folders\` row 목록이며 각 항목에 \`folderId\`와 누적 \`viewCount\`가 있습니다.
 
 ### 폴더 순서
 
@@ -89,6 +89,7 @@ const LIST_FOLDERS_RESPONSE_EXAMPLE = {
             folderName: '디자인',
             color: '#61a8ef',
             linkCount: 12,
+            viewCount: 24,
             lastSavedAt: TIMESTAMP_EXAMPLE,
         },
         {
@@ -96,6 +97,7 @@ const LIST_FOLDERS_RESPONSE_EXAMPLE = {
             folderName: 'AI',
             color: '#b282cc',
             linkCount: 8,
+            viewCount: 11,
             lastSavedAt: '2026-07-12T03:20:00.000Z',
         },
     ],

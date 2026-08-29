@@ -1,8 +1,16 @@
-// 요약과 태그 생성에 사용할 링크 페이지 정보.
+export type LinkImageSource = 'og:image' | 'twitter:image'
+
+export type CollectedLinkImage = {
+    url: string
+    source: LinkImageSource
+}
+
+// 요약·태그·이미지 분석에 사용할 링크 페이지 정보.
 export type CollectedLinkContent = {
     title: string | null
     description: string | null
     content: string | null
+    image: CollectedLinkImage | null
 }
 
 // 저장 전 링크 미리보기에 필요한 응답 정보.
@@ -23,9 +31,14 @@ export type FetchLinkHtmlOptions = {
     beforeRequest?: (url: URL) => Promise<void>
 }
 
-export type ParsedLinkInformation = CollectedLinkContent
+export type ParsedLinkInformation = {
+    title: string | null
+    description: string | null
+    content: string | null
+}
 
 export type ParsedLinkPreview = {
     title: string | null
     image: string | null
+    imageSource: LinkImageSource | null
 }

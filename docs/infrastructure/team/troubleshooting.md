@@ -51,4 +51,4 @@ aws login --remote --profile promise9
 aws sts get-caller-identity --profile promise9
 ```
 
-`Account`가 `743070678932`가 아니면 profile 설정을 다시 확인한다.
+`Account`가 관리자가 안내한 팀 AWS 계정과 다르면 profile 설정을 다시 확인한다.

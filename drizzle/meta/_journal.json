@@ -50,6 +50,27 @@
       "when": 1786174199321,
       "tag": "0006_link_text_search",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787497123015,
+      "tag": "0007_lively_fixer",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787497895780,
+      "tag": "0008_late_tenebrous",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787672970234,
+      "tag": "0009_omniscient_microchip",
+      "breakpoints": true
     }
   ]
 }

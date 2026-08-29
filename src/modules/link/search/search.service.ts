@@ -28,7 +28,7 @@ import { SEARCH_QUERY_TOKEN_LIMIT } from './search-ranking.constant'
 
 export type SearchResultRow = Pick<
     LinkRow,
-    'id' | 'title' | 'domain' | 'metadata' | 'createdAt'
+    'id' | 'title' | 'domain' | 'metadata' | 'createdAt' | 'reminderAt'
 >
 type ScoredLink = { row: SearchResultRow; score: number }
 
