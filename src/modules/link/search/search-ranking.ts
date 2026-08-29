@@ -19,6 +19,7 @@ export type RankedSearchCandidate = {
 
 export type SearchCandidateFeatures = {
     title?: string | null
+    folder?: string | null
     tags?: readonly string[] | null
     content?: string | null
     embeddingSimilarity?: number | null
@@ -109,6 +110,7 @@ export function calculateSearchSignals(
 ) {
     return {
         titleKeyword: queryTokenCoverage(query, candidate.title),
+        folderKeyword: queryTokenCoverage(query, candidate.folder),
         tagKeyword: queryTokenCoverageAcrossTargets(
             query,
             candidate.tags ?? [],

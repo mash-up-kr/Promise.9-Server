@@ -117,28 +117,38 @@ export class SearchService {
                     : [],
             }),
         )
-        const [titleIds, tagIds, contentIds, { queryEmbedding, vectorIds }] =
-            await Promise.all([
-                this.searchRepository.findTitleCandidateIds(
-                    userId,
-                    tokens,
-                    textCandidateOptions,
-                ),
-                this.searchRepository.findTagKeywordCandidateIds(
-                    userId,
-                    tokens,
-                    textCandidateOptions,
-                ),
-                this.searchRepository.findContentCandidateIds(
-                    userId,
-                    tokens,
-                    textCandidateOptions,
-                ),
-                semanticCandidatesPromise,
-            ])
+        const [
+            titleIds,
+            folderIds,
+            tagIds,
+            contentIds,
+            { queryEmbedding, vectorIds },
+        ] = await Promise.all([
+            this.searchRepository.findTitleCandidateIds(
+                userId,
+                tokens,
+                textCandidateOptions,
+            ),
+            this.searchRepository.findFolderKeywordCandidateIds(
+                userId,
+                tokens,
+                textCandidateOptions,
+            ),
+            this.searchRepository.findTagKeywordCandidateIds(
+                userId,
+                tokens,
+                textCandidateOptions,
+            ),
+            this.searchRepository.findContentCandidateIds(
+                userId,
+                tokens,
+                textCandidateOptions,
+            ),
+            semanticCandidatesPromise,
+        ])
         const candidates = await this.searchRepository.findCandidates(
             userId,
-            this.unionIds(titleIds, tagIds, contentIds, vectorIds),
+            this.unionIds(titleIds, folderIds, tagIds, contentIds, vectorIds),
             queryEmbedding,
             scope,
         )
@@ -147,6 +157,7 @@ export class SearchService {
                 id: candidate.id,
                 signals: calculateSearchSignals(tokens.join(' '), {
                     title: candidate.title,
+                    folder: candidate.folderName,
                     tags: candidate.tags,
                     content: this.queryContent(candidate),
                     embeddingSimilarity: candidate.embeddingSimilarity,
