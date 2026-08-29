@@ -101,6 +101,12 @@ export const links = pgTable(
         index('links_deleted_at_idx')
             .on(table.deletedAt)
             .where(sql`${table.deletedAt} is not null`),
+        // 15분 주기 리마인드 배치의 발송 대상 조회
+        index('links_reminder_at_active_idx')
+            .on(table.reminderAt)
+            .where(
+                sql`${table.deletedAt} is null and ${table.reminderAt} is not null`,
+            ),
         // 현재 검색의 '%부분일치%'를 위한 trigram 표현식 인덱스.
         // 제목과 나머지 콘텐츠는 랭킹 신호가 다르므로 후보 회수도 분리한다.
         index('links_title_search_trgm_idx')
