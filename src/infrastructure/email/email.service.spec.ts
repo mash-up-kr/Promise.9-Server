@@ -1,19 +1,24 @@
 import { ConfigService } from '@nestjs/config'
-import { SendEmailCommand, SendEmailCommandOutput } from '@aws-sdk/client-sesv2'
+import {
+    SendBulkEmailCommand,
+    SendBulkEmailCommandOutput,
+    SendEmailCommand,
+    SendEmailCommandOutput,
+    SESv2Client,
+} from '@aws-sdk/client-sesv2'
 
 import { ValidatedEnvironment } from '../../config/environment'
 
 import { EmailService } from './email.service'
 import { EMAIL_ERROR } from './email-error.constant'
 
-interface SesClientMock {
-    send(command: SendEmailCommand): Promise<SendEmailCommandOutput>
-}
+type EmailCommand = SendEmailCommand | SendBulkEmailCommand
+type EmailCommandOutput = SendEmailCommandOutput | SendBulkEmailCommandOutput
 
 class TestEmailService extends EmailService {
     constructor(
         config: ConfigService<ValidatedEnvironment, true>,
-        private readonly sesClient: SesClientMock,
+        private readonly sesClient: SESv2Client,
     ) {
         super(config)
     }
@@ -25,10 +30,7 @@ class TestEmailService extends EmailService {
 
 describe('EmailService', () => {
     let service: EmailService
-    let sendMock: jest.Mock<
-        Promise<SendEmailCommandOutput>,
-        [command: SendEmailCommand]
-    >
+    let sendMock: jest.Mock<Promise<EmailCommandOutput>, [EmailCommand]>
 
     beforeEach(() => {
         const config = {
@@ -42,13 +44,10 @@ describe('EmailService', () => {
                 return values[key]
             }),
         }
-        sendMock = jest.fn<
-            Promise<SendEmailCommandOutput>,
-            [command: SendEmailCommand]
-        >()
+        sendMock = jest.fn<Promise<EmailCommandOutput>, [EmailCommand]>()
         service = new TestEmailService(
             config as unknown as ConfigService<ValidatedEnvironment, true>,
-            { send: sendMock },
+            { send: sendMock } as unknown as SESv2Client,
         )
     })
 
@@ -96,6 +95,164 @@ describe('EmailService', () => {
             },
             EmailTags: [{ Name: 'kind', Value: 'link-reminder' }],
             ConfigurationSetName: 'promise9-email',
+        })
+    })
+
+    it('수신자별 주소와 치환값을 독립된 bulk 이메일로 변환한다', async () => {
+        sendMock.mockResolvedValueOnce({
+            BulkEmailEntryResults: [
+                { Status: 'SUCCESS', MessageId: 'first-message-id' },
+                {
+                    Status: 'TRANSIENT_FAILURE',
+                    Error: 'retry later',
+                },
+            ],
+            $metadata: {},
+        })
+
+        const result = await service.sendBulk({
+            entries: [
+                {
+                    to: 'first@example.com',
+                    templateData: { linkTitle: '첫 번째 링크' },
+                },
+                {
+                    to: 'second@example.com',
+                    templateData: { linkTitle: '두 번째 링크' },
+                },
+            ],
+            subject: '링크 리마인드',
+            html: '<p>{{linkTitle}}</p>',
+            templateData: { linkTitle: '저장한 링크' },
+            tags: { kind: 'link-reminder' },
+        })
+
+        expect(result).toEqual([
+            {
+                Status: 'SUCCESS',
+                MessageId: 'first-message-id',
+            },
+            {
+                Status: 'TRANSIENT_FAILURE',
+                Error: 'retry later',
+            },
+        ])
+        const command = sendMock.mock.calls[0]?.[0]
+        expect(command).toBeInstanceOf(SendBulkEmailCommand)
+        expect(command?.input).toMatchObject({
+            FromEmailAddress: 'reminder@link-ding-dong.com',
+            DefaultContent: {
+                Template: {
+                    TemplateContent: {
+                        Subject: '링크 리마인드',
+                        Html: '<p>{{linkTitle}}</p>',
+                    },
+                    TemplateData: JSON.stringify({
+                        linkTitle: '저장한 링크',
+                    }),
+                },
+            },
+            BulkEmailEntries: [
+                {
+                    Destination: {
+                        ToAddresses: ['first@example.com'],
+                    },
+                    ReplacementEmailContent: {
+                        ReplacementTemplate: {
+                            ReplacementTemplateData: JSON.stringify({
+                                linkTitle: '첫 번째 링크',
+                            }),
+                        },
+                    },
+                },
+                {
+                    Destination: {
+                        ToAddresses: ['second@example.com'],
+                    },
+                },
+            ],
+            DefaultEmailTags: [{ Name: 'kind', Value: 'link-reminder' }],
+            ConfigurationSetName: 'promise9-email',
+        })
+    })
+
+    it('50개가 넘는 수신자를 SES 제한에 맞춰 나눠 발송한다', async () => {
+        sendMock
+            .mockResolvedValueOnce({
+                BulkEmailEntryResults: Array.from(
+                    { length: 50 },
+                    (_, index) => ({
+                        Status: 'SUCCESS',
+                        MessageId: `message-${index}`,
+                    }),
+                ),
+                $metadata: {},
+            })
+            .mockResolvedValueOnce({
+                BulkEmailEntryResults: [
+                    { Status: 'SUCCESS', MessageId: 'message-50' },
+                ],
+                $metadata: {},
+            })
+
+        const result = await service.sendBulk({
+            entries: Array.from({ length: 51 }, (_, index) => ({
+                to: `user-${index}@example.com`,
+                templateData: { index },
+            })),
+            subject: '제목',
+            text: '{{index}}',
+        })
+
+        expect(sendMock).toHaveBeenCalledTimes(2)
+        const firstCommand = sendMock.mock.calls[0]?.[0]
+        const secondCommand = sendMock.mock.calls[1]?.[0]
+
+        expect(firstCommand).toBeInstanceOf(SendBulkEmailCommand)
+        expect(secondCommand).toBeInstanceOf(SendBulkEmailCommand)
+        expect(
+            firstCommand instanceof SendBulkEmailCommand
+                ? firstCommand.input.BulkEmailEntries
+                : undefined,
+        ).toHaveLength(50)
+        expect(
+            secondCommand instanceof SendBulkEmailCommand
+                ? secondCommand.input.BulkEmailEntries
+                : undefined,
+        ).toHaveLength(1)
+        expect(result).toHaveLength(51)
+        expect(result.every((entry) => entry.Status === 'SUCCESS')).toBe(true)
+    })
+
+    it('한 bulk 요청이 실패해도 다음 묶음을 계속 발송한다', async () => {
+        const sdkError = new Error('rate exceeded')
+        sdkError.name = 'TooManyRequestsException'
+        sendMock.mockRejectedValueOnce(sdkError).mockResolvedValueOnce({
+            BulkEmailEntryResults: [
+                { Status: 'SUCCESS', MessageId: 'last-message-id' },
+            ],
+            $metadata: {},
+        })
+
+        const result = await service.sendBulk({
+            entries: Array.from({ length: 51 }, (_, index) => ({
+                to: `user-${index}@example.com`,
+                templateData: { index },
+            })),
+            subject: '제목',
+            text: '{{index}}',
+        })
+
+        expect(sendMock).toHaveBeenCalledTimes(2)
+        expect(result.slice(0, 50)).toEqual(
+            Array.from({ length: 50 }, () => ({
+                Status: 'FAILED',
+                Error: 'TooManyRequestsException',
+            })),
+        )
+        expect(result[50]).toEqual({
+            Status: 'SUCCESS',
+            MessageId: 'last-message-id',
         })
     })
 

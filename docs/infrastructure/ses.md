@@ -37,6 +37,23 @@ SES 계정이 sandbox 상태라면 운영 액세스를 요청한다. Sandbox에�
 이메일 identity나 실제 메일함 생성 없이 발신 주소로 사용할 수 있다. 해당 주소로 답장을
 받아야 한다면 `EmailService.send()`의 `replyTo`에 실제 수신 가능한 주소를 지정한다.
 
+## 애플리케이션 발송
+
+`EmailService.send()`는 단건을, `EmailService.sendBulk()`는 같은 템플릿을 사용하는 여러 건을
+발송한다. `sendBulk()`는 애플리케이션의 HTML을 SES inline template으로 전달하므로 SES에
+별도 template 리소스를 만들 필요가 없다.
+
+Bulk 발송에서도 각 항목은 독립된 `Destination`을 사용한다. 각 항목에는 한 명의 `to`와 그
+수신자에게 보낼 template 치환값만 지정하므로 다른 사용자의 주소나 링크 내용이 이메일에
+노출되지 않는다. `cc`와 `bcc`는 사용하지 않는다. SES의 요청당 destination 제한에 맞춰
+50건씩 자동 분할하고, 반환된 항목별 결과는 입력 항목과 같은 순서로 제공한다. 호출부는
+성공한 건만 처리 완료해야 한다. Bulk 발송은 API 호출 수를 줄이지만 SES 과금과 발송 quota는
+실제 수신자 수를 기준으로 계산된다.
+
+SES는 template 치환값을 HTML escape하지 않는다. 사용자 입력을 HTML에 넣는 호출부는
+치환값을 escape해야 한다. Configuration set을 사용하는 경우 Rendering Failure 이벤트를
+수집하도록 event destination도 함께 구성한다.
+
 ## 런타임 자격 증명
 
 IAM access key는 환경별 IAM User에서 한 번 발급하고 다음 GitHub Secrets에 저장한다.
