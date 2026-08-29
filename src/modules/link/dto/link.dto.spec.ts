@@ -1,6 +1,31 @@
 import { MAX_BULK_MOVE_LINKS } from '../link.constants'
 
-import { moveLinksToFolderSchema } from './link.dto'
+import { listLinksQuerySchema, moveLinksToFolderSchema } from './link.dto'
+
+describe('listLinksQuerySchema', () => {
+    it('리마인드 링크를 가까운 시각순으로 조회하는 query를 파싱한다', () => {
+        expect(
+            listLinksQuerySchema.parse({
+                reminder: 'true',
+                sortBy: 'reminderAt',
+                order: 'asc',
+                limit: '9',
+            }),
+        ).toMatchObject({
+            reminder: true,
+            sortBy: 'reminderAt',
+            order: 'asc',
+            limit: 9,
+        })
+    })
+
+    it.each([
+        { q: 'NestJS', reminder: 'true' },
+        { q: 'NestJS', sortBy: 'reminderAt' },
+    ])('검색과 리마인드 조회 조건의 조합을 거부한다', (query) => {
+        expect(listLinksQuerySchema.safeParse(query).success).toBe(false)
+    })
+})
 
 describe('moveLinksToFolderSchema', () => {
     it('중복 linkId를 입력 순서대로 제거한다', () => {

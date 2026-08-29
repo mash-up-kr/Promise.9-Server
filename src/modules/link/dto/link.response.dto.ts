@@ -327,6 +327,15 @@ export class LinkListItemDto {
         description: '저장 시각 (ISO 8601)',
     })
     savedAt!: string
+
+    @ApiProperty({
+        type: String,
+        format: 'date-time',
+        example: '2026-08-20T12:00:00.000Z',
+        nullable: true,
+        description: '리마인드 시각. 설정하지 않았으면 null',
+    })
+    reminderAt!: string | null
 }
 
 export class ListLinksResponseDto {

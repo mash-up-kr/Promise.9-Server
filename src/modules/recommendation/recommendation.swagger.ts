@@ -58,7 +58,7 @@ export const ApiListRecommendations = () =>
         ApiOperation({
             summary: '자주 저장한 키워드 조회',
             description:
-                '홈 화면의 자주 저장한 키워드 섹션에 사용할 폴더·태그 목록입니다. 활성 링크가 3개 이상 연결된 폴더와 태그만 후보로 삼아 링크 수 내림차순으로 정렬하고, 동점이면 최근 조회 시각을 사용합니다. 필터를 통과한 전체 후보가 4개 이상일 때만 목록을 반환하며, 3개 이하면 클라이언트가 섹션 전체를 숨길 수 있도록 data를 null로 반환합니다.',
+                '홈 화면의 자주 저장한 키워드 섹션에 사용할 폴더·태그 목록입니다. 활성 링크가 3개 이상 연결된 폴더와 태그만 후보로 삼아 링크 수 내림차순으로 정렬하고, 동점이면 최근 조회 시각을 사용합니다. 필터를 통과한 전체 후보가 3개 이상일 때만 목록을 반환하며, 2개 이하면 클라이언트가 섹션 전체를 숨길 수 있도록 data를 null로 반환합니다.',
         }),
         ApiQuery({
             name: 'limit',
@@ -73,7 +73,7 @@ export const ApiListRecommendations = () =>
         }),
         ApiCommonResponse(RecommendationResponseDto, {
             description:
-                '자주 저장한 키워드 조회 성공. 후보가 3개 이하면 data는 null',
+                '자주 저장한 키워드 조회 성공. 후보가 2개 이하면 data는 null',
             dataNullable: true,
             dataExample: RECOMMENDATION_RESPONSE_EXAMPLE,
         }),

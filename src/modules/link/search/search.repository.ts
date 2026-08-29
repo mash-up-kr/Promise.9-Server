@@ -29,6 +29,7 @@ export type SearchLinkCandidate = Pick<
     | 'memo'
     | 'metadata'
     | 'createdAt'
+    | 'reminderAt'
 > & {
     description: string | null
     tags: string[]
@@ -200,6 +201,7 @@ export class SearchRepository {
                 memo: links.memo,
                 metadata: links.metadata,
                 createdAt: links.createdAt,
+                reminderAt: links.reminderAt,
                 description,
                 embeddingSimilarity,
             })

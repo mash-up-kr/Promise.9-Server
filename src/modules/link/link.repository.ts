@@ -48,10 +48,11 @@ export type LinkEmbeddingSource = Pick<
     tagNames: string[]
 }
 
-// 목록 sortBy 값 → 실제 정렬 컬럼 매핑. viewedAt만 null 허용.
+// 목록 sortBy 값 → 실제 정렬 컬럼 매핑. nullable 정렬 컬럼은 목록 조건에서 null을 제외한다.
 const LINK_SORT_COLUMNS: Record<ListLinksQueryInput['sortBy'], Column> = {
     savedAt: links.createdAt,
     viewedAt: links.viewedAt,
+    reminderAt: links.reminderAt,
     deletedAt: links.deletedAt,
 }
 
@@ -487,7 +488,7 @@ export class LinkRepository {
         const conditions = this.buildScopeConditions(userId, input)
 
         // sortBy → 실제 정렬 컬럼. 위 조건들로 정렬 컬럼은 항상 not-null이 보장돼
-        // (savedAt=createdAt, deletedAt은 deleted 필터, viewedAt은 위 제외 조건)
+        // (savedAt=createdAt, deletedAt은 deleted 필터, viewedAt·reminderAt은 아래 제외 조건)
         // 커서 정렬이 안정적이다.
         const sortColumn = LINK_SORT_COLUMNS[input.sortBy]
 
@@ -548,6 +549,10 @@ export class LinkRepository {
 
         if (input.favorite) {
             conditions.push(eq(links.isFavorite, true))
+        }
+
+        if (input.reminder || input.sortBy === 'reminderAt') {
+            conditions.push(isNotNull(links.reminderAt))
         }
 
         if (input.sortBy === 'viewedAt') {

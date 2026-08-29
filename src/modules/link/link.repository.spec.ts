@@ -8,6 +8,7 @@ import { LinkRepository } from './link.repository'
 const listInput = (cursor: string): ListLinksQueryInput => ({
     unassigned: false,
     favorite: false,
+    reminder: false,
     deleted: false,
     sortBy: 'savedAt',
     order: 'desc',
