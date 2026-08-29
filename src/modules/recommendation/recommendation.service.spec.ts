@@ -63,7 +63,7 @@ describe('RecommendationService', () => {
         expect(repository.findCandidates).toHaveBeenCalledWith(7)
     })
 
-    it('폴더와 태그 후보를 합쳐 3개 이하면 null을 반환한다', async () => {
+    it('폴더와 태그 후보를 합쳐 2개 이하면 null을 반환한다', async () => {
         const repository: jest.Mocked<
             Pick<RecommendationRepository, 'findCandidates'>
         > = {
@@ -85,14 +85,6 @@ describe('RecommendationService', () => {
                     lastViewedAt: null,
                     normalizedTag: 'ai',
                 },
-                {
-                    type: 'tag',
-                    key: 'tag:backend',
-                    label: 'Backend',
-                    linkCount: 3,
-                    lastViewedAt: null,
-                    normalizedTag: 'backend',
-                },
             ]),
         }
         const service = new RecommendationService(
@@ -100,5 +92,47 @@ describe('RecommendationService', () => {
         )
 
         await expect(service.list(7, { limit: 12 })).resolves.toBeNull()
+    })
+
+    it('폴더와 태그 후보를 합쳐 3개 이상이면 목록을 반환한다', async () => {
+        const candidates = [
+            {
+                type: 'folder' as const,
+                key: 'folder:3',
+                label: '디자인',
+                linkCount: 5,
+                lastViewedAt: null,
+                folderId: 3,
+                color: '#61a8ef',
+            },
+            {
+                type: 'tag' as const,
+                key: 'tag:ai',
+                label: 'AI',
+                linkCount: 4,
+                lastViewedAt: null,
+                normalizedTag: 'ai',
+            },
+            {
+                type: 'tag' as const,
+                key: 'tag:backend',
+                label: 'Backend',
+                linkCount: 3,
+                lastViewedAt: null,
+                normalizedTag: 'backend',
+            },
+        ]
+        const repository: jest.Mocked<
+            Pick<RecommendationRepository, 'findCandidates'>
+        > = {
+            findCandidates: jest.fn().mockResolvedValue(candidates),
+        }
+        const service = new RecommendationService(
+            repository as unknown as RecommendationRepository,
+        )
+
+        await expect(service.list(7, { limit: 12 })).resolves.toEqual({
+            items: candidates,
+        })
     })
 })

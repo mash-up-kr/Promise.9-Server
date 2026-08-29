@@ -277,6 +277,7 @@ export class LinkService {
             representativeTag: null,
             thumbnailUrl: pickThumbnailUrl(row.metadata),
             savedAt: row.createdAt,
+            reminderAt: row.reminderAt,
             // 점수 반올림은 커서 비교와 값을 맞추기 위해 search/search.util이 담당한다.
             score,
         }))

@@ -70,9 +70,10 @@ export const listLinksQuerySchema = z
         folderId: z.coerce.number().int().positive().optional(),
         unassigned: booleanQuerySchema.optional().default(false),
         favorite: booleanQuerySchema.optional().default(false),
+        reminder: booleanQuerySchema.optional().default(false),
         deleted: booleanQuerySchema.optional().default(false),
         sortBy: z
-            .enum(['savedAt', 'viewedAt', 'deletedAt'])
+            .enum(['savedAt', 'viewedAt', 'reminderAt', 'deletedAt'])
             .optional()
             .default('savedAt'),
         order: z.enum(['asc', 'desc']).optional().default('desc'),
@@ -91,6 +92,14 @@ export const listLinksQuerySchema = z
     .refine((value) => value.sortBy !== 'deletedAt' || value.deleted, {
         message: 'sortBy=deletedAt은 deleted=true일 때만 사용할 수 있습니다.',
     })
+    .refine(
+        (value) =>
+            !value.q || (!value.reminder && value.sortBy !== 'reminderAt'),
+        {
+            message:
+                'q는 reminder=true 또는 sortBy=reminderAt과 함께 사용할 수 없습니다.',
+        },
+    )
 export type ListLinksQueryInput = z.infer<typeof listLinksQuerySchema>
 
 // Swagger 문서용 (런타임 검증은 위의 zod 스키마가 담당)

@@ -38,6 +38,7 @@ describe('LinkService', () => {
             domain: 'example.com',
             metadata: null,
             createdAt: new Date('2026-08-08T08:10:14.443Z'),
+            reminderAt: new Date('2026-08-20T12:00:00.000Z'),
             cursorValue: '2026-08-08T08:10:14.443365Z',
         } as LinkListRow
         const second = {
@@ -62,6 +63,7 @@ describe('LinkService', () => {
         const result = await service.list(1, {
             unassigned: false,
             favorite: false,
+            reminder: false,
             deleted: false,
             sortBy: 'savedAt',
             order: 'desc',
@@ -74,6 +76,7 @@ describe('LinkService', () => {
             v: first.cursorValue,
             id: first.id,
         })
+        expect(result.links[0].reminderAt).toEqual(first.reminderAt)
     })
 
     it('상세 링크의 폴더 색상과 관련 링크를 응답에 포함한다', async () => {

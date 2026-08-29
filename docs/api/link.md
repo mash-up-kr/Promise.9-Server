@@ -8,19 +8,20 @@
 GET /links
 ```
 
-화면별 별도 목록 엔드포인트를 만들지 않는다. 최근 저장, 전체, 미분류, 즐겨찾기, 최근 삭제, 사용자 폴더, 최근 본 링크, 검색 결과를 모두 `GET /links`의 독립적인 Query 조합으로 조회한다.
+화면별 별도 목록 엔드포인트를 만들지 않는다. 최근 저장, 다시 볼 링크, 전체, 미분류, 즐겨찾기, 최근 삭제, 사용자 폴더, 최근 본 링크, 검색 결과를 모두 `GET /links`의 독립적인 Query 조합으로 조회한다.
 
-| Query        | 타입    | 기본값    | 설명                                 |
-| ------------ | ------- | --------- | ------------------------------------ |
-| `folderId`   | number  | -         | 특정 사용자 폴더의 링크만 조회       |
-| `unassigned` | boolean | `false`   | `true`이면 미분류 링크만 조회        |
-| `favorite`   | boolean | `false`   | `true`이면 즐겨찾기 링크만 조회      |
-| `deleted`    | boolean | `false`   | `true`이면 soft delete된 링크만 조회 |
-| `q`          | string  | -         | 적용된 필터 범위 안에서 검색         |
-| `sortBy`     | enum    | `savedAt` | `savedAt`, `viewedAt`, `deletedAt`   |
-| `order`      | enum    | `desc`    | `asc`, `desc`                        |
-| `cursor`     | string  | -         | 직전 응답의 `nextCursor`             |
-| `limit`      | number  | `9`       | 최대 `30`                            |
+| Query        | 타입    | 기본값    | 설명                                             |
+| ------------ | ------- | --------- | ------------------------------------------------ |
+| `folderId`   | number  | -         | 특정 사용자 폴더의 링크만 조회                   |
+| `unassigned` | boolean | `false`   | `true`이면 미분류 링크만 조회                    |
+| `favorite`   | boolean | `false`   | `true`이면 즐겨찾기 링크만 조회                  |
+| `reminder`   | boolean | `false`   | `true`이면 리마인드 설정 링크만 조회             |
+| `deleted`    | boolean | `false`   | `true`이면 soft delete된 링크만 조회             |
+| `q`          | string  | -         | 적용된 필터 범위 안에서 검색                     |
+| `sortBy`     | enum    | `savedAt` | `savedAt`, `viewedAt`, `reminderAt`, `deletedAt` |
+| `order`      | enum    | `desc`    | `asc`, `desc`                                    |
+| `cursor`     | string  | -         | 직전 응답의 `nextCursor`                         |
+| `limit`      | number  | `9`       | 최대 `30`                                        |
 
 서로 다른 축의 조건은 함께 사용할 수 있다.
 
@@ -32,23 +33,27 @@ GET /links?folderId=3&favorite=true&q=피그마&limit=9
 
 - `folderId`와 `unassigned=true`
 - `deleted=false`와 `sortBy=deletedAt`
+- `q`와 `reminder=true`
+- `q`와 `sortBy=reminderAt`
 
 `sortBy=viewedAt`을 사용하면 조회 이력이 없는 `viewedAt=null` 링크는 결과에서 제외한다.
+`reminder=true` 또는 `sortBy=reminderAt`을 사용하면 `reminderAt=null` 링크는 결과에서 제외한다. 지난 리마인드 시각도 포함하며, `order=asc`이면 만료·임박 링크부터 정렬한다.
 
 ### 화면별 링크 목록 요청 예시
 
 아래 표는 기본 폴더를 정의하는 표가 아니라 같은 `GET /links`를 화면의 조회 목적에 맞게 사용하는 예시다. 전체·미분류·즐겨찾기·최근 삭제는 `folders` row가 아닌 링크 조회 조건이고, 특정 사용자 폴더는 `folderId`, 검색은 `q`를 사용한다. 특히 최근 삭제는 삭제된 폴더가 아니라 soft delete된 링크를 뜻한다.
 
-| 화면         | 요청                                                  |
-| ------------ | ----------------------------------------------------- |
-| 전체         | `GET /links`                                          |
-| 미분류       | `GET /links?unassigned=true`                          |
-| 즐겨찾기     | `GET /links?favorite=true`                            |
-| 최근 삭제    | `GET /links?deleted=true&sortBy=deletedAt&order=desc` |
-| 특정 폴더    | `GET /links?folderId=3`                               |
-| 검색 결과    | `GET /links?q=피그마`                                 |
-| 최근 저장    | `GET /links?sortBy=savedAt&order=desc&limit=9`        |
-| 최근 본 링크 | `GET /links?sortBy=viewedAt&order=desc&limit=9`       |
+| 화면         | 요청                                                           |
+| ------------ | -------------------------------------------------------------- |
+| 전체         | `GET /links`                                                   |
+| 미분류       | `GET /links?unassigned=true`                                   |
+| 즐겨찾기     | `GET /links?favorite=true`                                     |
+| 최근 삭제    | `GET /links?deleted=true&sortBy=deletedAt&order=desc`          |
+| 특정 폴더    | `GET /links?folderId=3`                                        |
+| 검색 결과    | `GET /links?q=피그마`                                          |
+| 최근 저장    | `GET /links?sortBy=savedAt&order=desc&limit=9`                 |
+| 다시 볼 링크 | `GET /links?reminder=true&sortBy=reminderAt&order=asc&limit=9` |
+| 최근 본 링크 | `GET /links?sortBy=viewedAt&order=desc&limit=9`                |
 
 **Response `200`**
 
@@ -64,6 +69,7 @@ GET /links?folderId=3&favorite=true&q=피그마&limit=9
                 "representativeTag": null,
                 "thumbnailUrl": "https://static.example.com/thumbnail.png",
                 "savedAt": "2026-07-13T00:00:00.000Z",
+                "reminderAt": "2026-08-20T12:00:00.000Z",
                 "score": null
             }
         ],
