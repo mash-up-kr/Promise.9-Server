@@ -65,7 +65,7 @@ export class AuthController {
     @ApiBearerAuth()
     @ApiExtensionToken()
     async issueExtensionToken(@CurrentUser() user: AuthUser) {
-        return this.authService.issueExtensionToken(user.userId)
+        return this.authService.issueTokens(user.userId)
     }
 
     @Post('refresh')
