@@ -32,6 +32,8 @@ ENV PORT=3000
 
 COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/dist ./dist
+COPY --from=builder --chown=node:node /app/email/link-reminder-email.html ./email/link-reminder-email.html
+COPY --from=builder --chown=node:node /app/email/assets/link-reminder-motion-poster.png ./email/assets/link-reminder-motion-poster.png
 COPY --chown=node:node package.json ./
 
 USER node

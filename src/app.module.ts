@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
+import { ScheduleModule } from '@nestjs/schedule'
 
 import { DatabaseModule } from './config/database/database.module'
 import { validateEnvironment } from './config/environment'
@@ -17,6 +18,7 @@ import { AppService } from './app.service'
             isGlobal: true,
             validate: validateEnvironment,
         }),
+        ScheduleModule.forRoot(),
         DatabaseModule,
         FolderModule,
         LinkModule,
