@@ -14,6 +14,7 @@ import {
 } from 'drizzle-orm'
 
 import { DatabaseService } from '../../../config/database/database.service'
+import { folders } from '../../folder/folder.schema'
 import { ListLinksQueryInput } from '../dto/link.dto'
 import { LinkRow, links, normalizedSearchText } from '../link.schema'
 import { tags } from '../tag.schema'
@@ -31,6 +32,7 @@ export type SearchLinkCandidate = Pick<
     | 'createdAt'
 > & {
     description: string | null
+    folderName: string | null
     tags: string[]
     embeddingSimilarity: number | null
 }
@@ -135,6 +137,44 @@ export class SearchRepository {
         return rows.map((row) => row.id)
     }
 
+    async findFolderKeywordCandidateIds(
+        userId: number,
+        tokens: readonly string[],
+        options: SearchCandidateOptions,
+    ): Promise<number[]> {
+        const searchText = normalizedSearchText([folders.name])
+        const keyword = this.buildTokenKeywordCondition(searchText, tokens)
+
+        if (!keyword) return []
+
+        const matchCount = this.buildTokenMatchCount(searchText, tokens)
+        const rows = await this.db
+            .select({ id: links.id })
+            .from(links)
+            .innerJoin(
+                folders,
+                and(
+                    eq(folders.id, links.folderId),
+                    eq(folders.userId, links.userId),
+                    isNull(folders.deletedAt),
+                ),
+            )
+            .where(
+                and(
+                    ...this.buildScopeConditions(userId, options.scope),
+                    keyword,
+                ),
+            )
+            .orderBy(
+                ...(matchCount ? [desc(matchCount)] : []),
+                desc(links.createdAt),
+                desc(links.id),
+            )
+            .limit(options.limit)
+
+        return rows.map((row) => row.id)
+    }
+
     async findContentCandidateIds(
         userId: number,
         tokens: readonly string[],
@@ -200,10 +240,19 @@ export class SearchRepository {
                 memo: links.memo,
                 metadata: links.metadata,
                 createdAt: links.createdAt,
+                folderName: folders.name,
                 description,
                 embeddingSimilarity,
             })
             .from(links)
+            .leftJoin(
+                folders,
+                and(
+                    eq(folders.id, links.folderId),
+                    eq(folders.userId, links.userId),
+                    isNull(folders.deletedAt),
+                ),
+            )
             .where(
                 and(
                     ...this.buildScopeConditions(userId, scope),
