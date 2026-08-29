@@ -186,8 +186,11 @@ export class AuthService {
             },
         )
 
+        // jti 없이 sub+type만 서명하면 같은 유저에게 같은 초(iat)에 두 번 발급할 때
+        // 완전히 동일한 토큰 문자열이 나와 refresh_tokens.token_hash 유니크 제약과
+        // 충돌한다(예: extension-token을 로그인 직후 연달아 호출하는 경우).
         const rawRefreshToken = this.jwtService.sign(
-            { sub: userId, type: TOKEN_TYPE.REFRESH },
+            { sub: userId, type: TOKEN_TYPE.REFRESH, jti: randomUUID() },
             {
                 secret: this.refreshSecret,
                 expiresIn: this.refreshExpiresIn as StringValue,
