@@ -1,6 +1,9 @@
 // 메모 최대 길이
 export const LINK_MEMO_MAX_LENGTH = 1000
 
+// 한 요청에서 원자적으로 폴더를 이동할 수 있는 최대 링크 수
+export const MAX_BULK_MOVE_LINKS = 100
+
 // 운영 검색은 전체 일치 행을 끝없이 나열하지 않고 관련도 상위 결과만 제공한다.
 export const MAX_SEARCH_RESULTS = 30
 

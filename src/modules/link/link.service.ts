@@ -9,6 +9,7 @@ import { LinkAnalysisInput } from './analysis/link-analysis.type'
 import {
     CreateLinkInput,
     ListLinksQueryInput,
+    MoveLinksToFolderInput,
     UpdateLinkInput,
 } from './dto/link.dto'
 import { CreateLinkTagInput } from './dto/tag.dto'
@@ -137,6 +138,14 @@ export class LinkService {
             isFavorite: row.isFavorite,
             updatedAt: row.updatedAt,
         }
+    }
+
+    moveToFolder(userId: number, input: MoveLinksToFolderInput) {
+        return this.linkRepository.moveToFolder(
+            userId,
+            input.linkIds,
+            input.folderId,
+        )
     }
 
     async remove(userId: number, linkId: number) {
@@ -268,6 +277,7 @@ export class LinkService {
             representativeTag: null,
             thumbnailUrl: pickThumbnailUrl(row.metadata),
             savedAt: row.createdAt,
+            reminderAt: row.reminderAt,
             // 점수 반올림은 커서 비교와 값을 맞추기 위해 search/search.util이 담당한다.
             score,
         }))
@@ -337,7 +347,13 @@ export class LinkService {
 
         const folder = await this.linkRepository.findFolder(folderId)
 
-        return folder ? { folderId: folder.id, folderName: folder.name } : null
+        return folder
+            ? {
+                  folderId: folder.id,
+                  folderName: folder.name,
+                  color: folder.color,
+              }
+            : null
     }
 
     // 링크에 저장된 사용자·규칙·AI 태그를 API 응답 shape으로 바꾼다.

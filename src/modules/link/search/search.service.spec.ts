@@ -4,12 +4,14 @@ import { EmbeddingService } from '../embedding/embedding.service'
 
 import { SearchLinkCandidate, SearchRepository } from './search.repository'
 import { SearchService } from './search.service'
-import { toSearchCursorPayload } from './search.util'
+import { roundSearchScore, toSearchCursorPayload } from './search.util'
+import { SEARCH_RANKING_WEIGHTS } from './search-ranking.constant'
 
 type RepositoryMock = jest.Mocked<
     Pick<
         SearchRepository,
         | 'findTitleCandidateIds'
+        | 'findFolderKeywordCandidateIds'
         | 'findTagKeywordCandidateIds'
         | 'findContentCandidateIds'
         | 'findVectorCandidateIds'
@@ -28,7 +30,9 @@ const candidate = (
     memo: null,
     metadata: null,
     createdAt: new Date('2026-08-08T00:00:00.000Z'),
+    reminderAt: null,
     description: null,
+    folderName: null,
     tags: [],
     embeddingSimilarity: null,
     ...values,
@@ -41,6 +45,7 @@ const searchInput = (
     q: 'NestJS 인증',
     unassigned: false,
     favorite: false,
+    reminder: false,
     deleted: false,
     sortBy: 'savedAt',
     order: 'desc',
@@ -65,6 +70,7 @@ describe('SearchService', () => {
     beforeEach(() => {
         repository = {
             findTitleCandidateIds: jest.fn(),
+            findFolderKeywordCandidateIds: jest.fn(),
             findTagKeywordCandidateIds: jest.fn(),
             findContentCandidateIds: jest.fn(),
             findVectorCandidateIds: jest.fn(),
@@ -82,6 +88,7 @@ describe('SearchService', () => {
         const embedding = [1, 0]
         embeddingService.embedQuery.mockResolvedValue(embedding)
         repository.findTitleCandidateIds.mockResolvedValue([1])
+        repository.findFolderKeywordCandidateIds.mockResolvedValue([3])
         repository.findTagKeywordCandidateIds.mockResolvedValue([2])
         repository.findContentCandidateIds.mockResolvedValue([1])
         repository.findVectorCandidateIds.mockResolvedValue([2])
@@ -96,6 +103,11 @@ describe('SearchService', () => {
                 title: '백엔드 가이드',
                 tags: ['NestJS', '인증'],
                 embeddingSimilarity: 0.9,
+            }),
+            candidate({
+                id: 3,
+                title: '유틸 모음',
+                folderName: 'NestJS 인증',
             }),
         ])
 
@@ -112,6 +124,11 @@ describe('SearchService', () => {
             ['nestjs', '인증'],
             options,
         )
+        expect(repository.findFolderKeywordCandidateIds).toHaveBeenCalledWith(
+            7,
+            ['nestjs', '인증'],
+            options,
+        )
         expect(repository.findContentCandidateIds).toHaveBeenCalledWith(
             7,
             ['nestjs', '인증'],
@@ -124,12 +141,14 @@ describe('SearchService', () => {
         )
         expect(repository.findCandidates).toHaveBeenCalledWith(
             7,
-            [1, 2],
+            [1, 3, 2],
             embedding,
             input,
         )
-        expect(result.totalCount).toBe(2)
-        expect(result.rows.map(({ row }) => row.id)).toEqual([1, 2])
+        expect(result.totalCount).toBe(3)
+        expect(result.rows.map(({ row }) => row.id)).toEqual(
+            expect.arrayContaining([1, 2, 3]),
+        )
     })
 
     it('운영 검색 결과 집합은 관련도 상위 30개로 제한한다', async () => {
@@ -137,6 +156,7 @@ describe('SearchService', () => {
         const ids = Array.from({ length: 40 }, (_, index) => index + 1)
         embeddingService.embedQuery.mockResolvedValue([1])
         repository.findTitleCandidateIds.mockResolvedValue(ids)
+        repository.findFolderKeywordCandidateIds.mockResolvedValue([])
         repository.findTagKeywordCandidateIds.mockResolvedValue([])
         repository.findContentCandidateIds.mockResolvedValue([])
         repository.findVectorCandidateIds.mockResolvedValue([])
@@ -153,6 +173,36 @@ describe('SearchService', () => {
         )
     })
 
+    it('폴더명만 검색어와 일치해도 해당 폴더의 링크를 반환한다', async () => {
+        const input = searchInput({ q: '유틸리티' })
+        embeddingService.embedQuery.mockResolvedValue([1])
+        repository.findTitleCandidateIds.mockResolvedValue([])
+        repository.findFolderKeywordCandidateIds.mockResolvedValue([11])
+        repository.findTagKeywordCandidateIds.mockResolvedValue([])
+        repository.findContentCandidateIds.mockResolvedValue([])
+        repository.findVectorCandidateIds.mockResolvedValue([])
+        repository.findCandidates.mockResolvedValue([
+            candidate({ id: 11, folderName: '개발 유틸리티' }),
+        ])
+
+        const result = await service.search(7, input)
+
+        expect(repository.findCandidates).toHaveBeenCalledWith(
+            7,
+            [11],
+            [1],
+            input,
+        )
+        expect(result.rows).toHaveLength(1)
+        expect(result.rows[0]).toMatchObject({ row: { id: 11 } })
+        expect(result.rows[0].score).toBe(
+            roundSearchScore(
+                SEARCH_RANKING_WEIGHTS.folderKeyword /
+                    (1 - SEARCH_RANKING_WEIGHTS.embedding),
+            ),
+        )
+    })
+
     it('후보 조회와 점수 계산에 동일한 상위 12개 검색 토큰을 사용한다', async () => {
         const queryTokens = Array.from(
             { length: 13 },
@@ -162,6 +212,7 @@ describe('SearchService', () => {
         const rankingTokens = queryTokens.slice(0, 12)
         embeddingService.embedQuery.mockResolvedValue([1])
         repository.findTitleCandidateIds.mockResolvedValue([1])
+        repository.findFolderKeywordCandidateIds.mockResolvedValue([])
         repository.findTagKeywordCandidateIds.mockResolvedValue([])
         repository.findContentCandidateIds.mockResolvedValue([])
         repository.findVectorCandidateIds.mockResolvedValue([])
@@ -177,13 +228,19 @@ describe('SearchService', () => {
             { limit: 30, scope: input },
         )
         expect(result.rows).toHaveLength(1)
-        expect(result.rows[0].score).toBe(0.5)
+        expect(result.rows[0].score).toBe(
+            roundSearchScore(
+                SEARCH_RANKING_WEIGHTS.titleKeyword /
+                    (1 - SEARCH_RANKING_WEIGHTS.embedding),
+            ),
+        )
     })
 
     it('반올림 후 동점인 후보를 id로 재정렬해 다음 cursor 페이지까지 누락 없이 반환한다', async () => {
         const input = searchInput({ q: '검색', limit: 1 })
         embeddingService.embedQuery.mockResolvedValue([1])
         repository.findTitleCandidateIds.mockResolvedValue([])
+        repository.findFolderKeywordCandidateIds.mockResolvedValue([])
         repository.findTagKeywordCandidateIds.mockResolvedValue([])
         repository.findContentCandidateIds.mockResolvedValue([])
         repository.findVectorCandidateIds.mockResolvedValue([1, 2])
@@ -216,6 +273,9 @@ describe('SearchService', () => {
         const lexical = deferred<number[]>()
         embeddingService.embedQuery.mockReturnValue(embedding.promise)
         repository.findTitleCandidateIds.mockReturnValue(lexical.promise)
+        repository.findFolderKeywordCandidateIds.mockReturnValue(
+            lexical.promise,
+        )
         repository.findTagKeywordCandidateIds.mockReturnValue(lexical.promise)
         repository.findContentCandidateIds.mockReturnValue(lexical.promise)
         repository.findVectorCandidateIds.mockResolvedValue([])
@@ -224,6 +284,9 @@ describe('SearchService', () => {
         const resultPromise = service.search(7, input)
 
         expect(repository.findTitleCandidateIds).toHaveBeenCalledTimes(1)
+        expect(repository.findFolderKeywordCandidateIds).toHaveBeenCalledTimes(
+            1,
+        )
         expect(repository.findTagKeywordCandidateIds).toHaveBeenCalledTimes(1)
         expect(repository.findContentCandidateIds).toHaveBeenCalledTimes(1)
         expect(repository.findVectorCandidateIds).not.toHaveBeenCalled()
@@ -245,6 +308,7 @@ describe('SearchService', () => {
         const input = searchInput({ q: 'NestJS' })
         embeddingService.embedQuery.mockRejectedValue(new Error('API down'))
         repository.findTitleCandidateIds.mockResolvedValue([1])
+        repository.findFolderKeywordCandidateIds.mockResolvedValue([])
         repository.findTagKeywordCandidateIds.mockResolvedValue([])
         repository.findContentCandidateIds.mockResolvedValue([])
         repository.findCandidates.mockResolvedValue([

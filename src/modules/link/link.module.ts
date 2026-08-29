@@ -4,6 +4,7 @@ import { UrlSecurityModule } from '../../common/security/url-security/url-securi
 import { DatabaseModule } from '../../config/database/database.module'
 import { AiModule } from '../ai/ai.module'
 import { AuthModule } from '../auth/auth.module'
+import { ImageColorModule } from '../image-color/image-color.module'
 
 import { LinkAnalysisService } from './analysis/link-analysis.service'
 import { LinkContentService } from './content/link-content.service'
@@ -17,7 +18,13 @@ import { LinkRepository } from './link.repository'
 import { LinkService } from './link.service'
 
 @Module({
-    imports: [DatabaseModule, AiModule, AuthModule, UrlSecurityModule],
+    imports: [
+        DatabaseModule,
+        AiModule,
+        AuthModule,
+        UrlSecurityModule,
+        ImageColorModule,
+    ],
     controllers: [LinkController],
     providers: [
         LinkService,

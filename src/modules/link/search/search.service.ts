@@ -28,7 +28,7 @@ import { SEARCH_QUERY_TOKEN_LIMIT } from './search-ranking.constant'
 
 export type SearchResultRow = Pick<
     LinkRow,
-    'id' | 'title' | 'domain' | 'metadata' | 'createdAt'
+    'id' | 'title' | 'domain' | 'metadata' | 'createdAt' | 'reminderAt'
 >
 type ScoredLink = { row: SearchResultRow; score: number }
 
@@ -117,28 +117,38 @@ export class SearchService {
                     : [],
             }),
         )
-        const [titleIds, tagIds, contentIds, { queryEmbedding, vectorIds }] =
-            await Promise.all([
-                this.searchRepository.findTitleCandidateIds(
-                    userId,
-                    tokens,
-                    textCandidateOptions,
-                ),
-                this.searchRepository.findTagKeywordCandidateIds(
-                    userId,
-                    tokens,
-                    textCandidateOptions,
-                ),
-                this.searchRepository.findContentCandidateIds(
-                    userId,
-                    tokens,
-                    textCandidateOptions,
-                ),
-                semanticCandidatesPromise,
-            ])
+        const [
+            titleIds,
+            folderIds,
+            tagIds,
+            contentIds,
+            { queryEmbedding, vectorIds },
+        ] = await Promise.all([
+            this.searchRepository.findTitleCandidateIds(
+                userId,
+                tokens,
+                textCandidateOptions,
+            ),
+            this.searchRepository.findFolderKeywordCandidateIds(
+                userId,
+                tokens,
+                textCandidateOptions,
+            ),
+            this.searchRepository.findTagKeywordCandidateIds(
+                userId,
+                tokens,
+                textCandidateOptions,
+            ),
+            this.searchRepository.findContentCandidateIds(
+                userId,
+                tokens,
+                textCandidateOptions,
+            ),
+            semanticCandidatesPromise,
+        ])
         const candidates = await this.searchRepository.findCandidates(
             userId,
-            this.unionIds(titleIds, tagIds, contentIds, vectorIds),
+            this.unionIds(titleIds, folderIds, tagIds, contentIds, vectorIds),
             queryEmbedding,
             scope,
         )
@@ -147,6 +157,7 @@ export class SearchService {
                 id: candidate.id,
                 signals: calculateSearchSignals(tokens.join(' '), {
                     title: candidate.title,
+                    folder: candidate.folderName,
                     tags: candidate.tags,
                     content: this.queryContent(candidate),
                     embeddingSimilarity: candidate.embeddingSimilarity,

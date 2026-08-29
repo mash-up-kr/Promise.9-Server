@@ -18,6 +18,9 @@ export const LINK_CONTENT_FETCH = {
     maxRedirects: 3,
 } as const
 
+// 외부 페이지가 제공하는 OG 이미지 URL이 JSONB와 API 응답을 과도하게 키우지 않게 제한한다.
+export const LINK_CONTENT_IMAGE_URL_MAX_LENGTH = 8 * 1024
+
 export const LINK_CONTENT_REDIRECT_STATUSES: readonly number[] = [
     301, 302, 303, 307, 308,
 ]

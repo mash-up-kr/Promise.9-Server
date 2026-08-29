@@ -24,6 +24,7 @@ describe('rankSearchCandidates', () => {
                 id: 1,
                 signals: {
                     titleKeyword: 1,
+                    folderKeyword: 0,
                     tagKeyword: 0,
                     contentKeyword: 0,
                     embedding: null,
@@ -43,6 +44,7 @@ describe('rankSearchCandidates', () => {
                 id: 1,
                 signals: {
                     titleKeyword: 1,
+                    folderKeyword: 0,
                     tagKeyword: 0,
                     contentKeyword: 0,
                     embedding: 0,
@@ -59,6 +61,7 @@ describe('rankSearchCandidates', () => {
                 id: 1,
                 signals: {
                     titleKeyword: 1.5,
+                    folderKeyword: -1,
                     tagKeyword: -1,
                     contentKeyword: Number.NaN,
                     embedding: 0.5,
@@ -121,16 +124,18 @@ describe('search keyword signals', () => {
         ).toBe(1)
     })
 
-    it('제목·태그·본문·임베딩 원점수를 분리한다', () => {
+    it('제목·폴더·태그·본문·임베딩 원점수를 분리한다', () => {
         expect(
             calculateSearchSignals('NestJS 인증', {
                 title: 'NestJS 가이드',
+                folder: '인증 자료',
                 tags: ['인증', '백엔드'],
                 content: 'JWT 인증 예제',
                 embeddingSimilarity: 0.75,
             }),
         ).toEqual({
             titleKeyword: 0.5,
+            folderKeyword: 0.5,
             tagKeyword: 0.5,
             contentKeyword: 0.5,
             embedding: 0.75,
@@ -145,6 +150,7 @@ describe('search keyword signals', () => {
             }),
         ).toEqual({
             titleKeyword: 1,
+            folderKeyword: 0,
             tagKeyword: 0,
             contentKeyword: 0,
             embedding: null,

@@ -8,8 +8,8 @@ export const RELATED_LINK_VECTOR_CANDIDATE_LIMIT =
     DEFAULT_RELATED_LINK_LIMIT * 2
 
 export const RELATED_LINK_RANKING_WEIGHTS = {
-    folder: 0.2,
-    tag: 0.3,
-    title: 0.15,
-    embedding: 0.35,
+    folder: 0.1,
+    tag: 0.25,
+    title: 0.1,
+    embedding: 0.55,
 } as const

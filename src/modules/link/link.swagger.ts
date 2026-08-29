@@ -19,34 +19,40 @@ import {
 import { AUTH_ERROR } from '../auth/auth-error.constant'
 import { FOLDER_ERROR } from '../folder/folder-error.constant'
 
-import { CreateLinkDto, UpdateLinkDto } from './dto/link.dto'
+import {
+    CreateLinkDto,
+    MoveLinksToFolderDto,
+    UpdateLinkDto,
+} from './dto/link.dto'
 import {
     CreateLinkResponseDto,
     LinkDetailResponseDto,
     LinkPreviewResponseDto,
     ListLinksResponseDto,
+    MoveLinksToFolderResponseDto,
     RestoreLinkResponseDto,
     UpdateLinkResponseDto,
 } from './dto/link.response.dto'
 import { CreateLinkTagDto } from './dto/tag.dto'
 import { LinkTagResponseDto } from './dto/tag.response.dto'
-import { LINK_MEMO_MAX_LENGTH } from './link.constants'
+import { LINK_MEMO_MAX_LENGTH, MAX_BULK_MOVE_LINKS } from './link.constants'
 import { LINK_ERROR } from './link-error.constant'
 
 const LIST_LINKS_DESCRIPTION = `
 ### 사용 화면
 
-화면마다 별도 목록 Endpoint를 만들지 않고, 최근 저장·전체·미분류·즐겨찾기·최근 삭제·사용자 폴더·검색 결과를 모두 \`GET /links\`의 Query 조합으로 조회합니다.
+화면마다 별도 목록 Endpoint를 만들지 않고, 최근 저장·다시 볼 링크·전체·미분류·즐겨찾기·최근 삭제·사용자 폴더·검색 결과를 모두 \`GET /links\`의 Query 조합으로 조회합니다.
 
 ### 필터 조합
 
 - \`folderId\`: 특정 사용자 폴더의 링크만 조회합니다.
 - \`unassigned=true\`: 폴더가 없는 미분류 링크만 조회합니다.
 - \`favorite=true\`: 즐겨찾기한 링크만 조회합니다.
+- \`reminder=true\`: 리마인드 시각이 설정된 링크만 조회합니다. 지난 시각도 포함합니다.
 - \`deleted=true\`: soft delete된 링크만 조회합니다.
 - \`q\`: 다른 필터를 적용한 범위 안에서 검색합니다.
 
-\`folderId\`, \`favorite\`, \`q\`처럼 서로 다른 축의 조건은 함께 사용할 수 있습니다. \`folderId\`와 \`unassigned=true\`처럼 동시에 성립할 수 없는 조건은 \`400 Bad Request\`로 처리합니다.
+\`folderId\`, \`favorite\`, \`q\`처럼 서로 다른 축의 조건은 함께 사용할 수 있습니다. \`folderId\`와 \`unassigned=true\`처럼 동시에 성립할 수 없는 조건은 \`400 Bad Request\`로 처리합니다. 홈 전용 리마인드 조회는 검색과 결합하지 않으므로 \`q\`와 \`reminder=true\` 또는 \`sortBy=reminderAt\` 조합도 거부합니다.
 
 ### 화면별 링크 목록 요청 예시
 
@@ -63,6 +69,7 @@ const LIST_LINKS_DESCRIPTION = `
 | 특정 폴더 | \`GET /links?folderId=3\` |
 | 검색 | \`GET /links?q=피그마\` |
 | 최근 저장 | \`GET /links?sortBy=savedAt&order=desc\` |
+| 다시 볼 링크 | \`GET /links?reminder=true&sortBy=reminderAt&order=asc&limit=9\` |
 
 ### 정렬과 페이지네이션
 
@@ -79,7 +86,7 @@ const LIST_LINKS_DESCRIPTION = `
 
 ### 현재 구현 상태
 
-- **현재 동작:** \`q\`, \`folderId\`, \`unassigned\`, \`deleted\`, \`favorite\`, \`sortBy\`, \`order\`, \`cursor\`, \`limit\`
+- **현재 동작:** \`q\`, \`folderId\`, \`unassigned\`, \`deleted\`, \`favorite\`, \`reminder\`, \`sortBy\`, \`order\`, \`cursor\`, \`limit\`
 - **계약만 제공:** 대표 태그(\`representativeTag\`)
 - \`q\`가 없는 일반 목록은 \`sortBy\`/\`order\`에 따라 정렬되며, 검색은 위 설명처럼 \`score\` 내림차순으로 고정됩니다. 두 경로 모두 cursor 페이지네이션으로 \`nextCursor\`·\`hasNext\`를 실제 계산해 반환합니다.
 - \`representativeTag\`는 대표 태그 선정 로직 구현 전까지 \`null\`을 반환합니다.
@@ -134,6 +141,17 @@ const UPDATE_LINK_DESCRIPTION = `
 - 폴더 이동, 메모 변경, 리마인드 설정·해제, 즐겨찾기 설정·해제가 모두 저장됩니다.
 `
 
+const MOVE_LINKS_TO_FOLDER_DESCRIPTION = `
+여러 활성 링크를 한 사용자 폴더 또는 미분류로 원자적으로 이동합니다. 링크가 전체·미분류·즐겨찾기·사용자 폴더·검색 중 어느 화면에서 선택됐는지는 구분하지 않습니다.
+
+- 요청은 최대 ${MAX_BULK_MOVE_LINKS}개이며 중복 \`linkIds\`는 한 번만 처리합니다.
+- \`folderId=null\`이면 미분류로 이동합니다.
+- 이미 목적지에 있는 링크는 변경하지 않으며 \`unchangedCount\`에 포함합니다. 해당 링크의 \`updatedAt\`도 유지됩니다.
+- 링크 하나라도 없거나, 삭제됐거나, 다른 사용자 소유라면 전체 요청을 실패시킵니다.
+- 목적지 폴더가 없거나 다른 사용자 소유여도 전체 요청을 실패시킵니다.
+- 검증과 이동은 하나의 DB transaction에서 실행해 부분 이동을 허용하지 않습니다.
+`
+
 const REMOVE_LINK_DESCRIPTION = `
 링크를 즉시 영구 삭제하지 않고 \`deletedAt\`을 기록해 최근 삭제 상태로 이동합니다. 이후 \`GET /links?deleted=true\`로 조회할 수 있습니다.
 `
@@ -181,6 +199,7 @@ const LIST_LINKS_RESPONSE_EXAMPLE = {
             representativeTag: null,
             thumbnailUrl: THUMBNAIL_EXAMPLE,
             savedAt: TIMESTAMP_EXAMPLE,
+            reminderAt: '2026-08-20T12:00:00.000Z',
             score: 0.87342,
         },
         {
@@ -190,6 +209,7 @@ const LIST_LINKS_RESPONSE_EXAMPLE = {
             representativeTag: null,
             thumbnailUrl: null,
             savedAt: '2026-07-12T03:20:00.000Z',
+            reminderAt: null,
             score: 0.64125,
         },
     ],
@@ -208,6 +228,7 @@ const LINK_DETAIL_RESPONSE_EXAMPLE = {
     folder: {
         folderId: 3,
         folderName: '디자인',
+        color: '#d5d76a',
     },
     thumbnailUrl: THUMBNAIL_EXAMPLE,
     title: '신입 디자이너가 알아야 할 실험 설계 팁',
@@ -240,6 +261,13 @@ const UPDATE_LINK_RESPONSE_EXAMPLE = {
     reminderAt: '2026-08-20T12:00:00.000Z',
     isFavorite: true,
     updatedAt: TIMESTAMP_EXAMPLE,
+}
+
+const MOVE_LINKS_TO_FOLDER_RESPONSE_EXAMPLE = {
+    requestedCount: 3,
+    movedCount: 2,
+    unchangedCount: 1,
+    folderId: 7,
 }
 
 const RESTORE_LINK_RESPONSE_EXAMPLE = {
@@ -327,6 +355,13 @@ export const ApiListLinks = () =>
             description: '[선택, 기본값: false] true이면 즐겨찾기 링크만 조회',
         }),
         ApiQuery({
+            name: 'reminder',
+            required: false,
+            schema: { type: 'boolean', default: false },
+            description:
+                '[선택, 기본값: false] true이면 reminderAt이 설정된 링크만 조회. 지난 시각도 포함하며 q와 함께 사용할 수 없음',
+        }),
+        ApiQuery({
             name: 'deleted',
             required: false,
             schema: { type: 'boolean', default: false },
@@ -338,11 +373,11 @@ export const ApiListLinks = () =>
             required: false,
             schema: {
                 type: 'string',
-                enum: ['savedAt', 'viewedAt', 'deletedAt'],
+                enum: ['savedAt', 'viewedAt', 'reminderAt', 'deletedAt'],
                 default: 'savedAt',
             },
             description:
-                '[선택, 기본값: savedAt] 정렬 기준. `viewedAt`은 조회 이력이 있는 링크만 대상으로 하며 `viewedAt=null` 링크는 결과에서 제외한다.',
+                '[선택, 기본값: savedAt] 정렬 기준. `viewedAt`과 `reminderAt`은 해당 시각이 설정된 링크만 대상으로 하며 null 링크는 결과에서 제외한다. `sortBy=reminderAt`은 q와 함께 사용할 수 없다.',
         }),
         ApiQuery({
             name: 'order',
@@ -463,6 +498,29 @@ export const ApiUpdateLink = () =>
         ApiCommonResponse(UpdateLinkResponseDto, {
             description: '수정 성공',
             dataExample: UPDATE_LINK_RESPONSE_EXAMPLE,
+        }),
+        ApiCommonErrorResponses(
+            COMMON_ERROR.VALIDATION,
+            AUTH_ERROR.INVALID_TOKEN,
+            LINK_ERROR.NOT_FOUND,
+            FOLDER_ERROR.NOT_FOUND,
+        ),
+    )
+
+export const ApiMoveLinksToFolder = () =>
+    applyDecorators(
+        ApiOperation({
+            summary: '링크 일괄 폴더 이동',
+            description: MOVE_LINKS_TO_FOLDER_DESCRIPTION,
+        }),
+        ApiBody({
+            type: MoveLinksToFolderDto,
+            description:
+                '`linkIds`의 활성 링크를 `folderId`로 이동합니다. `folderId=null`이면 미분류로 이동합니다.',
+        }),
+        ApiCommonResponse(MoveLinksToFolderResponseDto, {
+            description: '일괄 이동 성공',
+            dataExample: MOVE_LINKS_TO_FOLDER_RESPONSE_EXAMPLE,
         }),
         ApiCommonErrorResponses(
             COMMON_ERROR.VALIDATION,

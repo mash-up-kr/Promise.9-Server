@@ -96,6 +96,14 @@ const appEnvSchema = z
                     'AWS_SESSION_TOKEN을 사용하려면 AWS access key도 설정해야 합니다.',
             })
         }
+
+        if (env.APP_ENV === 'production' && !env.OPENAI_API_KEY) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['OPENAI_API_KEY'],
+                message: 'production 환경에서는 OPENAI_API_KEY가 필요합니다.',
+            })
+        }
     })
     .transform((env) => ({
         ...env,
