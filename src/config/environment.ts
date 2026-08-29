@@ -68,6 +68,14 @@ const appEnvSchema = z
                 message: `${key} 환경변수가 필요합니다.`,
             })
         }
+
+        if (env.APP_ENV === 'production' && !env.OPENAI_API_KEY) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['OPENAI_API_KEY'],
+                message: 'production 환경에서는 OPENAI_API_KEY가 필요합니다.',
+            })
+        }
     })
     .transform((env) => ({
         ...env,

@@ -77,12 +77,17 @@ jobs:
           KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID }}
           KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
           APPLE_CLIENT_ID: ${{ secrets.APPLE_CLIENT_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           MASTER_ACCESS_TOKEN: ${{ secrets.MASTER_ACCESS_TOKEN }}
           MASTER_USER_ID: ${{ secrets.MASTER_USER_ID }}
         run: |
           : "${DATABASE_URL_PRODUCTION:?DATABASE_URL_PRODUCTION is required}"
+          : "${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}"
+          : "${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}"
+          : "${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID is required}"
           : "${KAKAO_CLIENT_ID:?KAKAO_CLIENT_ID is required}"
           : "${APPLE_CLIENT_ID:?APPLE_CLIENT_ID is required}"
+          : "${OPENAI_API_KEY:?OPENAI_API_KEY is required}"
 
           {
             printf 'APP_ENV=production\n'
@@ -92,13 +97,19 @@ jobs:
             printf 'GOOGLE_CLIENT_ID=%s\n' "$GOOGLE_CLIENT_ID"
             printf 'KAKAO_CLIENT_ID=%s\n' "$KAKAO_CLIENT_ID"
             printf 'APPLE_CLIENT_ID=%s\n' "$APPLE_CLIENT_ID"
+            printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
 
             if [ -n "$KAKAO_CLIENT_SECRET" ]; then
               printf 'KAKAO_CLIENT_SECRET=%s\n' "$KAKAO_CLIENT_SECRET"
             fi
 
-            printf 'MASTER_ACCESS_TOKEN=%s\n' "$MASTER_ACCESS_TOKEN"
-            printf 'MASTER_USER_ID=%s\n' "$MASTER_USER_ID"
+            if [ -n "$MASTER_ACCESS_TOKEN" ]; then
+              printf 'MASTER_ACCESS_TOKEN=%s\n' "$MASTER_ACCESS_TOKEN"
+            fi
+
+            if [ -n "$MASTER_USER_ID" ]; then
+              printf 'MASTER_USER_ID=%s\n' "$MASTER_USER_ID"
+            fi
           } > .env.production
 
       - name: Ensure deploy directory
