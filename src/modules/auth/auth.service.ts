@@ -97,6 +97,12 @@ export class AuthService {
         return { idToken }
     }
 
+    // 웹 세션(access token)으로 인증된 사용자에게 익스텐션 전용 토큰쌍을 새로
+    // 발급한다. 새 tokenFamily를 쓰므로 웹 쪽 토큰과 독립적으로 회전/폐기된다.
+    async issueExtensionToken(userId: number): Promise<TokenPair> {
+        return this.issueTokens(userId)
+    }
+
     async refresh(rawRefreshToken: string): Promise<TokenPair> {
         const payload = this.verifyRefreshToken(rawRefreshToken)
         const tokenHash = hashToken(rawRefreshToken)

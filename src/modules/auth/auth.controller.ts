@@ -5,9 +5,12 @@ import {
     HttpCode,
     HttpStatus,
     Post,
+    UseGuards,
 } from '@nestjs/common'
-import { ApiTags } from '@nestjs/swagger'
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 
+import { CurrentUser } from '../../common/decorators/current-user.decorator'
+import { AuthUser, JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ZodValidationPipe } from '../../common/pipe/zod-validation.pipe'
 
 import {
@@ -24,6 +27,7 @@ import {
 } from './dto/auth.dto'
 import { AuthService } from './auth.service'
 import {
+    ApiExtensionToken,
     ApiKakaoExchange,
     ApiLogout,
     ApiRefreshToken,
@@ -53,6 +57,15 @@ export class AuthController {
         dto: KakaoExchangeInput,
     ) {
         return this.authService.kakaoExchange(dto.code, dto.redirectUri)
+    }
+
+    @Post('extension-token')
+    @HttpCode(HttpStatus.OK)
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiExtensionToken()
+    async issueExtensionToken(@CurrentUser() user: AuthUser) {
+        return this.authService.issueExtensionToken(user.userId)
     }
 
     @Post('refresh')
