@@ -80,6 +80,10 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           MASTER_ACCESS_TOKEN: ${{ secrets.MASTER_ACCESS_TOKEN }}
           MASTER_USER_ID: ${{ secrets.MASTER_USER_ID }}
+          EMAIL_FROM_ADDRESS: ${{ secrets.EMAIL_FROM_ADDRESS }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
         run: |
           : "${DATABASE_URL_PRODUCTION:?DATABASE_URL_PRODUCTION is required}"
           : "${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}"
@@ -109,6 +113,21 @@ jobs:
 
             if [ -n "$MASTER_USER_ID" ]; then
               printf 'MASTER_USER_ID=%s\n' "$MASTER_USER_ID"
+            fi
+
+            printf 'EMAIL_SES_REGION=ap-northeast-2\n'
+
+            if [ -n "$EMAIL_FROM_ADDRESS" ]; then
+              printf 'EMAIL_FROM_ADDRESS=%s\n' "$EMAIL_FROM_ADDRESS"
+            fi
+            if [ -n "$AWS_ACCESS_KEY_ID" ]; then
+              printf 'AWS_ACCESS_KEY_ID=%s\n' "$AWS_ACCESS_KEY_ID"
+            fi
+            if [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+              printf 'AWS_SECRET_ACCESS_KEY=%s\n' "$AWS_SECRET_ACCESS_KEY"
+            fi
+            if [ -n "$AWS_SESSION_TOKEN" ]; then
+              printf 'AWS_SESSION_TOKEN=%s\n' "$AWS_SESSION_TOKEN"
             fi
           } > .env.production
 

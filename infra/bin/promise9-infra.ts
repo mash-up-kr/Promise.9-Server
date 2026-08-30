@@ -9,6 +9,7 @@ import {
 
 import { AccessStack } from '../lib/access-stack'
 import { AWS_ACCOUNT_ID, AWS_REGION, PROJECT_NAME } from '../lib/constants'
+import { EmailStack } from '../lib/email-stack'
 import { LightsailStack } from '../lib/lightsail-stack'
 
 const app = new App()
@@ -33,6 +34,16 @@ const accessStack = new AccessStack(app, 'Promise9AccessStack', {
 
 Tags.of(accessStack).add('Project', PROJECT_NAME)
 Tags.of(accessStack).add('ManagedBy', 'AWS-CDK')
+
+const emailStack = new EmailStack(app, 'Promise9EmailStack', {
+    env,
+    synthesizer: new CliCredentialsStackSynthesizer(),
+    terminationProtection: true,
+    description: 'Promise9 SES identity and application sending access',
+})
+
+Tags.of(emailStack).add('Project', PROJECT_NAME)
+Tags.of(emailStack).add('ManagedBy', 'AWS-CDK')
 
 // 기존 Lightsail 리소스의 현재 상태를 유지하기 위해 Tag를 별도로 적용하지 않는다.
 new LightsailStack(app, 'Promise9LightsailStack', {
