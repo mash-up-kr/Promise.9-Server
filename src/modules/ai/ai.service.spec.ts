@@ -10,6 +10,7 @@ import { LlmService } from '../../infrastructure/llm/llm.service'
 
 import { AiMetricService } from './metrics/ai-metric.service'
 import {
+    AI_EMBEDDING_TASK_TYPE,
     AI_METRIC_STATUS,
     AI_TASK_RESPONSE_SCHEMA_NAME,
     AI_TASK_TYPE,
@@ -39,6 +40,7 @@ describe('AiService', () => {
         Pick<
             LlmService,
             | 'resolveTarget'
+            | 'embed'
             | 'generateTextWithResolvedTarget'
             | 'generateObjectWithResolvedTarget'
         >
@@ -48,6 +50,7 @@ describe('AiService', () => {
 
     beforeEach(() => {
         llmService = {
+            embed: jest.fn(),
             resolveTarget: jest.fn().mockReturnValue({
                 provider: 'openai',
                 model: LLM_MODEL.GPT_5_4_MINI,
@@ -74,6 +77,49 @@ describe('AiService', () => {
     afterEach(() => {
         loggerErrorSpy.mockRestore()
     })
+
+    it('임베딩의 LLM 설정 오류를 영구 실패 계약으로 변환한다', async () => {
+        const configurationError = new LlmConfigurationError(
+            'OPENAI_API_KEY 환경변수가 필요합니다.',
+        )
+        llmService.embed.mockRejectedValueOnce(configurationError)
+
+        const result = service.embedText('임베딩할 텍스트')
+
+        await expect(result).rejects.toMatchObject({
+            code: 'LLM_CONFIGURATION_ERROR',
+            taskType: AI_EMBEDDING_TASK_TYPE,
+            retryable: false,
+            cause: configurationError,
+        })
+    })
+
+    it.each([
+        { statusCode: 401, retryable: false },
+        { statusCode: 403, retryable: false },
+        { statusCode: 429, retryable: true },
+        { statusCode: 500, retryable: true },
+    ])(
+        '임베딩 provider ($statusCode) 오류의 retryable을 ($retryable)로 변환한다',
+        async ({ statusCode, retryable }) => {
+            const providerError = new LlmProviderError(
+                'openai',
+                'OPENAI_REQUEST_FAILED',
+                'OpenAI failed',
+                statusCode,
+            )
+            llmService.embed.mockRejectedValueOnce(providerError)
+
+            const result = service.embedText('임베딩할 텍스트')
+
+            await expect(result).rejects.toMatchObject({
+                code: 'OPENAI_REQUEST_FAILED',
+                taskType: AI_EMBEDDING_TASK_TYPE,
+                retryable,
+                cause: providerError,
+            })
+        },
+    )
 
     it('수집한 링크 정보로 최대 300자 요약을 생성한다', async () => {
         llmService.generateObjectWithResolvedTarget.mockResolvedValueOnce({

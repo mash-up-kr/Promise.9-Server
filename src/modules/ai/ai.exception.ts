@@ -1,9 +1,9 @@
-import { AiTaskType } from './ai.constants'
+import { AiErrorTaskType } from './ai.constants'
 
 type AiGenerationErrorInput = {
     code: string
     message: string
-    taskType: AiTaskType
+    taskType: AiErrorTaskType
     retryable: boolean
     cause?: unknown
 }
@@ -16,7 +16,7 @@ type AiGenerationErrorInput = {
  */
 export class AiGenerationError extends Error {
     readonly code: string
-    readonly taskType: AiTaskType
+    readonly taskType: AiErrorTaskType
     readonly retryable: boolean
 
     constructor(input: AiGenerationErrorInput) {

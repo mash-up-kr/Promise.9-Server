@@ -11,6 +11,7 @@ import { LlmService } from '../../infrastructure/llm/llm.service'
 import { AiMetricService } from './metrics/ai-metric.service'
 import { AiMetricGeneratedResult } from './metrics/ai-metric.type'
 import {
+    AI_EMBEDDING_TASK_TYPE,
     AI_FAILURE_ERROR_CODE,
     AI_METRIC_STATUS,
     AI_TASK_RESPONSE_SCHEMA_NAME,
@@ -54,9 +55,16 @@ export class AiService {
 
     // 여러 텍스트를 한 번에 임베딩한다. 링크 백필처럼 배치 처리에 사용.
     async embedTexts(texts: string[]): Promise<number[][]> {
-        const { embeddings } = await this.llmService.embed(texts)
+        try {
+            const { embeddings } = await this.llmService.embed(texts)
 
-        return embeddings
+            return embeddings
+        } catch (error) {
+            throw this.createGenerationError({
+                error,
+                taskType: AI_EMBEDDING_TASK_TYPE,
+            })
+        }
     }
 
     // 수집한 링크 정보를 기반으로 최대 300자의 한국어 요약을 생성한다.
