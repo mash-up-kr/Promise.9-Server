@@ -46,6 +46,9 @@ const appEnvSchema = z
         KAKAO_CLIENT_ID: z.string().min(1),
         // 카카오 로그인 콘솔에서 Client Secret 사용을 켠 경우에만 필요 (기본값 OFF)
         KAKAO_CLIENT_SECRET: z.string().min(1).optional(),
+        // 네이티브(iOS/Android) SDK가 발급하는 id_token의 aud는 REST API 키가 아니라
+        // 네이티브 앱 키라, 두 값을 모두 audience로 허용해야 앱 로그인이 검증된다.
+        KAKAO_NATIVE_APP_KEY: z.string().min(1),
         APPLE_CLIENT_ID: z.string().min(1),
         MASTER_ACCESS_TOKEN: z.string().optional(),
         MASTER_USER_ID: z.coerce.number().int().positive().optional(),
