@@ -56,11 +56,12 @@ SES는 template 치환값을 HTML escape하지 않는다. 사용자 입력을 HT
 
 ## 런타임 자격 증명
 
-IAM access key는 환경별 IAM User에서 한 번 발급하고 다음 GitHub Secrets에 저장한다.
+`promise9-email-sender-production` IAM User에서 access key를 한 번 발급하고 다음
+GitHub Secrets에 저장한다. SQS용 `AWS_*` 자격 증명과 섞지 않는다.
 
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- 임시 자격 증명을 사용할 때만 `AWS_SESSION_TOKEN`
+- `EMAIL_SES_ACCESS_KEY_ID`
+- `EMAIL_SES_SECRET_ACCESS_KEY`
+- 임시 자격 증명을 사용할 때만 `EMAIL_SES_SESSION_TOKEN`
 - `EMAIL_FROM_ADDRESS` (`reminder@link-ding-dong.com` 등 identity 도메인 주소이며 실제
   메일함은 필요하지 않음)
 

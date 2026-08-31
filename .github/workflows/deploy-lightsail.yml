@@ -84,6 +84,9 @@ jobs:
           AWS_REGION: ${{ secrets.AWS_REGION }}
           SQS_LINK_ANALYSIS_QUEUE_URL: ${{ secrets.SQS_LINK_ANALYSIS_QUEUE_URL }}
           EMAIL_FROM_ADDRESS: ${{ secrets.EMAIL_FROM_ADDRESS }}
+          EMAIL_SES_ACCESS_KEY_ID: ${{ secrets.EMAIL_SES_ACCESS_KEY_ID }}
+          EMAIL_SES_SECRET_ACCESS_KEY: ${{ secrets.EMAIL_SES_SECRET_ACCESS_KEY }}
+          EMAIL_SES_SESSION_TOKEN: ${{ secrets.EMAIL_SES_SESSION_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
@@ -132,6 +135,15 @@ jobs:
 
             if [ -n "$EMAIL_FROM_ADDRESS" ]; then
               printf 'EMAIL_FROM_ADDRESS=%s\n' "$EMAIL_FROM_ADDRESS"
+            fi
+            if [ -n "$EMAIL_SES_ACCESS_KEY_ID" ]; then
+              printf 'EMAIL_SES_ACCESS_KEY_ID=%s\n' "$EMAIL_SES_ACCESS_KEY_ID"
+            fi
+            if [ -n "$EMAIL_SES_SECRET_ACCESS_KEY" ]; then
+              printf 'EMAIL_SES_SECRET_ACCESS_KEY=%s\n' "$EMAIL_SES_SECRET_ACCESS_KEY"
+            fi
+            if [ -n "$EMAIL_SES_SESSION_TOKEN" ]; then
+              printf 'EMAIL_SES_SESSION_TOKEN=%s\n' "$EMAIL_SES_SESSION_TOKEN"
             fi
             if [ -n "$AWS_ACCESS_KEY_ID" ]; then
               printf 'AWS_ACCESS_KEY_ID=%s\n' "$AWS_ACCESS_KEY_ID"

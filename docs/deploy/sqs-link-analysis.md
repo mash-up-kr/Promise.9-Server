@@ -184,6 +184,9 @@ secret을 설정하기 전에 배포해도 앱은 정상 부팅된다(재시도�
 | `AWS_ACCESS_KEY_ID` | production, stage | `Promise9AppRuntime` 액세스 키 |
 | `AWS_SECRET_ACCESS_KEY` | production, stage | 같은 키의 시크릿 |
 
+`AWS_*`에는 SQS 권한만 가진 `Promise9AppRuntime` 키를 사용한다. SES 발송 키는
+`EMAIL_SES_*` secrets로 별도 관리하며 자세한 설정은 `docs/infrastructure/ses.md`를 따른다.
+
 <br>
 
 ## 환경변수

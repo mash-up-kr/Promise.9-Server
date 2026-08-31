@@ -85,6 +85,9 @@ const appEnvSchema = z
         EMAIL_SES_REGION: z.string().min(1).default(DEFAULT_EMAIL_SES_REGION),
         EMAIL_FROM_ADDRESS: z.email().optional(),
         EMAIL_CONFIGURATION_SET: z.string().min(1).optional(),
+        EMAIL_SES_ACCESS_KEY_ID: z.string().min(1).optional(),
+        EMAIL_SES_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+        EMAIL_SES_SESSION_TOKEN: z.string().min(1).optional(),
         AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
         AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
         AWS_SESSION_TOKEN: z.string().min(1).optional(),
@@ -118,6 +121,40 @@ const appEnvSchema = z
                 path: ['AWS_SESSION_TOKEN'],
                 message:
                     'AWS_SESSION_TOKEN을 사용하려면 AWS access key도 설정해야 합니다.',
+            })
+        }
+
+        if (
+            Boolean(env.EMAIL_SES_ACCESS_KEY_ID) !==
+            Boolean(env.EMAIL_SES_SECRET_ACCESS_KEY)
+        ) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['EMAIL_SES_ACCESS_KEY_ID'],
+                message:
+                    'EMAIL_SES_ACCESS_KEY_ID와 EMAIL_SES_SECRET_ACCESS_KEY는 함께 설정해야 합니다.',
+            })
+        }
+
+        if (env.EMAIL_SES_SESSION_TOKEN && !env.EMAIL_SES_ACCESS_KEY_ID) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['EMAIL_SES_SESSION_TOKEN'],
+                message:
+                    'EMAIL_SES_SESSION_TOKEN을 사용하려면 SES access key도 설정해야 합니다.',
+            })
+        }
+
+        if (
+            env.EMAIL_FROM_ADDRESS &&
+            env.AWS_ACCESS_KEY_ID &&
+            !env.EMAIL_SES_ACCESS_KEY_ID
+        ) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['EMAIL_SES_ACCESS_KEY_ID'],
+                message:
+                    'SQS용 AWS 자격 증명과 별도로 SES 자격 증명을 설정해야 합니다.',
             })
         }
 
