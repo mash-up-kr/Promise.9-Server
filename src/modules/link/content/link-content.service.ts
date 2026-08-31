@@ -6,6 +6,7 @@ import { LINK_ERROR } from '../link-error.constant'
 
 import {
     LINK_CONTENT_FETCH,
+    LINK_CONTENT_IMAGE_URL_MAX_LENGTH,
     LINK_CONTENT_REDIRECT_STATUSES,
     LINK_CONTENT_REQUEST_HEADERS,
     LINK_CONTENT_TEXT_LIMIT,
@@ -33,7 +34,7 @@ export class LinkContentService {
 
         return {
             title,
-            thumbnailUrl: this.toAbsoluteImage(image, finalUrl),
+            thumbnailUrl: await this.toSafeAbsoluteImage(image, finalUrl),
             source: this.toSource(finalUrl),
         }
     }
@@ -41,10 +42,15 @@ export class LinkContentService {
     // robots.txt가 허용한 링크에서 요약과 태그 생성에 필요한 정보를 수집한다.
     async collect(url: string): Promise<CollectedLinkContent | null> {
         try {
-            const { html } = await this.fetchHtml(url, {
+            const { html, finalUrl } = await this.fetchHtml(url, {
                 beforeRequest: this.validateCrawlingAllowed,
             })
             const information = parseLinkInformation(html)
+            const preview = parseLinkPreview(html)
+            const imageUrl = await this.toSafeAbsoluteImage(
+                preview.image,
+                finalUrl,
+            )
             const collected = {
                 title: this.limitText(
                     information.title,
@@ -58,6 +64,10 @@ export class LinkContentService {
                     information.content,
                     LINK_CONTENT_TEXT_LIMIT.content,
                 ),
+                image:
+                    imageUrl && preview.imageSource
+                        ? { url: imageUrl, source: preview.imageSource }
+                        : null,
             }
 
             return this.hasCollectedContent(collected) ? collected : null
@@ -145,12 +155,25 @@ export class LinkContentService {
         }
     }
 
-    // 대표 이미지 상대 경로를 최종 링크 URL 기준의 절대 경로로 변환한다.
-    private toAbsoluteImage(image: string | null, baseUrl: URL): string | null {
+    // 대표 이미지는 공개 HTTP(S) URL만 허용하고, 저장·응답 가능한 길이로 제한한다.
+    private async toSafeAbsoluteImage(
+        image: string | null,
+        baseUrl: URL,
+    ): Promise<string | null> {
         if (!image) return null
+        if (image.length > LINK_CONTENT_IMAGE_URL_MAX_LENGTH) return null
 
         try {
-            return new URL(image, baseUrl).toString()
+            const imageUrl = this.urlSecurity.parseHttpUrl(image, baseUrl)
+            const normalizedUrl = imageUrl.toString()
+
+            if (normalizedUrl.length > LINK_CONTENT_IMAGE_URL_MAX_LENGTH) {
+                return null
+            }
+
+            await this.urlSecurity.resolvePublicUrl(imageUrl)
+
+            return normalizedUrl
         } catch {
             return null
         }
@@ -163,7 +186,12 @@ export class LinkContentService {
 
     // 제목, 설명, 본문 중 하나라도 수집됐는지 확인한다.
     private hasCollectedContent(content: CollectedLinkContent): boolean {
-        return Boolean(content.title || content.description || content.content)
+        return Boolean(
+            content.title ||
+            content.description ||
+            content.content ||
+            content.image,
+        )
     }
 
     // HTML에서 수집한 문자열을 저장·AI 입력에 허용된 길이까지만 유지한다.

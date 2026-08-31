@@ -2,12 +2,9 @@ import { Injectable } from '@nestjs/common'
 
 import { AiService } from '../../ai/ai.service'
 import { LinkRepository } from '../link.repository'
-import { LinkRow } from '../link.schema'
 import { buildEmbeddingText } from '../link.util'
 
-// 링크 임베딩 생성·저장과 검색 쿼리 임베딩을 담당한다. 벡터를 소비하는 건 검색뿐이라
-// search/ 아래에 둔다. 링크 임베딩 트리거는 analysis/의 EMBEDDING 작업 한 곳으로 모여 있고,
-// 실패 처리·재시도는 그쪽이 담당하므로 여기서는 예외를 그대로 전파한다.
+// 링크 임베딩 생성·저장과 검색 쿼리 임베딩을 담당한다.
 // 텍스트 조립(link.util)·임베딩(AiService)·저장(LinkRepository)을 조율만 하며,
 // provider나 저장 방식의 세부는 각 의존성이 감춘다.
 @Injectable()
@@ -22,16 +19,25 @@ export class EmbeddingService {
         return this.aiService.embedText(text)
     }
 
-    // 링크 텍스트를 임베딩해 저장한다. 임베딩할 텍스트가 없으면 건너뛴다.
-    async embedLink(link: LinkRow): Promise<void> {
-        const text = buildEmbeddingText(link)
+    // 최신 활성 링크와 태그를 조회해 임베딩하고, 원본이 비었으면 기존 벡터를 제거한다.
+    async embedLink(userId: number, linkId: number): Promise<boolean> {
+        const source = await this.linkRepository.findEmbeddingSource(
+            userId,
+            linkId,
+        )
+
+        if (!source) {
+            return false
+        }
+
+        const text = buildEmbeddingText(source)
 
         if (!text) {
-            return
+            await this.linkRepository.updateEmbedding(userId, linkId, null)
+            return false
         }
 
         const embedding = await this.aiService.embedText(text)
-        // 생성 중 링크가 수정됐다면 오래된 텍스트의 임베딩을 저장하지 않는다.
-        await this.linkRepository.updateEmbedding(link, embedding)
+        return this.linkRepository.updateEmbedding(userId, linkId, embedding)
     }
 }

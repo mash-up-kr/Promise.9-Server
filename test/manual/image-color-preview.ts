@@ -5,6 +5,7 @@ import { performance } from 'node:perf_hooks'
 import { UrlSecurityService } from '../../src/common/security/url-security/url-security.service'
 import { NodeVibrantImageColorAnalyzer } from '../../src/modules/image-color/analyzers/node-vibrant-image-color.analyzer'
 import { SharpImageColorAnalyzer } from '../../src/modules/image-color/analyzers/sharp-image-color.analyzer'
+import { ImageAnalysisPreprocessor } from '../../src/modules/image-color/image-analysis-preprocessor.service'
 import { ImageColorService } from '../../src/modules/image-color/image-color.service'
 import { ImageFetcherService } from '../../src/modules/image-color/image-fetcher/image-fetcher.service'
 import {
@@ -35,6 +36,7 @@ async function main() {
     const nodeVibrantAnalyzer = new TimedNodeVibrantImageColorAnalyzer()
     const imageColorService = new ImageColorService(
         imageFetcher,
+        new ImageAnalysisPreprocessor(),
         sharpAnalyzer,
         nodeVibrantAnalyzer,
     )

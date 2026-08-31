@@ -17,3 +17,12 @@ export class SocialLoginResponseDto extends TokenPairResponseDto {
     })
     isNewUser!: boolean
 }
+
+export class KakaoExchangeResponseDto {
+    @ApiProperty({
+        example: 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...',
+        description:
+            'Kakao ID 토큰. POST /auth/social의 idToken으로 그대로 사용',
+    })
+    idToken!: string
+}

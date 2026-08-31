@@ -8,19 +8,20 @@
 GET /links
 ```
 
-화면별 별도 목록 엔드포인트를 만들지 않는다. 최근 저장, 전체, 미분류, 즐겨찾기, 최근 삭제, 사용자 폴더, 최근 본 링크, 검색 결과를 모두 `GET /links`의 독립적인 Query 조합으로 조회한다.
+화면별 별도 목록 엔드포인트를 만들지 않는다. 최근 저장, 다시 볼 링크, 전체, 미분류, 즐겨찾기, 최근 삭제, 사용자 폴더, 최근 본 링크, 검색 결과를 모두 `GET /links`의 독립적인 Query 조합으로 조회한다.
 
-| Query        | 타입    | 기본값    | 설명                                 |
-| ------------ | ------- | --------- | ------------------------------------ |
-| `folderId`   | number  | -         | 특정 사용자 폴더의 링크만 조회       |
-| `unassigned` | boolean | `false`   | `true`이면 미분류 링크만 조회        |
-| `favorite`   | boolean | `false`   | `true`이면 즐겨찾기 링크만 조회      |
-| `deleted`    | boolean | `false`   | `true`이면 soft delete된 링크만 조회 |
-| `q`          | string  | -         | 적용된 필터 범위 안에서 검색         |
-| `sortBy`     | enum    | `savedAt` | `savedAt`, `viewedAt`, `deletedAt`   |
-| `order`      | enum    | `desc`    | `asc`, `desc`                        |
-| `cursor`     | string  | -         | 직전 응답의 `nextCursor`             |
-| `limit`      | number  | `9`       | 최대 `30`                            |
+| Query        | 타입    | 기본값    | 설명                                             |
+| ------------ | ------- | --------- | ------------------------------------------------ |
+| `folderId`   | number  | -         | 특정 사용자 폴더의 링크만 조회                   |
+| `unassigned` | boolean | `false`   | `true`이면 미분류 링크만 조회                    |
+| `favorite`   | boolean | `false`   | `true`이면 즐겨찾기 링크만 조회                  |
+| `reminder`   | boolean | `false`   | `true`이면 리마인드 설정 링크만 조회             |
+| `deleted`    | boolean | `false`   | `true`이면 soft delete된 링크만 조회             |
+| `q`          | string  | -         | 적용된 필터 범위 안에서 검색                     |
+| `sortBy`     | enum    | `savedAt` | `savedAt`, `viewedAt`, `reminderAt`, `deletedAt` |
+| `order`      | enum    | `desc`    | `asc`, `desc`                                    |
+| `cursor`     | string  | -         | 직전 응답의 `nextCursor`                         |
+| `limit`      | number  | `9`       | 최대 `30`                                        |
 
 서로 다른 축의 조건은 함께 사용할 수 있다.
 
@@ -32,23 +33,27 @@ GET /links?folderId=3&favorite=true&q=피그마&limit=9
 
 - `folderId`와 `unassigned=true`
 - `deleted=false`와 `sortBy=deletedAt`
+- `q`와 `reminder=true`
+- `q`와 `sortBy=reminderAt`
 
 `sortBy=viewedAt`을 사용하면 조회 이력이 없는 `viewedAt=null` 링크는 결과에서 제외한다.
+`reminder=true` 또는 `sortBy=reminderAt`을 사용하면 `reminderAt=null` 링크는 결과에서 제외한다. 지난 리마인드 시각도 포함하며, `order=asc`이면 만료·임박 링크부터 정렬한다.
 
 ### 화면별 링크 목록 요청 예시
 
 아래 표는 기본 폴더를 정의하는 표가 아니라 같은 `GET /links`를 화면의 조회 목적에 맞게 사용하는 예시다. 전체·미분류·즐겨찾기·최근 삭제는 `folders` row가 아닌 링크 조회 조건이고, 특정 사용자 폴더는 `folderId`, 검색은 `q`를 사용한다. 특히 최근 삭제는 삭제된 폴더가 아니라 soft delete된 링크를 뜻한다.
 
-| 화면         | 요청                                                  |
-| ------------ | ----------------------------------------------------- |
-| 전체         | `GET /links`                                          |
-| 미분류       | `GET /links?unassigned=true`                          |
-| 즐겨찾기     | `GET /links?favorite=true`                            |
-| 최근 삭제    | `GET /links?deleted=true&sortBy=deletedAt&order=desc` |
-| 특정 폴더    | `GET /links?folderId=3`                               |
-| 검색 결과    | `GET /links?q=피그마`                                 |
-| 최근 저장    | `GET /links?sortBy=savedAt&order=desc&limit=9`        |
-| 최근 본 링크 | `GET /links?sortBy=viewedAt&order=desc&limit=9`       |
+| 화면         | 요청                                                           |
+| ------------ | -------------------------------------------------------------- |
+| 전체         | `GET /links`                                                   |
+| 미분류       | `GET /links?unassigned=true`                                   |
+| 즐겨찾기     | `GET /links?favorite=true`                                     |
+| 최근 삭제    | `GET /links?deleted=true&sortBy=deletedAt&order=desc`          |
+| 특정 폴더    | `GET /links?folderId=3`                                        |
+| 검색 결과    | `GET /links?q=피그마`                                          |
+| 최근 저장    | `GET /links?sortBy=savedAt&order=desc&limit=9`                 |
+| 다시 볼 링크 | `GET /links?reminder=true&sortBy=reminderAt&order=asc&limit=9` |
+| 최근 본 링크 | `GET /links?sortBy=viewedAt&order=desc&limit=9`                |
 
 **Response `200`**
 
@@ -64,6 +69,7 @@ GET /links?folderId=3&favorite=true&q=피그마&limit=9
                 "representativeTag": null,
                 "thumbnailUrl": "https://static.example.com/thumbnail.png",
                 "savedAt": "2026-07-13T00:00:00.000Z",
+                "reminderAt": "2026-08-20T12:00:00.000Z",
                 "score": null
             }
         ],
@@ -86,9 +92,7 @@ GET /links?folderId=3&favorite=true&q=피그마&limit=9
 - `score`: 0~1 사이 검색 점수(소수점 5자리). `q` 없는 일반 목록에서는 항상 `null`이다.
 - **정렬**: `score` 내림차순으로 고정되며 `sortBy`·`order`는 적용되지 않는다.
 - **`nextCursor`**: 검색 커서는 `(score, id)` 기준이라 일반 목록 커서와 **호환되지 않는다.** 검색 요청에 일반 목록의 커서를 넘기면(또는 반대) `400 Bad Request`(`INVALID_CURSOR`)다. `q`를 바꾸면 커서도 버리고 첫 페이지부터 다시 요청한다.
-- **`totalCount`**: 검색 후보 풀 전체 크기로, 최대 100으로 제한된다.
-
-> 기존 `GET /links/search`, `GET /folders/{folderId}/links`는 이 API로 통합하여 제거한다.
+- **`totalCount`**: 관련도 상위 검색 결과 크기로, 최대 30이다.
 
 ## 링크 미리보기
 
@@ -131,7 +135,7 @@ GET /links/preview?url=https%3A%2F%2Ftoss.tech%2Farticle%2F50893
 POST /links
 ```
 
-URL을 먼저 저장하고 링크 정보 수집, AI 요약, AI 태그 생성을 현재 프로세스에서 비동기로 처리한다.
+URL을 먼저 저장하고 링크 정보·대표 이미지 수집, 이미지 색상 추출, AI 요약·태그, 임베딩 생성을 현재 프로세스에서 비동기로 처리한다. 저장 응답은 이 분석 작업을 기다리지 않는다.
 
 **Request Body**
 
@@ -174,7 +178,8 @@ GET /links/{linkId}
         "url": "https://toss.tech/article/example",
         "folder": {
             "folderId": 3,
-            "folderName": "디자인"
+            "folderName": "디자인",
+            "color": "#d5d76a"
         },
         "thumbnailUrl": "https://static.example.com/thumbnail.png",
         "title": "신입 디자이너가 알아야 할 실험 설계 팁",
@@ -207,7 +212,7 @@ GET /links/{linkId}
 
 ### 비동기 처리 중 응답
 
-`processingStatus`는 AI 요약 상태이며 `PENDING`, `SUCCESS`, `NEEDS_REVIEW`, `FAILED` 중 하나다.
+`processingStatus`는 AI 요약·태그·임베딩 전체 처리 상태이며 `PENDING`, `SUCCESS`, `NEEDS_REVIEW`, `FAILED` 중 하나다. 세 단계가 모두 성공해야 `SUCCESS`가 된다. 대표 이미지 색상 추출은 상태 확정 전에 완료하지만, 이미지가 없거나 다운로드·색상 추출이 실패해도 `FAILED` 사유로 보지 않는다.
 
 ```json
 {
@@ -218,9 +223,11 @@ GET /links/{linkId}
 }
 ```
 
-- 요약 처리 중에는 `aiSummary=null`로 반환한다.
+- 처리 중에는 `aiSummary=null`일 수 있다.
+- 대표 이미지 URL은 `metadata.images[0].url`에, 추출한 대표 색상은 `metadata.images[0].dominantColor`에 저장한다. 색상 추출이 실패하면 이미지 URL만 보존한다.
 - `tags`, `relatedLinks`는 현재 저장된 결과가 없으면 `[]`로 반환한다.
-- `aiSummary=null`의 원인은 `processingStatus`로 구분한다.
+- 관련 링크 후보 조회가 실패해도 상세 조회는 성공하며 `relatedLinks: []`로 반환한다.
+- 일부 분석 단계가 실패해도 성공한 단계의 `aiSummary`, `tags`는 부분 결과로 반환될 수 있다.
 - 폴더가 없으면 `folder=null`, 발행일을 수집하지 못하면 `publishedAt=null`이다.
 
 ## 링크 수정
@@ -257,6 +264,52 @@ PATCH /links/{linkId}
     }
 }
 ```
+
+## 링크 일괄 폴더 이동
+
+```http
+PATCH /links/folder
+```
+
+선택 출처와 관계없이 사용자가 소유한 활성 링크를 한 사용자 폴더 또는 미분류로 이동한다.
+
+**Request Body**
+
+```json
+{
+    "linkIds": [42, 43, 44],
+    "folderId": 7
+}
+```
+
+`folderId=null`이면 미분류로 이동한다. 전체, 즐겨찾기, 최근 삭제는 실제 폴더가 아니므로 목적지로 지정할 수 없다.
+
+- `linkIds`는 필수이며 1개 이상 100개 이하의 양의 정수 ID 배열이어야 한다.
+- 중복된 `linkIds`는 서버에서 제거하고 한 번만 처리한다.
+- `folderId`는 필수이며 양의 정수 또는 `null`이어야 한다.
+- 빈 `linkIds`, 100개 초과, 양수가 아닌 ID, 누락된 `folderId`는 `400 Bad Request`로 처리한다.
+
+**Response `200`**
+
+```json
+{
+    "success": true,
+    "data": {
+        "requestedCount": 3,
+        "movedCount": 2,
+        "unchangedCount": 1,
+        "folderId": 7
+    }
+}
+```
+
+- `requestedCount`: 중복 제거 후 요청된 링크 수
+- `movedCount`: 목적지 폴더가 달라 실제로 이동한 링크 수
+- `unchangedCount`: 이미 목적지에 있어 변경하지 않은 링크 수
+- 같은 목적지인 링크는 `updatedAt`을 변경하지 않는다.
+- 링크 하나라도 없거나, 삭제됐거나, 다른 사용자 소유이면 `404`로 전체 요청을 실패시킨다.
+- 목적지 폴더가 없거나 다른 사용자 소유여도 `404`로 전체 요청을 실패시킨다.
+- 검증과 이동은 하나의 DB transaction으로 실행하며 부분 성공하지 않는다.
 
 ## 링크 삭제
 
@@ -295,7 +348,7 @@ POST /links/{linkId}/restore
 POST /links/{linkId}/view
 ```
 
-상세 화면이 실제로 노출된 시점에 프론트가 호출한다. 상세 조회 GET 요청 자체는 조회 시각을 변경하지 않는다. 서버 현재 시각을 `viewedAt`으로 기록하므로 Request Body는 없다.
+상세 화면을 5초 이상 본 시점에 프론트가 한 번 호출한다. 상세 조회 GET 요청 자체는 조회 시각과 조회수를 변경하지 않는다. 서버는 현재 시각을 `viewedAt`으로 기록하고, 링크에 폴더가 있으면 해당 폴더의 `viewCount`를 1 증가시킨다. Request Body는 없다.
 
 **Response `204`** No Content
 

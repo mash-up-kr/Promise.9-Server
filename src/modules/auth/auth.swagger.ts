@@ -6,14 +6,17 @@ import {
     ApiCommonErrorResponses,
     ApiCommonResponse,
 } from '../../common/swagger/api-response.decorator'
+import { USER_ERROR } from '../user/user-error.constant'
 
 import {
+    KakaoExchangeDto,
     LogoutDto,
     RefreshDto,
     SocialLoginDto,
     WithdrawDto,
 } from './dto/auth.dto'
 import {
+    KakaoExchangeResponseDto,
     SocialLoginResponseDto,
     TokenPairResponseDto,
 } from './dto/auth.response.dto'
@@ -34,22 +37,27 @@ const TOKEN_PAIR_RESPONSE_EXAMPLE = {
 }
 
 const SOCIAL_LOGIN_DESCRIPTION = `
-현재 Google 로그인만 구현되어 있습니다.
+Google, Kakao, Apple 소셜 로그인을 지원합니다.
 
-- \`provider=google\`: 현재 사용 가능
-- \`provider=kakao\`: 요청 계약만 열어 둔 TODO입니다. Kakao provider가 연결되기 전에는 \`400 Bad Request\`와 \`errorCode=950004\`를 반환합니다.
+- \`provider=google\`: Google ID 토큰 검증 (OAuth2Client, audience=GOOGLE_CLIENT_ID)
+- \`provider=kakao\`: Kakao OIDC ID 토큰 검증 (JWKS, audience=KAKAO_CLIENT_ID)
+- \`provider=apple\`: Apple OIDC ID 토큰 검증 (JWKS, audience=APPLE_CLIENT_ID)
+
+이메일이 이미 다른 provider로 가입돼 있으면 자동으로 병합하지 않고
+\`409 Conflict\`(\`errorCode=960002\`)를 반환합니다. 같은 사람이어도
+provider마다 별개 계정이며, 기존에 가입한 provider로 로그인해야 합니다.
 `
 
 export const ApiSocialLogin = () =>
     applyDecorators(
         ApiOperation({
-            summary: '소셜 로그인 (Google 지원 / Kakao TODO)',
+            summary: '소셜 로그인 (Google / Kakao / Apple)',
             description: SOCIAL_LOGIN_DESCRIPTION,
         }),
         ApiBody({
             type: SocialLoginDto,
             description:
-                '- `provider` (필수): 현재 `google`만 지원\n- `idToken` (필수): 소셜 로그인 제공자가 발급한 ID 토큰',
+                '- `provider` (필수): `google` | `kakao` | `apple`\n- `idToken` (필수): 소셜 로그인 제공자가 발급한 ID 토큰',
         }),
         ApiCommonResponse(SocialLoginResponseDto, {
             description: '로그인 성공',
@@ -59,6 +67,50 @@ export const ApiSocialLogin = () =>
             COMMON_ERROR.VALIDATION,
             AUTH_ERROR.INVALID_SOCIAL_TOKEN,
             AUTH_ERROR.UNSUPPORTED_PROVIDER,
+            USER_ERROR.EMAIL_ALREADY_REGISTERED,
+        ),
+    )
+
+const KAKAO_EXCHANGE_DESCRIPTION = `
+웹에서만 사용합니다. Kakao OIDC는 response_type=code로 고정되어 있어,
+웹은 client_secret 노출 없이 idToken을 얻을 방법이 없습니다. 프론트가
+authorization code를 이 엔드포인트로 넘기면 서버가 대신 Kakao token
+endpoint와 교환해 idToken을 돌려줍니다. 이후 그 idToken을
+\`POST /auth/social\` (\`provider=kakao\`)에 그대로 넘겨 로그인을 완료하세요.
+
+⚠️ **선행 조건**: idToken은 순수 OAuth가 아니라 OIDC 확장 기능이라,
+이 code를 발급받는 authorize 요청의 \`scope\`에 \`openid\`가 반드시
+포함되어야 발급됩니다. 빠뜨리면 \`response_type=code\` 자체는 정상적으로
+code를 내주지만, token 교환 응답에 idToken이 없어 이 엔드포인트가 항상
+\`KAKAO_EXCHANGE_FAILED\`를 반환합니다.
+
+\`\`\`
+https://kauth.kakao.com/oauth/authorize?client_id=...&redirect_uri=...&response_type=code&scope=openid
+\`\`\`
+
+iOS/Android 네이티브 앱은 SDK가 idToken을 직접 발급하므로 이 엔드포인트가
+필요 없습니다.
+`
+
+export const ApiKakaoExchange = () =>
+    applyDecorators(
+        ApiOperation({
+            summary: 'Kakao 웹 로그인용 code→idToken 교환 (웹 전용)',
+            description: KAKAO_EXCHANGE_DESCRIPTION,
+        }),
+        ApiBody({
+            type: KakaoExchangeDto,
+            description:
+                '- `code` (필수): Kakao authorization code\n- `redirectUri` (필수): code 발급에 사용한 redirect_uri와 동일한 값',
+        }),
+        ApiCommonResponse(KakaoExchangeResponseDto, {
+            description: '교환 성공',
+            dataExample: { idToken: ACCESS_TOKEN_EXAMPLE },
+        }),
+        ApiCommonErrorResponses(
+            COMMON_ERROR.VALIDATION,
+            AUTH_ERROR.KAKAO_EXCHANGE_FAILED,
+            AUTH_ERROR.KAKAO_UPSTREAM_UNAVAILABLE,
         ),
     )
 

@@ -6,11 +6,15 @@ import {
 } from '../../../common/exception/error.util'
 import { AiService } from '../../ai/ai.service'
 import { AiLinkAnalysisInput } from '../../ai/ai.type'
+import { ImageColorService } from '../../image-color/image-color.service'
 import { LinkContentService } from '../content/link-content.service'
-import { CollectedLinkContent } from '../content/link-content.type'
+import {
+    CollectedLinkContent,
+    CollectedLinkImage,
+} from '../content/link-content.type'
+import { EmbeddingService } from '../embedding/embedding.service'
 import { LinkRepository, LinkUpdatePatch } from '../link.repository'
 import { LinkMetadata } from '../link.schema'
-import { EmbeddingService } from '../search/embedding.service'
 
 import { classifyFailure } from './link-analysis.failure'
 import {
@@ -29,6 +33,7 @@ export class LinkAnalysisService {
         private readonly linkContentService: LinkContentService,
         private readonly aiService: AiService,
         private readonly embeddingService: EmbeddingService,
+        private readonly imageColorService: ImageColorService,
     ) {}
 
     // 요청받은 작업만 실행하고 작업별 결과를 돌려준다. 예외는 호출부로 던지지 않으므로
@@ -40,7 +45,6 @@ export class LinkAnalysisService {
     ): Promise<LinkAnalysisTaskResult[]> {
         const requested = new Set(tasks)
         const results: LinkAnalysisTaskResult[] = []
-
         const content = await this.collectIfNeeded(input, requested)
 
         if (requested.has('CONTENT')) {
@@ -52,7 +56,6 @@ export class LinkAnalysisService {
         }
 
         const aiInput = this.buildAiInput(input, content)
-
         const aiResults = await Promise.all([
             requested.has('SUMMARY')
                 ? this.runTask(input, 'SUMMARY', () =>
@@ -61,14 +64,14 @@ export class LinkAnalysisService {
                 : undefined,
             requested.has('TAGS')
                 ? this.runTask(input, 'TAGS', () =>
-                      this.generateAndSaveTags(aiInput, input),
+                      this.generateAndSaveTags(input, aiInput),
                   )
                 : undefined,
         ])
 
         results.push(...aiResults.filter((result) => result !== undefined))
 
-        // 임베딩은 제목·요약이 저장된 뒤 최신 행으로 실행해야 검색 품질이 올라간다.
+        // 임베딩은 제목·요약이 저장된 뒤 최신 행을 다시 조회해 실행한다.
         if (requested.has('EMBEDDING')) {
             results.push(
                 await this.runTask(input, 'EMBEDDING', () =>
@@ -80,8 +83,6 @@ export class LinkAnalysisService {
         return results
     }
 
-    // 수집 결과는 CONTENT 저장과 AI 입력이 함께 쓰므로 한 실행에서 한 번만 크롤링한다.
-    // EMBEDDING만 재시도할 때처럼 아무도 본문을 쓰지 않으면 크롤링을 건너뛴다.
     private async collectIfNeeded(
         input: LinkAnalysisInput,
         requested: Set<LinkAnalysisTask>,
@@ -97,7 +98,6 @@ export class LinkAnalysisService {
         return this.linkContentService.collect(input.url)
     }
 
-    // 작업 하나를 실행하고 예외를 결과 객체로 변환한다.
     private async runTask(
         input: LinkAnalysisInput,
         task: LinkAnalysisTask,
@@ -133,17 +133,16 @@ export class LinkAnalysisService {
         }
     }
 
-    // 화면과 검색에 사용하는 제목·설명만 저장하고, 크롤링 본문은 DB에 보관하지 않는다.
-    // collect가 실패를 null로 감추므로 수집 결과가 없으면 실패가 아닌 SKIPPED로 본다.
+    // 화면과 검색에 사용하는 제목·설명·대표 이미지만 저장하고 본문은 보관하지 않는다.
     private async saveCollectedContent(
         input: LinkAnalysisInput,
         content: CollectedLinkContent | null,
     ): Promise<LinkAnalysisTaskResult | void> {
-        if (!content?.title && !content?.description) {
+        if (!content?.title && !content?.description && !content?.image) {
             return {
                 task: 'CONTENT',
                 status: 'SKIPPED',
-                reason: '수집한 제목·설명이 없습니다.',
+                reason: '수집한 링크 정보가 없습니다.',
             }
         }
 
@@ -160,19 +159,14 @@ export class LinkAnalysisService {
             }
         }
 
-        const patch: LinkUpdatePatch = {
-            updatedAt: new Date(),
-        }
+        const patch: LinkUpdatePatch = { updatedAt: new Date() }
 
         if (content.title) {
             patch.title = content.title
         }
 
-        if (content.description) {
-            patch.metadata = this.mergeDescription(
-                row.metadata,
-                content.description,
-            )
+        if (content.description || content.image) {
+            patch.metadata = this.mergeCollectedMetadata(row.metadata, content)
         }
 
         await this.linkRepository.updateActive(
@@ -180,6 +174,7 @@ export class LinkAnalysisService {
             input.linkId,
             patch,
         )
+        await this.extractAndSaveImageColor(input, content.image ?? null)
     }
 
     // 요약 실패는 상태를 FAILED로 남긴 뒤 예외를 다시 던져 재시도 판단을 runTask에 맡긴다.
@@ -197,14 +192,13 @@ export class LinkAnalysisService {
             })
         } catch (error) {
             await this.markSummaryFailedSafe(input)
-
             throw error
         }
     }
 
     private async generateAndSaveTags(
-        aiInput: AiLinkAnalysisInput,
         input: LinkAnalysisInput,
+        aiInput: AiLinkAnalysisInput,
     ): Promise<LinkAnalysisTaskResult | void> {
         const result = await this.aiService.generateTags(aiInput)
 
@@ -219,27 +213,53 @@ export class LinkAnalysisService {
         await this.replaceAiTags(input, result.tags)
     }
 
-    // 제목·요약이 반영된 최신 행을 다시 읽어 임베딩한다. 삭제된 링크는 건너뛴다.
     private async embedLatestRow(
         input: LinkAnalysisInput,
     ): Promise<LinkAnalysisTaskResult | void> {
-        const row = await this.linkRepository.findOwned(
+        const updated = await this.embeddingService.embedLink(
             input.userId,
             input.linkId,
         )
 
-        if (!row) {
+        if (!updated) {
             return {
                 task: 'EMBEDDING',
                 status: 'SKIPPED',
-                reason: '링크를 찾을 수 없습니다.',
+                reason: '임베딩할 활성 링크 내용이 없습니다.',
             }
         }
-
-        await this.embeddingService.embedLink(row)
     }
 
-    // 사용자·규칙 태그는 보존하고 AI 태그만 transaction 안에서 멱등하게 교체한다.
+    private async extractAndSaveImageColor(
+        input: LinkAnalysisInput,
+        image: CollectedLinkImage | null,
+    ): Promise<void> {
+        if (!image) return
+
+        try {
+            const color = await this.imageColorService.extractFromUrl(image.url)
+            const row = await this.linkRepository.findAnalysisMetadata(
+                input.userId,
+                input.linkId,
+            )
+
+            if (!row) return
+
+            await this.linkRepository.updateActive(input.userId, input.linkId, {
+                metadata: this.mergeImageMetadata(
+                    row.metadata,
+                    image,
+                    color.hex,
+                ),
+                updatedAt: new Date(),
+            })
+        } catch (error) {
+            this.logger.warn(
+                `이미지 대표 색상 추출에 실패했습니다. linkId=${input.linkId}: ${describeError(error)}`,
+            )
+        }
+    }
+
     private async replaceAiTags(
         input: LinkAnalysisInput,
         generatedTags: string[],
@@ -255,7 +275,6 @@ export class LinkAnalysisService {
         )
     }
 
-    // 상태 저장 실패가 원래 실패를 덮지 않도록 로그만 남긴다.
     private async markSummaryFailedSafe(
         input: LinkAnalysisInput,
     ): Promise<void> {
@@ -272,19 +291,57 @@ export class LinkAnalysisService {
         }
     }
 
-    // 기존 metadata 확장 필드를 보존하면서 수집한 description만 갱신한다.
-    private mergeDescription(
+    private mergeCollectedMetadata(
         metadata: LinkMetadata | null,
-        description: string,
+        information: CollectedLinkContent,
     ): LinkMetadata {
+        const merged: LinkMetadata = {
+            ...metadata,
+            version: metadata?.version ?? 1,
+        }
+
+        if (information.description) {
+            merged.description = information.description
+        }
+
+        if (information.image) {
+            merged.images = this.mergeImageMetadata(
+                metadata,
+                information.image,
+            ).images
+        }
+
+        return merged
+    }
+
+    private mergeImageMetadata(
+        metadata: LinkMetadata | null,
+        image: CollectedLinkImage,
+        dominantColor?: string,
+    ): LinkMetadata {
+        const existingImages = metadata?.images ?? []
+        const existingImage = existingImages.find(
+            (candidate) => candidate.url === image.url,
+        )
+        const mergedImage = {
+            ...existingImage,
+            url: image.url,
+            source: image.source,
+            ...(dominantColor ? { dominantColor } : {}),
+        }
+
         return {
             ...metadata,
             version: metadata?.version ?? 1,
-            description,
+            images: [
+                mergedImage,
+                ...existingImages.filter(
+                    (candidate) => candidate.url !== image.url,
+                ),
+            ],
         }
     }
 
-    // 태그 중복 판단용으로 양끝·연속 공백과 영문 대소문자를 정규화한다.
     private normalizeTagName(name: string): string {
         return name.trim().replace(/\s+/g, ' ').toLowerCase()
     }

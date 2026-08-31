@@ -7,6 +7,7 @@ export type RuntimeEnvironment = 'development' | 'production'
 const DEFAULT_LLM_REQUEST_TIMEOUT_MS = 30_000
 const DEFAULT_SQS_WAIT_TIME_SECONDS = 20
 const DEFAULT_SQS_VISIBILITY_TIMEOUT_SECONDS = 300
+const DEFAULT_EMAIL_SES_REGION = 'ap-northeast-2'
 
 // drizzle.config.ts에서 사용 — DB 접속 정보만 검증
 const dbEnvSchema = z
@@ -44,6 +45,13 @@ const appEnvSchema = z
         JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
         JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
         GOOGLE_CLIENT_ID: z.string().min(1),
+        KAKAO_CLIENT_ID: z.string().min(1),
+        // 카카오 로그인 콘솔에서 Client Secret 사용을 켠 경우에만 필요 (기본값 OFF)
+        KAKAO_CLIENT_SECRET: z.string().min(1).optional(),
+        // 네이티브(iOS/Android) SDK가 발급하는 id_token의 aud는 REST API 키가 아니라
+        // 네이티브 앱 키라, 두 값을 모두 audience로 허용해야 앱 로그인이 검증된다.
+        KAKAO_NATIVE_APP_KEY: z.string().min(1),
+        APPLE_CLIENT_ID: z.string().min(1),
         MASTER_ACCESS_TOKEN: z.string().optional(),
         MASTER_USER_ID: z.coerce.number().int().positive().optional(),
         LLM_DEFAULT_MODEL: z.enum(LLM_MODEL).default(LLM_MODEL.GPT_5_4_MINI),
@@ -74,6 +82,12 @@ const appEnvSchema = z
             .min(1)
             .max(43_200)
             .default(DEFAULT_SQS_VISIBILITY_TIMEOUT_SECONDS),
+        EMAIL_SES_REGION: z.string().min(1).default(DEFAULT_EMAIL_SES_REGION),
+        EMAIL_FROM_ADDRESS: z.email().optional(),
+        EMAIL_CONFIGURATION_SET: z.string().min(1).optional(),
+        AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
+        AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+        AWS_SESSION_TOKEN: z.string().min(1).optional(),
     })
     .superRefine((env, ctx) => {
         const key = getDatabaseUrlKey(env.APP_ENV)
@@ -83,6 +97,35 @@ const appEnvSchema = z
                 code: 'custom',
                 path: [key],
                 message: `${key} 환경변수가 필요합니다.`,
+            })
+        }
+
+        if (
+            Boolean(env.AWS_ACCESS_KEY_ID) !==
+            Boolean(env.AWS_SECRET_ACCESS_KEY)
+        ) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['AWS_ACCESS_KEY_ID'],
+                message:
+                    'AWS_ACCESS_KEY_ID와 AWS_SECRET_ACCESS_KEY는 함께 설정해야 합니다.',
+            })
+        }
+
+        if (env.AWS_SESSION_TOKEN && !env.AWS_ACCESS_KEY_ID) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['AWS_SESSION_TOKEN'],
+                message:
+                    'AWS_SESSION_TOKEN을 사용하려면 AWS access key도 설정해야 합니다.',
+            })
+        }
+
+        if (env.APP_ENV === 'production' && !env.OPENAI_API_KEY) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['OPENAI_API_KEY'],
+                message: 'production 환경에서는 OPENAI_API_KEY가 필요합니다.',
             })
         }
     })

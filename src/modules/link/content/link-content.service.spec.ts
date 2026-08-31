@@ -1,5 +1,6 @@
 import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
 
+import { LINK_CONTENT_IMAGE_URL_MAX_LENGTH } from './link-content.constants'
 import { LinkContentService } from './link-content.service'
 
 describe('LinkContentService', () => {
@@ -12,7 +13,13 @@ describe('LinkContentService', () => {
     beforeEach(() => {
         urlSecurity = {
             parseHttpUrl: jest.fn((rawUrl: string, baseUrl?: URL) => {
-                return new URL(rawUrl, baseUrl)
+                const url = new URL(rawUrl, baseUrl)
+
+                if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+                    throw new Error('unsupported protocol')
+                }
+
+                return url
             }),
             resolvePublicUrl: jest.fn().mockResolvedValue({
                 address: '93.184.216.34',
@@ -58,6 +65,7 @@ describe('LinkContentService', () => {
                     <html>
                         <head>
                             <meta property="og:title" content="링크 제목" />
+                            <meta property="og:image" content="/thumbnail.png" />
                             <meta name="description" content="링크 설명" />
                             <script>제외할 코드</script>
                         </head>
@@ -72,6 +80,77 @@ describe('LinkContentService', () => {
             title: '링크 제목',
             description: '링크 설명',
             content: '본문 & 내용',
+            image: {
+                url: 'https://example.com/thumbnail.png',
+                source: 'og:image',
+            },
+        })
+    })
+
+    it('twitter:image만 있는 페이지도 대표 이미지 출처와 함께 수집한다', async () => {
+        fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 404 }))
+            .mockResolvedValueOnce(
+                htmlResponse(`
+                    <meta name="twitter:image" content="/twitter.png" />
+                `),
+            )
+
+        const result = await service.collect('https://example.com/article')
+
+        expect(result).toEqual({
+            title: null,
+            description: null,
+            content: null,
+            image: {
+                url: 'https://example.com/twitter.png',
+                source: 'twitter:image',
+            },
+        })
+    })
+
+    it.each([
+        ['HTTP 이외 스킴', 'data:image/png;base64,AAAA'],
+        [
+            '최대 길이를 초과한 URL',
+            `https://cdn.example/${'a'.repeat(LINK_CONTENT_IMAGE_URL_MAX_LENGTH)}`,
+        ],
+    ])('%s의 대표 이미지는 저장하지 않는다', async (_case, imageUrl) => {
+        fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 404 }))
+            .mockResolvedValueOnce(
+                htmlResponse(`
+                    <meta property="og:title" content="링크 제목" />
+                    <meta property="og:image" content="${imageUrl}" />
+                `),
+            )
+
+        const result = await service.collect('https://example.com/article')
+
+        expect(result).toMatchObject({
+            title: '링크 제목',
+            image: null,
+        })
+    })
+
+    it('공개 호스트로 검증되지 않은 대표 이미지는 저장하지 않는다', async () => {
+        urlSecurity.resolvePublicUrl
+            .mockResolvedValueOnce({ address: '93.184.216.34' })
+            .mockRejectedValueOnce(new Error('private address'))
+        fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 404 }))
+            .mockResolvedValueOnce(
+                htmlResponse(`
+                    <meta property="og:title" content="링크 제목" />
+                    <meta property="og:image" content="http://127.0.0.1/private.png" />
+                `),
+            )
+
+        const result = await service.collect('https://example.com/article')
+
+        expect(result).toMatchObject({
+            title: '링크 제목',
+            image: null,
         })
     })
 

@@ -20,8 +20,10 @@ import {
     NodeVibrantImageColorResult,
     NodeVibrantPaletteColor,
 } from './types/node-vibrant-image-color.type'
+import { ImageAnalysisPreprocessor } from './image-analysis-preprocessor.service'
 import {
     EMPTY_NODE_VIBRANT_RESULT,
+    IMAGE_COLOR_ANALYSIS_LIMIT,
     IMAGE_COLOR_SELECTION_PRIORITY,
     IMAGE_COLOR_SELECTION_SOURCE,
     ImageColorSelectionSource,
@@ -31,8 +33,12 @@ import { toImageColorValue } from './image-color.util'
 
 @Injectable()
 export class ImageColorService {
+    private activeAnalysisCount = 0
+    private readonly analysisWaiters: Array<() => void> = []
+
     constructor(
         private readonly imageFetcher: ImageFetcherService,
+        private readonly imagePreprocessor: ImageAnalysisPreprocessor,
         private readonly sharpAnalyzer: SharpImageColorAnalyzer,
         private readonly nodeVibrantAnalyzer: NodeVibrantImageColorAnalyzer,
     ) {}
@@ -41,33 +47,44 @@ export class ImageColorService {
         imageUrl: string,
         options: ImageColorExtractOptions = {},
     ): Promise<SelectedImageColor> {
-        const { preferredColor, ...fetchOptions } = options
-        const image = await this.imageFetcher.fetch(imageUrl, fetchOptions)
-        // 단일 색상 선택 API는 node-vibrant 실패 시 sharp 결과로 보정한다.
-        const sharpPromise = this.sharpAnalyzer.analyze(image)
-        const nodeVibrantPromise = this.analyzeNodeVibrantOrEmpty(image)
-        const sharp = await sharpPromise
-        const nodeVibrant = await nodeVibrantPromise
-        const analysis = this.createAnalysisResult(image, sharp, nodeVibrant)
+        return this.withAnalysisSlot(async () => {
+            const { preferredColor, ...fetchOptions } = options
+            const image = await this.imageFetcher.fetch(imageUrl, fetchOptions)
+            const preparedImage = await this.imagePreprocessor.prepare(image)
+            // 단일 색상 선택 API는 node-vibrant 실패 시 sharp 결과로 보정한다.
+            const sharpPromise = this.sharpAnalyzer.analyze(preparedImage)
+            const nodeVibrantPromise =
+                this.analyzeNodeVibrantOrEmpty(preparedImage)
+            const sharp = await sharpPromise
+            const nodeVibrant = await nodeVibrantPromise
+            const analysis = this.createAnalysisResult(
+                image,
+                sharp,
+                nodeVibrant,
+            )
 
-        return this.selectColor(analysis, preferredColor)
+            return this.selectColor(analysis, preferredColor)
+        })
     }
 
     async extractAllFromUrl(
         imageUrl: string,
         options: ImageFetchOptions = {},
     ): Promise<ImageColorAnalysisResult> {
-        const image = await this.imageFetcher.fetch(imageUrl, options)
+        return this.withAnalysisSlot(async () => {
+            const image = await this.imageFetcher.fetch(imageUrl, options)
 
-        return this.analyzeImage(image)
+            return this.analyzeImage(image)
+        })
     }
 
     private async analyzeImage(
         image: FetchedImage,
     ): Promise<ImageColorAnalysisResult> {
+        const preparedImage = await this.imagePreprocessor.prepare(image)
         const [sharp, nodeVibrant] = await Promise.all([
-            this.sharpAnalyzer.analyze(image),
-            this.nodeVibrantAnalyzer.analyze(image),
+            this.sharpAnalyzer.analyze(preparedImage),
+            this.nodeVibrantAnalyzer.analyze(preparedImage),
         ])
 
         return this.createAnalysisResult(image, sharp, nodeVibrant)
@@ -101,6 +118,41 @@ export class ImageColorService {
 
             throw error
         }
+    }
+
+    // 웹 프로세스에서 동시에 디코딩하는 이미지 수를 제한해 메모리 급증을 막는다.
+    private async withAnalysisSlot<T>(task: () => Promise<T>): Promise<T> {
+        await this.acquireAnalysisSlot()
+
+        try {
+            return await task()
+        } finally {
+            this.releaseAnalysisSlot()
+        }
+    }
+
+    private acquireAnalysisSlot(): Promise<void> {
+        if (
+            this.activeAnalysisCount < IMAGE_COLOR_ANALYSIS_LIMIT.maxConcurrency
+        ) {
+            this.activeAnalysisCount += 1
+            return Promise.resolve()
+        }
+
+        return new Promise((resolve) => {
+            this.analysisWaiters.push(resolve)
+        })
+    }
+
+    private releaseAnalysisSlot(): void {
+        const next = this.analysisWaiters.shift()
+
+        if (next) {
+            next()
+            return
+        }
+
+        this.activeAnalysisCount -= 1
     }
 
     private selectColor(
