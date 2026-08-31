@@ -7,12 +7,9 @@ import { EmbeddingService } from '../embedding/embedding.service'
 import { LinkRepository, LinkUpdatePatch } from '../link.repository'
 import { LinkMetadata } from '../link.schema'
 
+import { LINK_ANALYSIS_TASKS } from './link-analysis.constant'
 import { LinkAnalysisService } from './link-analysis.service'
-import {
-    LINK_ANALYSIS_TASKS,
-    LinkAnalysisTask,
-    LinkAnalysisTaskResult,
-} from './link-analysis.type'
+import { LinkAnalysisTask, LinkAnalysisTaskResult } from './link-analysis.type'
 
 const INPUT = {
     linkId: 1,

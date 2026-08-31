@@ -16,9 +16,9 @@ import { EmbeddingService } from '../embedding/embedding.service'
 import { LinkRepository, LinkUpdatePatch } from '../link.repository'
 import { LinkMetadata } from '../link.schema'
 
+import { LINK_ANALYSIS_CONTENT_DEPENDENT_TASKS } from './link-analysis.constant'
 import { classifyFailure } from './link-analysis.failure'
 import {
-    LINK_ANALYSIS_CONTENT_DEPENDENT_TASKS,
     LinkAnalysisFailureKind,
     LinkAnalysisInput,
     LinkAnalysisTask,

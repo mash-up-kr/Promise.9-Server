@@ -5,13 +5,15 @@ import {
     describeErrorStack,
 } from '../../../common/exception/error.util'
 
-import { isRetryableFailure } from './link-analysis.failure'
-import { LinkAnalysisQueuePublisher } from './link-analysis.publisher'
-import { LinkAnalysisService } from './link-analysis.service'
 import {
     LINK_ANALYSIS_MAX_ATTEMPTS,
     LINK_ANALYSIS_MESSAGE_VERSION,
     LINK_ANALYSIS_TASKS,
+} from './link-analysis.constant'
+import { isRetryableFailure } from './link-analysis.failure'
+import { LinkAnalysisQueuePublisher } from './link-analysis.publisher'
+import { LinkAnalysisService } from './link-analysis.service'
+import {
     LinkAnalysisInput,
     LinkAnalysisRetryMessage,
     LinkAnalysisTask,

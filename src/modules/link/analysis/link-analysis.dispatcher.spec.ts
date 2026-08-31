@@ -1,10 +1,10 @@
 import { Logger } from '@nestjs/common'
 
+import { LINK_ANALYSIS_MAX_ATTEMPTS } from './link-analysis.constant'
 import { LinkAnalysisDispatcher } from './link-analysis.dispatcher'
 import { LinkAnalysisQueuePublisher } from './link-analysis.publisher'
 import { LinkAnalysisService } from './link-analysis.service'
 import {
-    LINK_ANALYSIS_MAX_ATTEMPTS,
     LinkAnalysisRetryMessage,
     LinkAnalysisTask,
     LinkAnalysisTaskResult,

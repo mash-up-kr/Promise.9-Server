@@ -21,12 +21,12 @@ import {
 import { ValidatedEnvironment } from '../../../config/environment'
 import { SqsService } from '../../../infrastructure/sqs/sqs.service'
 
-import { LinkAnalysisDispatcher } from './link-analysis.dispatcher'
 import {
     LINK_ANALYSIS_MESSAGE_VERSION,
     LINK_ANALYSIS_TASKS,
-    LinkAnalysisRetryMessage,
-} from './link-analysis.type'
+} from './link-analysis.constant'
+import { LinkAnalysisDispatcher } from './link-analysis.dispatcher'
+import { LinkAnalysisRetryMessage } from './link-analysis.type'
 
 // 큐 URL 오류나 IAM 권한 누락처럼 계속 실패하는 상황에서 초당 한 번씩 로그를 쌓지 않도록
 // 연속 실패에 백오프를 준다. 수신이 한 번 성공하면 다시 최소 간격으로 돌아간다.
