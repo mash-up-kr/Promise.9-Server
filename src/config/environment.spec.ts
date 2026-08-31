@@ -7,6 +7,7 @@ const developmentEnvironment = {
     JWT_REFRESH_SECRET: 'refresh-secret',
     GOOGLE_CLIENT_ID: 'google-client-id',
     KAKAO_CLIENT_ID: 'kakao-client-id',
+    KAKAO_NATIVE_APP_KEY: 'kakao-native-app-key',
     APPLE_CLIENT_ID: 'apple-client-id',
 }
 
@@ -17,6 +18,7 @@ const productionEnvironment = {
     JWT_REFRESH_SECRET: 'refresh-secret',
     GOOGLE_CLIENT_ID: 'google-client-id',
     KAKAO_CLIENT_ID: 'kakao-client-id',
+    KAKAO_NATIVE_APP_KEY: 'kakao-native-app-key',
     APPLE_CLIENT_ID: 'apple-client-id',
     OPENAI_API_KEY: 'openai-api-key',
 }
