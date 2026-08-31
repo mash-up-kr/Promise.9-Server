@@ -8,6 +8,7 @@ const DEFAULT_LLM_REQUEST_TIMEOUT_MS = 30_000
 const DEFAULT_SQS_WAIT_TIME_SECONDS = 20
 const DEFAULT_SQS_VISIBILITY_TIMEOUT_SECONDS = 300
 const DEFAULT_EMAIL_SES_REGION = 'ap-northeast-2'
+const PRODUCTION_LINK_ANALYSIS_QUEUE_NAME = 'promise9-link-analysis'
 
 // drizzle.config.ts에서 사용 — DB 접속 정보만 검증
 const dbEnvSchema = z
@@ -68,7 +69,7 @@ const appEnvSchema = z
         SQS_ENDPOINT: z.url().optional(),
         SQS_CONSUMER_ENABLED: z
             .enum(['true', 'false'])
-            .default('true')
+            .default('false')
             .transform((value) => value === 'true'),
         SQS_WAIT_TIME_SECONDS: z.coerce
             .number()
@@ -165,6 +166,22 @@ const appEnvSchema = z
                 message: 'production 환경에서는 OPENAI_API_KEY가 필요합니다.',
             })
         }
+
+        if (
+            env.APP_ENV === 'development' &&
+            env.SQS_CONSUMER_ENABLED &&
+            isProductionLinkAnalysisQueue(
+                env.SQS_LINK_ANALYSIS_QUEUE_URL,
+                env.SQS_ENDPOINT,
+            )
+        ) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['SQS_LINK_ANALYSIS_QUEUE_URL'],
+                message:
+                    'development 환경에서 production 링크 분석 큐를 소비할 수 없습니다. LocalStack(SQS_ENDPOINT)을 사용하거나 SQS_CONSUMER_ENABLED=false로 설정하세요.',
+            })
+        }
     })
     .transform((env) => ({
         ...env,
@@ -208,4 +225,16 @@ function getDatabaseUrlKey(appEnv: RuntimeEnvironment) {
     return appEnv === 'production'
         ? 'DATABASE_URL_PRODUCTION'
         : 'DATABASE_URL_DEVELOPMENT'
+}
+
+function isProductionLinkAnalysisQueue(
+    queueUrl: string | undefined,
+    endpoint: string | undefined,
+): boolean {
+    if (!queueUrl || endpoint) return false
+
+    return (
+        new URL(queueUrl).pathname.split('/').filter(Boolean).at(-1) ===
+        PRODUCTION_LINK_ANALYSIS_QUEUE_NAME
+    )
 }

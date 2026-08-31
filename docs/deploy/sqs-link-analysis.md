@@ -190,16 +190,32 @@ secret을 설정하기 전에 배포해도 앱은 정상 부팅된다(재시도�
 
 ## 환경변수
 
-필수 설정은 `AWS_REGION`, `SQS_LINK_ANALYSIS_QUEUE_URL`이다. 한 애플리케이션 인스턴스가
-API와 consumer를 함께 실행하는 것이 기본값이다. 발행만 담당할 인스턴스에서는
-`SQS_CONSUMER_ENABLED=false`로 polling을 끌 수 있다. 전체 항목과 기본값은
-`.env.example`을 참고한다.
+필수 설정은 `AWS_REGION`, `SQS_LINK_ANALYSIS_QUEUE_URL`이다. consumer는 기본으로
+비활성화되며, 실행할 인스턴스에서만 `SQS_CONSUMER_ENABLED=true`로 명시적으로
+켠다. production 배포 워크플로는 큐 URL이 설정된 경우 이 값을 함께 주입한다.
+전체 항목과 기본값은 `.env.example`을 참고한다.
+
+development 환경에서 production 큐 URL과 `SQS_CONSUMER_ENABLED=true`를 함께 설정하면
+앱이 부팅을 거부한다. 로컬 consumer를 테스트할 때는 `SQS_ENDPOINT`에 LocalStack 같은
+AWS 호환 엔드포인트를 설정한다.
 
 `SQS_LINK_ANALYSIS_QUEUE_URL`이 없으면 인라인 실행은 정상 동작하지만 재시도 발행이 실패한다.
 즉 큐 없이도 링크 저장과 분석은 되고, 일시적 실패에 대한 재시도만 사라진다.
 
 visibility timeout과 DLQ 연결은 큐 스택이 코드의 기본값과 맞춰 정의하므로 따로 확인할
 필요는 없다. 큐 설정을 바꿀 때는 콘솔이 아니라 `infra/lib/queue-stack.ts`를 고친다.
+
+<br>
+
+## Consumer 워커 분리 기준
+
+현재 production은 API와 SQS consumer를 한 프로세스에서 실행한다. 다음 중 하나라도
+해당하면 consumer를 별도 워커로 분리한다.
+
+- 큐 depth가 일시적 장애 후에도 0으로 복구되지 않는다.
+- 재시도 처리 중 API p95 latency가 의미 있게 증가한다.
+- API 인스턴스를 두 대 이상으로 확장해야 한다.
+- 리마인드 배치 등 다른 백그라운드 작업이 같은 프로세스에 추가된다.
 
 <br>
 

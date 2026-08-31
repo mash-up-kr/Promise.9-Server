@@ -129,6 +129,7 @@ jobs:
             fi
             if [ -n "$SQS_LINK_ANALYSIS_QUEUE_URL" ]; then
               printf 'SQS_LINK_ANALYSIS_QUEUE_URL=%s\n' "$SQS_LINK_ANALYSIS_QUEUE_URL"
+              printf 'SQS_CONSUMER_ENABLED=true\n'
             fi
 
             printf 'EMAIL_SES_REGION=ap-northeast-2\n'
