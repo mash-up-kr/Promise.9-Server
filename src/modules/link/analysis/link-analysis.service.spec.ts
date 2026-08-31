@@ -173,6 +173,22 @@ describe('LinkAnalysisService', () => {
         ])
     })
 
+    it('일시적인 수집 실패는 CONTENT·SUMMARY·TAGS를 재시도 대상으로 남긴다', async () => {
+        const error = new Error('collection failed')
+        linkContentService.collect.mockRejectedValueOnce(error)
+
+        const results = await service.run(INPUT, ['CONTENT', 'SUMMARY', 'TAGS'])
+
+        expect(results).toEqual([
+            { task: 'CONTENT', status: 'FAILED', kind: 'RETRYABLE', error },
+            { task: 'SUMMARY', status: 'FAILED', kind: 'RETRYABLE', error },
+            { task: 'TAGS', status: 'FAILED', kind: 'RETRYABLE', error },
+        ])
+        expect(aiService.generateSummary).not.toHaveBeenCalled()
+        expect(aiService.generateTags).not.toHaveBeenCalled()
+        expect(linkRepository.updateActive).not.toHaveBeenCalled()
+    })
+
     it('4xx 태그 실패를 PERMANENT로 분류한다', async () => {
         aiService.generateTags.mockRejectedValueOnce(new NotFoundException())
 

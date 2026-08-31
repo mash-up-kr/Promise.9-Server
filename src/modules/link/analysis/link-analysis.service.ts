@@ -24,6 +24,15 @@ import {
     LinkAnalysisTaskResult,
 } from './link-analysis.type'
 
+type ContentCollectionResult =
+    | { status: 'SUCCESS'; content: CollectedLinkContent | null }
+    | { status: 'FAILED'; error: unknown }
+
+const LINK_ANALYSIS_COLLECTION_TASKS = [
+    'CONTENT',
+    ...LINK_ANALYSIS_CONTENT_DEPENDENT_TASKS,
+] as const
+
 @Injectable()
 export class LinkAnalysisService {
     private readonly logger = new Logger(LinkAnalysisService.name)
@@ -45,31 +54,45 @@ export class LinkAnalysisService {
     ): Promise<LinkAnalysisTaskResult[]> {
         const requested = new Set(tasks)
         const results: LinkAnalysisTaskResult[] = []
-        const content = await this.collectIfNeeded(input, requested)
+        const collection = await this.collectIfNeeded(input, requested)
 
-        if (requested.has('CONTENT')) {
-            results.push(
-                await this.runTask(input, 'CONTENT', () =>
-                    this.saveCollectedContent(input, content),
-                ),
+        if (collection.status === 'FAILED') {
+            // 수집 결과가 필요한 작업은 URL만으로 실행하지 않고 같은 수집 오류를 남긴다.
+            // dispatcher가 요청된 작업만 재발행하므로 단독 SUMMARY/TAGS 재시도도 보존된다.
+            const failedResults = LINK_ANALYSIS_COLLECTION_TASKS.filter(
+                (task) => requested.has(task),
+            ).map((task) =>
+                this.toFailedTaskResult(input, task, collection.error),
             )
+
+            results.push(...failedResults)
+        } else {
+            const content = collection.content
+
+            if (requested.has('CONTENT')) {
+                results.push(
+                    await this.runTask(input, 'CONTENT', () =>
+                        this.saveCollectedContent(input, content),
+                    ),
+                )
+            }
+
+            const aiInput = this.buildAiInput(input, content)
+            const aiResults = await Promise.all([
+                requested.has('SUMMARY')
+                    ? this.runTask(input, 'SUMMARY', () =>
+                          this.generateAndSaveSummary(input, aiInput),
+                      )
+                    : undefined,
+                requested.has('TAGS')
+                    ? this.runTask(input, 'TAGS', () =>
+                          this.generateAndSaveTags(input, aiInput),
+                      )
+                    : undefined,
+            ])
+
+            results.push(...aiResults.filter((result) => result !== undefined))
         }
-
-        const aiInput = this.buildAiInput(input, content)
-        const aiResults = await Promise.all([
-            requested.has('SUMMARY')
-                ? this.runTask(input, 'SUMMARY', () =>
-                      this.generateAndSaveSummary(input, aiInput),
-                  )
-                : undefined,
-            requested.has('TAGS')
-                ? this.runTask(input, 'TAGS', () =>
-                      this.generateAndSaveTags(input, aiInput),
-                  )
-                : undefined,
-        ])
-
-        results.push(...aiResults.filter((result) => result !== undefined))
 
         // 임베딩은 제목·요약이 저장된 뒤 최신 행을 다시 조회해 실행한다.
         if (requested.has('EMBEDDING')) {
@@ -86,16 +109,25 @@ export class LinkAnalysisService {
     private async collectIfNeeded(
         input: LinkAnalysisInput,
         requested: Set<LinkAnalysisTask>,
-    ): Promise<CollectedLinkContent | null> {
+    ): Promise<ContentCollectionResult> {
         const needsContent =
             requested.has('CONTENT') ||
             LINK_ANALYSIS_CONTENT_DEPENDENT_TASKS.some((task) =>
                 requested.has(task),
             )
 
-        if (!needsContent) return null
+        if (!needsContent) {
+            return { status: 'SUCCESS', content: null }
+        }
 
-        return this.linkContentService.collect(input.url)
+        try {
+            return {
+                status: 'SUCCESS',
+                content: await this.linkContentService.collect(input.url),
+            }
+        } catch (error) {
+            return { status: 'FAILED', error }
+        }
     }
 
     private async runTask(
@@ -106,17 +138,25 @@ export class LinkAnalysisService {
         try {
             return (await execute()) ?? { task, status: 'SUCCESS' }
         } catch (error) {
-            this.logger.error(
-                `링크 분석 작업이 실패했습니다. task=${task}, linkId=${input.linkId}: ${describeError(error)}`,
-                describeErrorStack(error),
-            )
+            return this.toFailedTaskResult(input, task, error)
+        }
+    }
 
-            return {
-                task,
-                status: 'FAILED',
-                kind: classifyFailure(error),
-                error,
-            }
+    private toFailedTaskResult(
+        input: LinkAnalysisInput,
+        task: LinkAnalysisTask,
+        error: unknown,
+    ): LinkAnalysisTaskResult {
+        this.logger.error(
+            `링크 분석 작업이 실패했습니다. task=${task}, linkId=${input.linkId}: ${describeError(error)}`,
+            describeErrorStack(error),
+        )
+
+        return {
+            task,
+            status: 'FAILED',
+            kind: classifyFailure(error),
+            error,
         }
     }
 
