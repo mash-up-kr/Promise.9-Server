@@ -19,6 +19,7 @@ import { LinkMetadata } from '../link.schema'
 import { classifyFailure } from './link-analysis.failure'
 import {
     LINK_ANALYSIS_CONTENT_DEPENDENT_TASKS,
+    LinkAnalysisFailureKind,
     LinkAnalysisInput,
     LinkAnalysisTask,
     LinkAnalysisTaskResult,
@@ -31,6 +32,12 @@ type ContentCollectionResult =
 const LINK_ANALYSIS_COLLECTION_TASKS = [
     'CONTENT',
     ...LINK_ANALYSIS_CONTENT_DEPENDENT_TASKS,
+] as const
+
+const LINK_ANALYSIS_EMBEDDING_DEPENDENCIES = [
+    'CONTENT',
+    'SUMMARY',
+    'TAGS',
 ] as const
 
 @Injectable()
@@ -94,12 +101,28 @@ export class LinkAnalysisService {
             results.push(...aiResults.filter((result) => result !== undefined))
         }
 
-        // 임베딩은 제목·요약이 저장된 뒤 최신 행을 다시 조회해 실행한다.
+        // 임베딩은 제목·요약·태그가 모두 저장된 뒤 최신 행을 다시 조회해 실행한다.
+        // 선행 작업이 실패했다면 오래된 값으로 벡터를 만들지 않고 함께 재시도한다.
         if (requested.has('EMBEDDING')) {
+            const dependencyFailures = results.filter(
+                (
+                    result,
+                ): result is Extract<
+                    LinkAnalysisTaskResult,
+                    { status: 'FAILED' }
+                > =>
+                    result.status === 'FAILED' &&
+                    LINK_ANALYSIS_EMBEDDING_DEPENDENCIES.some(
+                        (task) => task === result.task,
+                    ),
+            )
+
             results.push(
-                await this.runTask(input, 'EMBEDDING', () =>
-                    this.embedLatestRow(input),
-                ),
+                dependencyFailures.length > 0
+                    ? this.toBlockedEmbeddingResult(dependencyFailures)
+                    : await this.runTask(input, 'EMBEDDING', () =>
+                          this.embedLatestRow(input),
+                      ),
             )
         }
 
@@ -157,6 +180,28 @@ export class LinkAnalysisService {
             status: 'FAILED',
             kind: classifyFailure(error),
             error,
+        }
+    }
+
+    private toBlockedEmbeddingResult(
+        dependencyFailures: Array<
+            Extract<LinkAnalysisTaskResult, { status: 'FAILED' }>
+        >,
+    ): LinkAnalysisTaskResult {
+        const failedTasks = dependencyFailures.map((result) => result.task)
+        const kind: LinkAnalysisFailureKind = dependencyFailures.some(
+            (result) => result.kind === 'RETRYABLE',
+        )
+            ? 'RETRYABLE'
+            : 'PERMANENT'
+
+        return {
+            task: 'EMBEDDING',
+            status: 'FAILED',
+            kind,
+            error: new Error(
+                `선행 링크 분석 작업이 실패했습니다. tasks=${failedTasks.join(',')}`,
+            ),
         }
     }
 

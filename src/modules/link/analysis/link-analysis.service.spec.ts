@@ -173,20 +173,75 @@ describe('LinkAnalysisService', () => {
         ])
     })
 
+    it('선행 작업이 일시 실패하면 오래된 데이터로 임베딩하지 않고 함께 재시도한다', async () => {
+        const error = new Error('summary failed')
+        aiService.generateSummary.mockRejectedValueOnce(error)
+
+        const results = await service.run(INPUT, LINK_ANALYSIS_TASKS)
+
+        expect(findResult(results, 'SUMMARY')).toEqual(
+            expect.objectContaining({ status: 'FAILED', kind: 'RETRYABLE' }),
+        )
+        expect(findResult(results, 'EMBEDDING')).toEqual(
+            expect.objectContaining({ status: 'FAILED', kind: 'RETRYABLE' }),
+        )
+        expect(embeddingService.embedLink).not.toHaveBeenCalled()
+    })
+
+    it('선행 작업 재시도가 성공하면 저장을 마친 뒤 임베딩한다', async () => {
+        embeddingService.embedLink.mockImplementationOnce(() => {
+            expect(updatePatches).toContainEqual(
+                expect.objectContaining({
+                    aiSummary: '요약',
+                    aiSummaryStatus: 'SUCCESS',
+                }),
+            )
+            return Promise.resolve(true)
+        })
+
+        const results = await service.run(INPUT, ['SUMMARY', 'EMBEDDING'])
+
+        expect(results).toEqual([
+            { task: 'SUMMARY', status: 'SUCCESS' },
+            { task: 'EMBEDDING', status: 'SUCCESS' },
+        ])
+        expect(embeddingService.embedLink).toHaveBeenCalledWith(2, 1)
+    })
+
+    it('선행 작업이 영구 실패하면 임베딩도 영구 실패로 남긴다', async () => {
+        aiService.generateTags.mockRejectedValueOnce(new NotFoundException())
+
+        const results = await service.run(INPUT, ['TAGS', 'EMBEDDING'])
+
+        expect(findResult(results, 'TAGS')).toEqual(
+            expect.objectContaining({ status: 'FAILED', kind: 'PERMANENT' }),
+        )
+        expect(findResult(results, 'EMBEDDING')).toEqual(
+            expect.objectContaining({ status: 'FAILED', kind: 'PERMANENT' }),
+        )
+        expect(embeddingService.embedLink).not.toHaveBeenCalled()
+    })
+
     it('일시적인 수집 실패는 CONTENT·SUMMARY·TAGS를 재시도 대상으로 남긴다', async () => {
         const error = new Error('collection failed')
         linkContentService.collect.mockRejectedValueOnce(error)
 
-        const results = await service.run(INPUT, ['CONTENT', 'SUMMARY', 'TAGS'])
+        const results = await service.run(INPUT, LINK_ANALYSIS_TASKS)
 
         expect(results).toEqual([
             { task: 'CONTENT', status: 'FAILED', kind: 'RETRYABLE', error },
             { task: 'SUMMARY', status: 'FAILED', kind: 'RETRYABLE', error },
             { task: 'TAGS', status: 'FAILED', kind: 'RETRYABLE', error },
+            expect.objectContaining({
+                task: 'EMBEDDING',
+                status: 'FAILED',
+                kind: 'RETRYABLE',
+            }),
         ])
         expect(aiService.generateSummary).not.toHaveBeenCalled()
         expect(aiService.generateTags).not.toHaveBeenCalled()
         expect(linkRepository.updateActive).not.toHaveBeenCalled()
+        expect(embeddingService.embedLink).not.toHaveBeenCalled()
     })
 
     it('4xx 태그 실패를 PERMANENT로 분류한다', async () => {
