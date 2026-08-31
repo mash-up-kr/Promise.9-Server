@@ -120,11 +120,10 @@ where ai_summary_status = 'PENDING'
 | 환경 | 큐 | DLQ |
 | --- | --- | --- |
 | production | `promise9-link-analysis` | `promise9-link-analysis-dlq` |
-| stage | `promise9-link-analysis-stage` | `promise9-link-analysis-stage-dlq` |
 
-**환경별로 큐를 분리한다.** stage와 production은 서로 다른 DB를 쓰기 때문에, 큐를
-공유하면 stage consumer가 production 재시도 메시지를 가져가 링크를 찾지 못하고 건너뛰어
-production 쪽 재시도가 조용히 사라진다.
+현재 배포 대상은 production 하나이므로 stage 큐를 별도로 생성하지 않는다. 기존
+stage 큐와 DLQ는 `RemovalPolicy.RETAIN`이 적용돼 스택에서 제거해도 AWS에는 보존된다.
+더 이상 필요하지 않은지 확인한 뒤 수동으로 삭제한다.
 
 적용되는 설정은 아래와 같다.
 
@@ -146,7 +145,7 @@ bun run diff Promise9QueueStack    # 변경 사항 확인
 bun run deploy Promise9QueueStack  # 큐·DLQ·IAM 사용자 생성
 ```
 
-스택 출력값 `ProductionQueueUrl`, `StageQueueUrl`이 각 환경의
+스택 출력값 `ProductionQueueUrl`이 production의
 `SQS_LINK_ANALYSIS_QUEUE_URL`에 넣을 값이다.
 
 Standard queue는 같은 메시지를 두 번 이상 전달할 수 있다. 요약·수집 결과는 동일 `linkId`를
@@ -156,7 +155,8 @@ Standard queue는 같은 메시지를 두 번 이상 전달할 수 있다. 요�
 
 ## IAM 권한
 
-큐 스택이 IAM 사용자 `Promise9AppRuntime`을 만들고, 두 큐의 ARN에만 아래 권한을 준다.
+큐 스택이 IAM 사용자 `Promise9AppRuntime`을 만들고, production 큐 ARN에만 아래
+권한을 준다.
 
 - `sqs:SendMessage`
 - `sqs:ReceiveMessage`
@@ -178,11 +178,10 @@ secret을 설정하기 전에 배포해도 앱은 정상 부팅된다(재시도�
 
 | Secret | 사용하는 워크플로 | 값 |
 | --- | --- | --- |
-| `AWS_REGION` | production, stage | `ap-northeast-2` |
+| `AWS_REGION` | production | `ap-northeast-2` |
 | `SQS_LINK_ANALYSIS_QUEUE_URL` | production | 스택 출력 `ProductionQueueUrl` |
-| `SQS_LINK_ANALYSIS_QUEUE_URL_STAGE` | stage | 스택 출력 `StageQueueUrl` |
-| `AWS_ACCESS_KEY_ID` | production, stage | `Promise9AppRuntime` 액세스 키 |
-| `AWS_SECRET_ACCESS_KEY` | production, stage | 같은 키의 시크릿 |
+| `AWS_ACCESS_KEY_ID` | production | `Promise9AppRuntime` 액세스 키 |
+| `AWS_SECRET_ACCESS_KEY` | production | 같은 키의 시크릿 |
 
 `AWS_*`에는 SQS 권한만 가진 `Promise9AppRuntime` 키를 사용한다. SES 발송 키는
 `EMAIL_SES_*` secrets로 별도 관리하며 자세한 설정은 `docs/infrastructure/ses.md`를 따른다.
@@ -219,4 +218,3 @@ visibility timeout과 DLQ 연결은 큐 스택이 코드의 기본값과 맞춰 
 | `src/config/environment.ts` | `SQS_*` 환경변수 검증 |
 | `infra/lib/queue-stack.ts` | 큐·DLQ·런타임 IAM 사용자 정의(CDK) |
 | `.github/workflows/deploy-lightsail.yml` | production 배포에 큐 환경변수 주입 |
-| `.github/workflows/deploy-stage.yml` | stage 배포에 큐 환경변수 주입 |

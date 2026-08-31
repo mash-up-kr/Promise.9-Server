@@ -34,27 +34,17 @@ export class QueueStack extends Stack {
     constructor(scope: Construct, id: string, props?: StackProps) {
         super(scope, id, props)
 
-        // production과 stage는 서로 다른 DB를 쓴다. 큐를 공유하면 stage consumer가
-        // production 재시도 메시지를 가져가 링크를 찾지 못하고 건너뛰므로 환경별로 분리한다.
         const production = this.createLinkAnalysisQueue(
             'Production',
             QUEUE_NAME,
         )
-        const stage = this.createLinkAnalysisQueue(
-            'Stage',
-            `${QUEUE_NAME}-stage`,
-        )
 
-        this.grantRuntimeAccess([production, stage])
+        this.grantRuntimeAccess(production)
 
         new CfnOutput(this, 'ProductionQueueUrl', {
             value: production.queueUrl,
             description:
                 'production 배포의 SQS_LINK_ANALYSIS_QUEUE_URL에 넣을 값',
-        })
-        new CfnOutput(this, 'StageQueueUrl', {
-            value: stage.queueUrl,
-            description: 'stage 배포의 SQS_LINK_ANALYSIS_QUEUE_URL에 넣을 값',
         })
     }
 
@@ -88,7 +78,7 @@ export class QueueStack extends Stack {
 
     // 액세스 키는 CloudFormation에 남기지 않기 위해 CDK에서 만들지 않는다.
     // 콘솔에서 발급해 GitHub Secrets(AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)에 넣는다.
-    private grantRuntimeAccess(queues: sqs.Queue[]): void {
+    private grantRuntimeAccess(queue: sqs.Queue): void {
         const runtimeUser = new iam.User(this, 'AppRuntimeUser', {
             userName: RUNTIME_USER_NAME,
         })
@@ -100,7 +90,7 @@ export class QueueStack extends Stack {
                     'sqs:ReceiveMessage',
                     'sqs:DeleteMessage',
                 ],
-                resources: queues.map((queue) => queue.queueArn),
+                resources: [queue.queueArn],
             }),
         )
     }
