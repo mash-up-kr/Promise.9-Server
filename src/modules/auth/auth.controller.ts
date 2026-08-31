@@ -10,7 +10,8 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
-import { AuthUser, JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
+import { AuthUser } from '../../common/guards/jwt-auth.guard'
+import { PrimaryAuthGuard } from '../../common/guards/primary-auth.guard'
 import { ZodValidationPipe } from '../../common/pipe/zod-validation.pipe'
 
 import {
@@ -25,6 +26,7 @@ import {
     WithdrawInput,
     withdrawSchema,
 } from './dto/auth.dto'
+import { TOKEN_PURPOSE } from './auth.constants'
 import { AuthService } from './auth.service'
 import {
     ApiExtensionToken,
@@ -61,11 +63,15 @@ export class AuthController {
 
     @Post('extension-token')
     @HttpCode(HttpStatus.OK)
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(PrimaryAuthGuard)
     @ApiBearerAuth()
     @ApiExtensionToken()
     async issueExtensionToken(@CurrentUser() user: AuthUser) {
-        return this.authService.issueTokens(user.userId)
+        return this.authService.issueTokens(
+            user.userId,
+            undefined,
+            TOKEN_PURPOSE.EXTENSION,
+        )
     }
 
     @Post('refresh')

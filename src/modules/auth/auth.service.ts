@@ -15,7 +15,12 @@ import { GoogleProvider } from './providers/google.provider'
 import { KakaoProvider } from './providers/kakao.provider'
 import { SocialProvider } from './providers/social-provider.interface'
 import { RefreshTokenRepository } from './repository/refresh-token.repository'
-import { TOKEN_TYPE, TokenType } from './auth.constants'
+import {
+    TOKEN_PURPOSE,
+    TOKEN_TYPE,
+    TokenPurpose,
+    TokenType,
+} from './auth.constants'
 import { AUTH_ERROR } from './auth-error.constant'
 import { hashToken } from './crypto.utils'
 import { parseExpiresIn } from './time.utils'
@@ -115,10 +120,16 @@ export class AuthService {
         }
 
         // Refresh Token Rotation: 기존 토큰을 soft revoke하고 새 토큰 쌍을 발급한다.
-        // 동일 family를 이어받아 rotation 체인을 유지한다.
+        // 동일 family와 purpose를 이어받아 rotation 체인을 유지한다. purpose를
+        // 이어받지 않으면 extension 토큰이 refresh 한 번으로 primary 권한을
+        // 얻어버린다.
         await this.refreshTokenRepository.revokeById(stored.id)
 
-        return this.issueTokens(payload.sub, stored.tokenFamily)
+        return this.issueTokens(
+            payload.sub,
+            stored.tokenFamily,
+            stored.purpose as TokenPurpose,
+        )
     }
 
     async logout(rawRefreshToken: string): Promise<void> {
@@ -174,9 +185,10 @@ export class AuthService {
     async issueTokens(
         userId: number,
         tokenFamily: string = randomUUID(),
+        purpose: TokenPurpose = TOKEN_PURPOSE.PRIMARY,
     ): Promise<TokenPair> {
         const accessToken = this.jwtService.sign(
-            { sub: userId, type: TOKEN_TYPE.ACCESS },
+            { sub: userId, type: TOKEN_TYPE.ACCESS, purpose },
             {
                 secret: this.accessSecret,
                 expiresIn: this.accessExpiresIn as StringValue,
@@ -198,6 +210,7 @@ export class AuthService {
             userId,
             tokenHash: hashToken(rawRefreshToken),
             tokenFamily,
+            purpose,
             expiresAt: parseExpiresIn(this.refreshExpiresIn),
         })
 
