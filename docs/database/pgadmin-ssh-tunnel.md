@@ -18,14 +18,16 @@ PEM 키는 PostgreSQL 비밀번호를 대신하지 않는다. 두 인증정보 �
 
 ```text
 pgAdmin
+  -> 로컬 OpenSSH 터널
   -> PEM 키로 Lightsail SSH 접속
   -> Lightsail 내부의 127.0.0.1:5432
   -> PostgreSQL promise9
 ```
 
-pgAdmin Desktop에서는 [방법 A](#방법-a-pgadmin-내장-ssh-tunnel-권장)를 권장한다. pgAdmin이
-PEM을 직접 관리하지 않게 하거나 내장 터널에 문제가 있을 때는
-[방법 B](#방법-b-로컬-ssh-터널--pgadmin-대안)를 사용한다.
+SSH host key를 `known_hosts`로 검증할 수 있는
+[방법 A](#방법-a-로컬-openssh-터널--pgadmin-권장)를 권장한다. pgAdmin 내장 터널은
+host key를 고정·검증할 수 있는 별도 절차가 마련된 경우에만
+[방법 B](#방법-b-pgadmin-내장-ssh-tunnel-대안)로 사용한다.
 
 ## 접속 정보
 
@@ -57,9 +59,54 @@ DNS가 CDN이나 Load Balancer를 가리키도록 변경되면 Lightsail 콘솔�
 않는다. fingerprint의 별도 저장 위치는 현재 문서화되어 있지 않으므로 최초 접속 전
 인프라 담당자에게 확인한다.
 
-## 방법 A: pgAdmin 내장 SSH Tunnel (권장)
+## 방법 A: 로컬 OpenSSH 터널 + pgAdmin (권장)
+
+터미널에서 먼저 SSH 터널을 연다. OpenSSH가 `known_hosts`의 host key를 검증하므로,
+최초 접속 때 표시되는 fingerprint가 인프라 담당자에게 전달받은 값과 일치할 때만
+등록한다.
+
+```bash
+PROMISE9_PEM_PATH="$HOME/Downloads/LightsailDefaultKey-ap-northeast-2.pem"
+
+ssh -N \
+  -L 127.0.0.1:15432:127.0.0.1:5432 \
+  -i "$PROMISE9_PEM_PATH" \
+  -o IdentitiesOnly=yes \
+  -o StrictHostKeyChecking=ask \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=3 \
+  ubuntu@api.link-ding-dong.com
+```
+
+`IdentitiesOnly=yes`는 `ssh-agent`에 등록된 다른 키를 시도하지 않고 지정한 PEM만
+사용하게 한다. `StrictHostKeyChecking=ask`는 처음 보는 host key를 자동으로 신뢰하지
+않게 한다. 기존 host key와 달라 연결이 거부되면 `known_hosts` 항목을 삭제하지 말고
+Instance 교체 여부와 새 fingerprint를 먼저 확인한다.
+
+터널을 연 터미널은 유지한다. pgAdmin의 `Connection` 탭에는 다음 값을 입력하고
+`SSH Tunnel` 탭의 `Use SSH tunneling`은 `No`로 둔다.
+
+| 필드                 | 값                                  |
+| -------------------- | ----------------------------------- |
+| Host name/address    | `127.0.0.1`                         |
+| Port                 | `15432`                             |
+| Maintenance database | `promise9`                          |
+| Username             | `promise9`                          |
+| Password             | 팀에서 전달받은 PostgreSQL 비밀번호 |
+
+`Parameters` 탭의 `SSL mode`는 `disable`로 설정한다. PostgreSQL 연결은 로컬 터널과
+Lightsail 내부의 loopback으로 전달되고, 개발자 PC와 Lightsail 사이 구간은 SSH로
+암호화된다.
+
+작업이 끝나면 pgAdmin 연결을 끊고 터널 터미널에서 `Ctrl+C`를 눌러 종료한다.
+
+## 방법 B: pgAdmin 내장 SSH Tunnel (대안)
 
 이 방법은 PEM 파일이 있는 개발자 PC에서 실행하는 pgAdmin Desktop을 기준으로 한다.
+아래 설정만으로는 OpenSSH의 `known_hosts`처럼 검증된 host key를 고정하는 절차를
+보장할 수 없다. 조직에서 별도의 host key 검증 절차를 마련한 경우에만 사용하고,
+그렇지 않으면 [방법 A](#방법-a-로컬-openssh-터널--pgadmin-권장)를 사용한다.
 
 1. Object Explorer에서 `Servers`를 우클릭하고 `Register` → `Server...`를 선택한다.
 
@@ -116,36 +163,8 @@ _`Use SSH tunneling`을 켜고 `Authentication`에서 `Identity file`을 선택�
 
 pgAdmin Web/Server mode에서는 Identity file이 pgAdmin 서버의 사용자 저장소에 올라가며
 서버 관리자가 파일에 접근할 수 있다. 장기 PEM을 업로드하지 말고, 로컬 pgAdmin Desktop을
-사용하거나 아래의 로컬 CLI 터널 방식을 사용한다.
-
-## 방법 B: 로컬 SSH 터널 + pgAdmin (대안)
-
-pgAdmin이 PEM을 직접 관리하지 않게 하려면 터미널에서 먼저 SSH 터널을 연다.
-
-```bash
-PROMISE9_PEM_PATH="$HOME/Downloads/LightsailDefaultKey-ap-northeast-2.pem"
-
-ssh -N \
-  -L 127.0.0.1:15432:127.0.0.1:5432 \
-  -i "$PROMISE9_PEM_PATH" \
-  -o ExitOnForwardFailure=yes \
-  -o ServerAliveInterval=30 \
-  -o ServerAliveCountMax=3 \
-  ubuntu@api.link-ding-dong.com
-```
-
-터널을 연 터미널은 유지한다. pgAdmin의 `Connection` 탭에는 다음 값을 입력하고
-`SSH Tunnel` 탭의 `Use SSH tunneling`은 `No`로 둔다.
-
-| 필드                 | 값                                  |
-| -------------------- | ----------------------------------- |
-| Host name/address    | `127.0.0.1`                         |
-| Port                 | `15432`                             |
-| Maintenance database | `promise9`                          |
-| Username             | `promise9`                          |
-| Password             | 팀에서 전달받은 PostgreSQL 비밀번호 |
-
-작업이 끝나면 pgAdmin 연결을 끊고 터널 터미널에서 `Ctrl+C`를 눌러 종료한다.
+사용하거나 [방법 A](#방법-a-로컬-openssh-터널--pgadmin-권장)의 로컬 OpenSSH 터널을
+사용한다.
 
 ## 연결 확인
 

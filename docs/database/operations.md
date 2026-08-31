@@ -93,37 +93,10 @@ aws login --profile promise9
 
 ### PEM 키 직접 인증
 
-AWS CLI 로그인을 사용할 수 없고 팀에서 Lightsail PEM 키를 전달받았다면 OpenSSH로
-같은 터널을 직접 열 수 있다. PEM 키는 repository 안에 복사하거나 커밋하지 않는다.
-
-```bash
-PROMISE9_PEM_PATH="$HOME/Downloads/LightsailDefaultKey-ap-northeast-2.pem"
-chmod 600 "$PROMISE9_PEM_PATH"
-
-ssh -N \
-  -L 127.0.0.1:15432:127.0.0.1:5432 \
-  -i "$PROMISE9_PEM_PATH" \
-  -o ExitOnForwardFailure=yes \
-  -o ServerAliveInterval=30 \
-  -o ServerAliveCountMax=3 \
-  ubuntu@api.link-ding-dong.com
-```
-
-- `api.link-ding-dong.com`은 현재 Lightsail Instance의 Public IP를 직접 가리킨다. DNS가
-  CDN이나 Load Balancer를 가리키도록 변경되면 Lightsail 콘솔의 현재 Public IP를 사용한다.
-- 도메인 사용 자체가 IP 직접 입력보다 SSH 연결을 더 안전하게 만들지는 않는다. 서버
-  신원은 SSH host key로 별도 검증한다.
-- 최초 접속 때 표시되는 SSH host key fingerprint는 인프라 담당자에게 전달받은 값과
-  일치할 때만 등록한다.
-- host key가 기존 값과 달라졌다면 `known_hosts` 항목을 바로 삭제하지 말고 Instance
-  교체 여부와 fingerprint를 먼저 확인한다.
-- `Permission denied (publickey)`가 발생하면 PEM 키와 SSH 사용자 `ubuntu`가 현재
-  Instance용인지 확인한다.
-- `UNPROTECTED PRIVATE KEY FILE`이 발생하면 PEM 파일 권한을 `600`으로 변경한다.
-
-터널을 연 터미널은 유지하고 다른 터미널에서 운영 DB 명령을 실행한다. 종료할 때는
-터널 터미널에서 `Ctrl+C`를 누른다. pgAdmin으로 접속할 때는
-[pgAdmin SSH Tunnel](./pgadmin-ssh-tunnel.md)을 따른다.
+AWS CLI 로그인을 사용할 수 없고 팀에서 Lightsail PEM 키를 전달받았다면
+[pgAdmin SSH Tunnel의 로컬 OpenSSH 터널 절차](./pgadmin-ssh-tunnel.md#방법-a-로컬-openssh-터널--pgadmin-권장)를
+따른다. 이 터널은 pgAdmin뿐 아니라 위의 `db:health`, `db:backup` 같은 운영 DB 명령에도
+동일하게 사용한다. PEM 키는 repository 안에 복사하거나 커밋하지 않는다.
 
 ## 운영 환경 주의사항
 
