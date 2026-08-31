@@ -4,12 +4,14 @@ import { z } from 'zod'
 import {
     LlmConfigurationError,
     LlmError,
+    LlmProviderError,
 } from '../../infrastructure/llm/llm.exception'
 import { LlmService } from '../../infrastructure/llm/llm.service'
 
 import { AiMetricService } from './metrics/ai-metric.service'
 import { AiMetricGeneratedResult } from './metrics/ai-metric.type'
 import {
+    AI_EMBEDDING_TASK_TYPE,
     AI_FAILURE_ERROR_CODE,
     AI_METRIC_STATUS,
     AI_TASK_RESPONSE_SCHEMA_NAME,
@@ -53,9 +55,16 @@ export class AiService {
 
     // 여러 텍스트를 한 번에 임베딩한다. 링크 백필처럼 배치 처리에 사용.
     async embedTexts(texts: string[]): Promise<number[][]> {
-        const { embeddings } = await this.llmService.embed(texts)
+        try {
+            const { embeddings } = await this.llmService.embed(texts)
 
-        return embeddings
+            return embeddings
+        } catch (error) {
+            throw this.createGenerationError({
+                error,
+                taskType: AI_EMBEDDING_TASK_TYPE,
+            })
+        }
     }
 
     // 수집한 링크 정보를 기반으로 최대 300자의 한국어 요약을 생성한다.
@@ -226,8 +235,30 @@ export class AiService {
             code: failure.errorCode,
             message: failure.errorMessage,
             taskType: input.taskType,
+            retryable: this.isRetryable(input.error),
             cause: input.error,
         })
+    }
+
+    // provider 응답을 재시도 가능 여부로 해석해 호출부가 provider 예외를 몰라도 되게 한다.
+    // 429를 제외한 4xx와 설정 오류는 다시 호출해도 결과가 같다.
+    // status를 알 수 없는 실패(네트워크 오류·타임아웃)와 5xx는 재시도 대상으로 본다.
+    private isRetryable(error: unknown): boolean {
+        if (error instanceof LlmConfigurationError) {
+            return false
+        }
+
+        if (
+            error instanceof LlmProviderError &&
+            error.statusCode !== undefined
+        ) {
+            const isClientError =
+                error.statusCode >= 400 && error.statusCode < 500
+
+            return !isClientError || error.statusCode === 429
+        }
+
+        return true
     }
 
     private toFailure(error: unknown): AiGenerationFailure {

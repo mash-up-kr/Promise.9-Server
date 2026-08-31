@@ -24,6 +24,54 @@ const productionEnvironment = {
 }
 
 describe('validateEnvironment', () => {
+    it('SQS consumer를 기본으로 비활성화한다', () => {
+        expect(
+            validateEnvironment(developmentEnvironment).SQS_CONSUMER_ENABLED,
+        ).toBe(false)
+    })
+
+    it('development에서 production 링크 분석 큐 consumer 활성화를 거부한다', () => {
+        expect(() =>
+            validateEnvironment({
+                ...developmentEnvironment,
+                SQS_LINK_ANALYSIS_QUEUE_URL:
+                    'https://sqs.ap-northeast-2.amazonaws.com/123456789012/promise9-link-analysis',
+                SQS_CONSUMER_ENABLED: 'true',
+            }),
+        ).toThrow(
+            'development 환경에서 production 링크 분석 큐를 소비할 수 없습니다.',
+        )
+    })
+
+    it('development에서 LocalStack 링크 분석 consumer를 활성화할 수 있다', () => {
+        expect(
+            validateEnvironment({
+                ...developmentEnvironment,
+                SQS_LINK_ANALYSIS_QUEUE_URL:
+                    'http://localhost:4566/000000000000/promise9-link-analysis',
+                SQS_ENDPOINT: 'http://localhost:4566',
+                SQS_CONSUMER_ENABLED: 'true',
+            }),
+        ).toMatchObject({
+            SQS_ENDPOINT: 'http://localhost:4566',
+            SQS_CONSUMER_ENABLED: true,
+        })
+    })
+
+    it('production에서 명시적으로 링크 분석 consumer를 활성화할 수 있다', () => {
+        expect(
+            validateEnvironment({
+                ...productionEnvironment,
+                SQS_LINK_ANALYSIS_QUEUE_URL:
+                    'https://sqs.ap-northeast-2.amazonaws.com/123456789012/promise9-link-analysis',
+                SQS_CONSUMER_ENABLED: 'true',
+            }),
+        ).toMatchObject({
+            APP_ENV: 'production',
+            SQS_CONSUMER_ENABLED: true,
+        })
+    })
+
     it('SES region 기본값을 적용한다', () => {
         const environment = validateEnvironment(developmentEnvironment)
 
@@ -54,6 +102,49 @@ describe('validateEnvironment', () => {
             AWS_SECRET_ACCESS_KEY: 'secret-access-key',
             AWS_SESSION_TOKEN: 'session-token',
         })
+    })
+
+    it('SES access key와 secret key 중 하나만 설정하면 실패한다', () => {
+        expect(() =>
+            validateEnvironment({
+                ...developmentEnvironment,
+                EMAIL_SES_ACCESS_KEY_ID: 'ses-access-key-id',
+            }),
+        ).toThrow(
+            'EMAIL_SES_ACCESS_KEY_ID와 EMAIL_SES_SECRET_ACCESS_KEY는 함께 설정해야 합니다.',
+        )
+    })
+
+    it('SQS와 SES에 서로 다른 자격 증명 세트를 허용한다', () => {
+        const environment = validateEnvironment({
+            ...developmentEnvironment,
+            AWS_ACCESS_KEY_ID: 'sqs-access-key-id',
+            AWS_SECRET_ACCESS_KEY: 'sqs-secret-access-key',
+            EMAIL_SES_ACCESS_KEY_ID: 'ses-access-key-id',
+            EMAIL_SES_SECRET_ACCESS_KEY: 'ses-secret-access-key',
+            EMAIL_SES_SESSION_TOKEN: 'ses-session-token',
+        })
+
+        expect(environment).toMatchObject({
+            AWS_ACCESS_KEY_ID: 'sqs-access-key-id',
+            AWS_SECRET_ACCESS_KEY: 'sqs-secret-access-key',
+            EMAIL_SES_ACCESS_KEY_ID: 'ses-access-key-id',
+            EMAIL_SES_SECRET_ACCESS_KEY: 'ses-secret-access-key',
+            EMAIL_SES_SESSION_TOKEN: 'ses-session-token',
+        })
+    })
+
+    it('메일 발신 주소와 SQS 키만 설정한 배포를 거부한다', () => {
+        expect(() =>
+            validateEnvironment({
+                ...developmentEnvironment,
+                EMAIL_FROM_ADDRESS: 'reminder@link-ding-dong.com',
+                AWS_ACCESS_KEY_ID: 'sqs-access-key-id',
+                AWS_SECRET_ACCESS_KEY: 'sqs-secret-access-key',
+            }),
+        ).toThrow(
+            'SQS용 AWS 자격 증명과 별도로 SES 자격 증명을 설정해야 합니다.',
+        )
     })
 
     it('production 환경에서 OPENAI_API_KEY를 필수로 검증한다', () => {

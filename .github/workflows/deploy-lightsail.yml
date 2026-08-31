@@ -81,7 +81,12 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           MASTER_ACCESS_TOKEN: ${{ secrets.MASTER_ACCESS_TOKEN }}
           MASTER_USER_ID: ${{ secrets.MASTER_USER_ID }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          SQS_LINK_ANALYSIS_QUEUE_URL: ${{ secrets.SQS_LINK_ANALYSIS_QUEUE_URL }}
           EMAIL_FROM_ADDRESS: ${{ secrets.EMAIL_FROM_ADDRESS }}
+          EMAIL_SES_ACCESS_KEY_ID: ${{ secrets.EMAIL_SES_ACCESS_KEY_ID }}
+          EMAIL_SES_SECRET_ACCESS_KEY: ${{ secrets.EMAIL_SES_SECRET_ACCESS_KEY }}
+          EMAIL_SES_SESSION_TOKEN: ${{ secrets.EMAIL_SES_SESSION_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
@@ -118,10 +123,28 @@ jobs:
               printf 'MASTER_USER_ID=%s\n' "$MASTER_USER_ID"
             fi
 
+            # 빈 값을 쓰면 URL 검증에 실패해 부팅이 막히므로 설정된 항목만 내려보낸다.
+            if [ -n "$AWS_REGION" ]; then
+              printf 'AWS_REGION=%s\n' "$AWS_REGION"
+            fi
+            if [ -n "$SQS_LINK_ANALYSIS_QUEUE_URL" ]; then
+              printf 'SQS_LINK_ANALYSIS_QUEUE_URL=%s\n' "$SQS_LINK_ANALYSIS_QUEUE_URL"
+              printf 'SQS_CONSUMER_ENABLED=true\n'
+            fi
+
             printf 'EMAIL_SES_REGION=ap-northeast-2\n'
 
             if [ -n "$EMAIL_FROM_ADDRESS" ]; then
               printf 'EMAIL_FROM_ADDRESS=%s\n' "$EMAIL_FROM_ADDRESS"
+            fi
+            if [ -n "$EMAIL_SES_ACCESS_KEY_ID" ]; then
+              printf 'EMAIL_SES_ACCESS_KEY_ID=%s\n' "$EMAIL_SES_ACCESS_KEY_ID"
+            fi
+            if [ -n "$EMAIL_SES_SECRET_ACCESS_KEY" ]; then
+              printf 'EMAIL_SES_SECRET_ACCESS_KEY=%s\n' "$EMAIL_SES_SECRET_ACCESS_KEY"
+            fi
+            if [ -n "$EMAIL_SES_SESSION_TOKEN" ]; then
+              printf 'EMAIL_SES_SESSION_TOKEN=%s\n' "$EMAIL_SES_SESSION_TOKEN"
             fi
             if [ -n "$AWS_ACCESS_KEY_ID" ]; then
               printf 'AWS_ACCESS_KEY_ID=%s\n' "$AWS_ACCESS_KEY_ID"

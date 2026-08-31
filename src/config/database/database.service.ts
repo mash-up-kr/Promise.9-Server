@@ -8,6 +8,10 @@ import { ConfigService } from '@nestjs/config'
 import { drizzle, PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 
+import {
+    describeError,
+    describeErrorStack,
+} from '../../common/exception/error.util'
 import { ValidatedEnvironment } from '../environment'
 
 import * as schema from './schema'
@@ -47,13 +51,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
             await this.client`select 1`
             this.logger.log('데이터베이스 연결이 완료되었습니다.')
         } catch (error) {
-            const errorMessage =
-                error instanceof Error ? error.message : String(error)
-            const errorStack = error instanceof Error ? error.stack : undefined
-
             this.logger.error(
-                `데이터베이스 연결에 실패했습니다: ${errorMessage}`,
-                errorStack,
+                `데이터베이스 연결에 실패했습니다: ${describeError(error)}`,
+                describeErrorStack(error),
             )
             throw error
         }

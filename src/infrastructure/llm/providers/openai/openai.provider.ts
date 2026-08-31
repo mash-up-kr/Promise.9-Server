@@ -7,6 +7,7 @@ import type {
     ResponseCreateParamsNonStreaming,
 } from 'openai/resources/responses/responses'
 
+import { describeError } from '../../../../common/exception/error.util'
 import { ValidatedEnvironment } from '../../../../config/environment'
 import { LLM_PROVIDER } from '../../llm.constants'
 import { LlmConfigurationError, LlmProviderError } from '../../llm.exception'
@@ -186,12 +187,10 @@ export class OpenAiProvider implements LlmProvider {
             )
         }
 
-        const message = error instanceof Error ? error.message : String(error)
-
         throw new LlmProviderError(
             this.name,
             OPENAI_ERROR_CODE.REQUEST_FAILED,
-            `OpenAI 요청에 실패했습니다: ${message}`,
+            `OpenAI 요청에 실패했습니다: ${describeError(error)}`,
             undefined,
             { cause: error },
         )

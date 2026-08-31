@@ -11,6 +11,7 @@ import { AccessStack } from '../lib/access-stack'
 import { AWS_ACCOUNT_ID, AWS_REGION, PROJECT_NAME } from '../lib/constants'
 import { EmailStack } from '../lib/email-stack'
 import { LightsailStack } from '../lib/lightsail-stack'
+import { QueueStack } from '../lib/queue-stack'
 
 const app = new App()
 const detectedAccount = process.env.CDK_DEFAULT_ACCOUNT
@@ -51,3 +52,13 @@ new LightsailStack(app, 'Promise9LightsailStack', {
     synthesizer: new CliCredentialsStackSynthesizer(),
     terminationProtection: true,
 })
+
+const queueStack = new QueueStack(app, 'Promise9QueueStack', {
+    env,
+    synthesizer: new CliCredentialsStackSynthesizer(),
+    terminationProtection: true,
+    description: 'Promise9 link analysis retry queue and runtime IAM user',
+})
+
+Tags.of(queueStack).add('Project', PROJECT_NAME)
+Tags.of(queueStack).add('ManagedBy', 'AWS-CDK')

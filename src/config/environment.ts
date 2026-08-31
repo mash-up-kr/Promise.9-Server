@@ -5,7 +5,10 @@ import { LLM_MODEL } from '../common/constants/llm'
 export type RuntimeEnvironment = 'development' | 'production'
 
 const DEFAULT_LLM_REQUEST_TIMEOUT_MS = 30_000
+const DEFAULT_SQS_WAIT_TIME_SECONDS = 20
+const DEFAULT_SQS_VISIBILITY_TIMEOUT_SECONDS = 300
 const DEFAULT_EMAIL_SES_REGION = 'ap-northeast-2'
+const PRODUCTION_LINK_ANALYSIS_QUEUE_NAME = 'promise9-link-analysis'
 
 // drizzle.config.ts에서 사용 — DB 접속 정보만 검증
 const dbEnvSchema = z
@@ -61,9 +64,31 @@ const appEnvSchema = z
             .default(DEFAULT_LLM_REQUEST_TIMEOUT_MS),
         OPENAI_API_KEY: z.string().min(1).optional(),
         GEMINI_API_KEY: z.string().min(1).optional(),
+        AWS_REGION: z.string().min(1).default('ap-northeast-2'),
+        SQS_LINK_ANALYSIS_QUEUE_URL: z.url().optional(),
+        SQS_ENDPOINT: z.url().optional(),
+        SQS_CONSUMER_ENABLED: z
+            .enum(['true', 'false'])
+            .default('false')
+            .transform((value) => value === 'true'),
+        SQS_WAIT_TIME_SECONDS: z.coerce
+            .number()
+            .int()
+            .min(1)
+            .max(20)
+            .default(DEFAULT_SQS_WAIT_TIME_SECONDS),
+        SQS_VISIBILITY_TIMEOUT_SECONDS: z.coerce
+            .number()
+            .int()
+            .min(1)
+            .max(43_200)
+            .default(DEFAULT_SQS_VISIBILITY_TIMEOUT_SECONDS),
         EMAIL_SES_REGION: z.string().min(1).default(DEFAULT_EMAIL_SES_REGION),
         EMAIL_FROM_ADDRESS: z.email().optional(),
         EMAIL_CONFIGURATION_SET: z.string().min(1).optional(),
+        EMAIL_SES_ACCESS_KEY_ID: z.string().min(1).optional(),
+        EMAIL_SES_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+        EMAIL_SES_SESSION_TOKEN: z.string().min(1).optional(),
         AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
         AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
         AWS_SESSION_TOKEN: z.string().min(1).optional(),
@@ -100,11 +125,61 @@ const appEnvSchema = z
             })
         }
 
+        if (
+            Boolean(env.EMAIL_SES_ACCESS_KEY_ID) !==
+            Boolean(env.EMAIL_SES_SECRET_ACCESS_KEY)
+        ) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['EMAIL_SES_ACCESS_KEY_ID'],
+                message:
+                    'EMAIL_SES_ACCESS_KEY_ID와 EMAIL_SES_SECRET_ACCESS_KEY는 함께 설정해야 합니다.',
+            })
+        }
+
+        if (env.EMAIL_SES_SESSION_TOKEN && !env.EMAIL_SES_ACCESS_KEY_ID) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['EMAIL_SES_SESSION_TOKEN'],
+                message:
+                    'EMAIL_SES_SESSION_TOKEN을 사용하려면 SES access key도 설정해야 합니다.',
+            })
+        }
+
+        if (
+            env.EMAIL_FROM_ADDRESS &&
+            env.AWS_ACCESS_KEY_ID &&
+            !env.EMAIL_SES_ACCESS_KEY_ID
+        ) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['EMAIL_SES_ACCESS_KEY_ID'],
+                message:
+                    'SQS용 AWS 자격 증명과 별도로 SES 자격 증명을 설정해야 합니다.',
+            })
+        }
+
         if (env.APP_ENV === 'production' && !env.OPENAI_API_KEY) {
             ctx.addIssue({
                 code: 'custom',
                 path: ['OPENAI_API_KEY'],
                 message: 'production 환경에서는 OPENAI_API_KEY가 필요합니다.',
+            })
+        }
+
+        if (
+            env.APP_ENV === 'development' &&
+            env.SQS_CONSUMER_ENABLED &&
+            isProductionLinkAnalysisQueue(
+                env.SQS_LINK_ANALYSIS_QUEUE_URL,
+                env.SQS_ENDPOINT,
+            )
+        ) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['SQS_LINK_ANALYSIS_QUEUE_URL'],
+                message:
+                    'development 환경에서 production 링크 분석 큐를 소비할 수 없습니다. LocalStack(SQS_ENDPOINT)을 사용하거나 SQS_CONSUMER_ENABLED=false로 설정하세요.',
             })
         }
     })
@@ -150,4 +225,16 @@ function getDatabaseUrlKey(appEnv: RuntimeEnvironment) {
     return appEnv === 'production'
         ? 'DATABASE_URL_PRODUCTION'
         : 'DATABASE_URL_DEVELOPMENT'
+}
+
+function isProductionLinkAnalysisQueue(
+    queueUrl: string | undefined,
+    endpoint: string | undefined,
+): boolean {
+    if (!queueUrl || endpoint) return false
+
+    return (
+        new URL(queueUrl).pathname.split('/').filter(Boolean).at(-1) ===
+        PRODUCTION_LINK_ANALYSIS_QUEUE_NAME
+    )
 }
