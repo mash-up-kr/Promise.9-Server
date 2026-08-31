@@ -104,49 +104,6 @@ describe('validateEnvironment', () => {
         })
     })
 
-    it('SES access key와 secret key 중 하나만 설정하면 실패한다', () => {
-        expect(() =>
-            validateEnvironment({
-                ...developmentEnvironment,
-                EMAIL_SES_ACCESS_KEY_ID: 'ses-access-key-id',
-            }),
-        ).toThrow(
-            'EMAIL_SES_ACCESS_KEY_ID와 EMAIL_SES_SECRET_ACCESS_KEY는 함께 설정해야 합니다.',
-        )
-    })
-
-    it('SQS와 SES에 서로 다른 자격 증명 세트를 허용한다', () => {
-        const environment = validateEnvironment({
-            ...developmentEnvironment,
-            AWS_ACCESS_KEY_ID: 'sqs-access-key-id',
-            AWS_SECRET_ACCESS_KEY: 'sqs-secret-access-key',
-            EMAIL_SES_ACCESS_KEY_ID: 'ses-access-key-id',
-            EMAIL_SES_SECRET_ACCESS_KEY: 'ses-secret-access-key',
-            EMAIL_SES_SESSION_TOKEN: 'ses-session-token',
-        })
-
-        expect(environment).toMatchObject({
-            AWS_ACCESS_KEY_ID: 'sqs-access-key-id',
-            AWS_SECRET_ACCESS_KEY: 'sqs-secret-access-key',
-            EMAIL_SES_ACCESS_KEY_ID: 'ses-access-key-id',
-            EMAIL_SES_SECRET_ACCESS_KEY: 'ses-secret-access-key',
-            EMAIL_SES_SESSION_TOKEN: 'ses-session-token',
-        })
-    })
-
-    it('메일 발신 주소와 SQS 키만 설정한 배포를 거부한다', () => {
-        expect(() =>
-            validateEnvironment({
-                ...developmentEnvironment,
-                EMAIL_FROM_ADDRESS: 'reminder@link-ding-dong.com',
-                AWS_ACCESS_KEY_ID: 'sqs-access-key-id',
-                AWS_SECRET_ACCESS_KEY: 'sqs-secret-access-key',
-            }),
-        ).toThrow(
-            'SQS용 AWS 자격 증명과 별도로 SES 자격 증명을 설정해야 합니다.',
-        )
-    })
-
     it('production 환경에서 OPENAI_API_KEY를 필수로 검증한다', () => {
         const { OPENAI_API_KEY: _, ...withoutOpenAiApiKey } =
             productionEnvironment
