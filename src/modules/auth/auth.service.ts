@@ -169,8 +169,8 @@ export class AuthService {
     }
 
     // 웹 세션(access token)으로 인증된 사용자에게 익스텐션 전용 토큰쌍을 새로
-    // 발급할 때(POST /auth/extension-token)도 컨트롤러에서 직접 호출한다. 새
-    // tokenFamily를 쓰므로 웹 쪽 토큰과 독립적으로 회전/폐기된다.
+    // 발급할 때(POST /auth/extension-token)도 컨트롤러에서 직접 호출한다.
+    // 새 tokenFamily를 쓰므로 웹 쪽 토큰과 독립적으로 회전/폐기된다.
     async issueTokens(
         userId: number,
         tokenFamily: string = randomUUID(),
