@@ -105,13 +105,13 @@ export class EmailService {
     }
 
     protected createClient(): EmailClient {
-        const accessKeyId = this.config.get('EMAIL_SES_ACCESS_KEY_ID', {
+        const accessKeyId = this.config.get('AWS_ACCESS_KEY_ID', {
             infer: true,
         })
-        const secretAccessKey = this.config.get('EMAIL_SES_SECRET_ACCESS_KEY', {
+        const secretAccessKey = this.config.get('AWS_SECRET_ACCESS_KEY', {
             infer: true,
         })
-        const sessionToken = this.config.get('EMAIL_SES_SESSION_TOKEN', {
+        const sessionToken = this.config.get('AWS_SESSION_TOKEN', {
             infer: true,
         })
 

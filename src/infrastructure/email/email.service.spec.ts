@@ -28,12 +28,6 @@ class TestEmailService extends EmailService {
     }
 }
 
-class InspectableEmailService extends EmailService {
-    createSesClient(): SESv2Client {
-        return super.createClient() as SESv2Client
-    }
-}
-
 describe('EmailService', () => {
     let service: EmailService
     let sendMock: jest.Mock<Promise<EmailCommandOutput>, [EmailCommand]>
@@ -55,30 +49,6 @@ describe('EmailService', () => {
             config as unknown as ConfigService<ValidatedEnvironment, true>,
             { send: sendMock } as unknown as SESv2Client,
         )
-    })
-
-    it('SQS용 AWS 자격 증명 대신 SES 전용 자격 증명을 사용한다', async () => {
-        const values: Record<string, string> = {
-            EMAIL_SES_REGION: 'ap-northeast-2',
-            EMAIL_SES_ACCESS_KEY_ID: 'ses-access-key-id',
-            EMAIL_SES_SECRET_ACCESS_KEY: 'ses-secret-access-key',
-            AWS_ACCESS_KEY_ID: 'sqs-access-key-id',
-            AWS_SECRET_ACCESS_KEY: 'sqs-secret-access-key',
-        }
-        const config = {
-            get: jest.fn((key: string) => values[key]),
-        }
-        const inspectableService = new InspectableEmailService(
-            config as unknown as ConfigService<ValidatedEnvironment, true>,
-        )
-        const client = inspectableService.createSesClient()
-
-        await expect(client.config.credentials()).resolves.toMatchObject({
-            accessKeyId: 'ses-access-key-id',
-            secretAccessKey: 'ses-secret-access-key',
-        })
-
-        client.destroy()
     })
 
     it('수신자 한 명의 이메일을 SES 요청으로 변환한다', async () => {
