@@ -13,6 +13,7 @@ import {
     NodeVibrantPaletteColor,
     NodeVibrantPaletteColors,
 } from './types/node-vibrant-image-color.type'
+import { ImageAnalysisPreprocessor } from './image-analysis-preprocessor.service'
 import { IMAGE_COLOR_SELECTION_SOURCE } from './image-color.constants'
 import { ImageColorService } from './image-color.service'
 import { IMAGE_COLOR_ERROR } from './image-color-error.constant'
@@ -20,6 +21,9 @@ import { IMAGE_COLOR_ERROR } from './image-color-error.constant'
 describe('ImageColorService', () => {
     let service: ImageColorService
     let imageFetcher: jest.Mocked<Pick<ImageFetcherService, 'fetch'>>
+    let imagePreprocessor: jest.Mocked<
+        Pick<ImageAnalysisPreprocessor, 'prepare'>
+    >
     let sharpAnalyzer: jest.Mocked<Pick<SharpImageColorAnalyzer, 'analyze'>>
     let nodeVibrantAnalyzer: jest.Mocked<
         Pick<NodeVibrantImageColorAnalyzer, 'analyze'>
@@ -31,6 +35,12 @@ describe('ImageColorService', () => {
         byteLength: 3,
         buffer: Buffer.from([1, 2, 3]),
     }
+    const preparedImage: FetchedImage = {
+        ...image,
+        contentType: 'image/png',
+        byteLength: 2,
+        buffer: Buffer.from([4, 5]),
+    }
     const sharpResult: SharpImageColorResult = {
         averageColor: createImageColor('#111111', [17, 17, 17]),
         dominantColor: createImageColor('#222222', [34, 34, 34]),
@@ -41,6 +51,9 @@ describe('ImageColorService', () => {
     beforeEach(() => {
         imageFetcher = {
             fetch: jest.fn().mockResolvedValue(image),
+        }
+        imagePreprocessor = {
+            prepare: jest.fn().mockResolvedValue(preparedImage),
         }
         sharpAnalyzer = {
             analyze: jest.fn().mockResolvedValue(sharpResult),
@@ -56,6 +69,7 @@ describe('ImageColorService', () => {
 
         service = new ImageColorService(
             imageFetcher as unknown as ImageFetcherService,
+            imagePreprocessor,
             sharpAnalyzer as unknown as SharpImageColorAnalyzer,
             nodeVibrantAnalyzer as unknown as NodeVibrantImageColorAnalyzer,
         )
@@ -73,6 +87,9 @@ describe('ImageColorService', () => {
         expect(imageFetcher.fetch).toHaveBeenCalledWith(image.sourceUrl, {
             timeoutMs: 1000,
         })
+        expect(imagePreprocessor.prepare).toHaveBeenCalledWith(image)
+        expect(sharpAnalyzer.analyze).toHaveBeenCalledWith(preparedImage)
+        expect(nodeVibrantAnalyzer.analyze).toHaveBeenCalledWith(preparedImage)
     })
 
     it('preferredColor가 있으면 해당 색상을 우선 선택한다', async () => {
@@ -123,6 +140,34 @@ describe('ImageColorService', () => {
                 }),
             },
         })
+    })
+
+    it('동시에 최대 두 개의 이미지만 가져와 분석한다', async () => {
+        const fetchResolvers: Array<(value: FetchedImage) => void> = []
+        imageFetcher.fetch.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    fetchResolvers.push(resolve)
+                }),
+        )
+
+        const tasks = [
+            service.extractFromUrl('https://example.com/1.png'),
+            service.extractFromUrl('https://example.com/2.png'),
+            service.extractFromUrl('https://example.com/3.png'),
+        ]
+
+        await Promise.resolve()
+        expect(imageFetcher.fetch).toHaveBeenCalledTimes(2)
+
+        fetchResolvers[0](image)
+        await tasks[0]
+        await Promise.resolve()
+        expect(imageFetcher.fetch).toHaveBeenCalledTimes(3)
+
+        fetchResolvers[1](image)
+        fetchResolvers[2](image)
+        await Promise.all(tasks)
     })
 })
 

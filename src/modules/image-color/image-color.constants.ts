@@ -3,6 +3,12 @@ import {
     type NodeVibrantPaletteColors,
 } from './types/node-vibrant-image-color.type'
 
+export const IMAGE_COLOR_ANALYSIS_LIMIT = {
+    maxInputPixels: 20_000_000,
+    maxDimension: 512,
+    maxConcurrency: 2,
+} as const
+
 export const IMAGE_COLOR_SELECTION_SOURCE = {
     NODE_VIBRANT_LIGHT_VIBRANT: 'node-vibrant.lightVibrant',
     NODE_VIBRANT_VIBRANT: 'node-vibrant.vibrant',

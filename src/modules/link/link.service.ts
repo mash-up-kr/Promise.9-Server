@@ -4,16 +4,16 @@ import { BaseException } from '../../common/exception/base.exception'
 import { buildCursorPage } from '../../common/pagination/cursor'
 import { FOLDER_ERROR } from '../folder/folder-error.constant'
 
-import { LinkAnalysisService } from './analysis/link-analysis.service'
-import { LinkAnalysisInput } from './analysis/link-analysis.type'
+import { LinkAnalysisDispatcher } from './analysis/link-analysis.dispatcher'
 import {
     CreateLinkInput,
     ListLinksQueryInput,
+    MoveLinksToFolderInput,
     UpdateLinkInput,
 } from './dto/link.dto'
 import { CreateLinkTagInput } from './dto/tag.dto'
-import { EmbeddingService } from './search/embedding.service'
-import { SearchService } from './search/search.service'
+import { RelatedLinkService } from './related/related-link.service'
+import { SearchResultRow, SearchService } from './search/search.service'
 import { toSearchCursorPayload } from './search/search.util'
 import { LinkRepository, LinkUpdatePatch } from './link.repository'
 import { LinkRow } from './link.schema'
@@ -26,9 +26,9 @@ export class LinkService {
 
     constructor(
         private readonly linkRepository: LinkRepository,
-        private readonly embeddingService: EmbeddingService,
         private readonly searchService: SearchService,
-        private readonly linkAnalysisService: LinkAnalysisService,
+        private readonly linkAnalysisDispatcher: LinkAnalysisDispatcher,
+        private readonly relatedLinkService: RelatedLinkService,
     ) {}
 
     async create(userId: number, input: CreateLinkInput) {
@@ -48,14 +48,12 @@ export class LinkService {
             // 링크 정보와 AI 요약은 저장 이후 비동기로 생성하므로 대기 상태로 둔다.
             aiSummaryStatus: 'PENDING',
             memo: input.memo ?? null,
+            reminderAt: input.reminderAt ? new Date(input.reminderAt) : null,
         })
 
-        // 임베딩은 외부 호출이라 저장 응답을 막지 않도록 best-effort로 처리한다.
-        // 저장 시점엔 title·aiSummary·metadata가 아직 비어 domain(+memo) 위주로만 임베딩된다.
-        // TODO: 메타데이터/요약 수집 파이프라인 완료 시 embedLinkSafe(row)를 다시 호출해 재임베딩한다.
-        void this.embeddingService.embedLinkSafe(row)
-
-        this.startLinkAnalysis({
+        // 정보 수집·AI 요약·태그·임베딩은 저장 응답을 막지 않도록 dispatcher에 넘긴다.
+        // 임베딩은 제목·요약이 저장된 뒤 실행되므로 여기서 따로 호출하지 않는다.
+        this.linkAnalysisDispatcher.dispatch({
             linkId: row.id,
             userId,
             url: row.originalUrl,
@@ -65,15 +63,21 @@ export class LinkService {
             linkId: row.id,
             url: row.originalUrl,
             savedAt: row.createdAt,
+            reminderAt: row.reminderAt,
         }
     }
 
     async detail(userId: number, linkId: number) {
         const link = await this.getOwnedLink(userId, linkId)
-        const [folder, linkTags] = await Promise.all([
+        const [folder, tagRows] = await Promise.all([
             this.findFolderRef(link.folderId),
-            this.findTags(userId, linkId),
+            this.linkRepository.findTags(userId, linkId),
         ])
+        const relatedLinks = await this.findRelatedLinks(
+            userId,
+            link,
+            tagRows.map((tag) => tag.normalizedName),
+        )
 
         return {
             linkId: link.id,
@@ -89,9 +93,10 @@ export class LinkService {
             viewedAt: link.viewedAt,
             processingStatus: link.aiSummaryStatus,
             aiSummary: link.aiSummary,
-            tags: linkTags,
+            tags: this.toTagResponses(tagRows),
             memo: link.memo,
-            relatedLinks: [],
+            reminderAt: link.reminderAt,
+            relatedLinks,
         }
     }
 
@@ -114,24 +119,42 @@ export class LinkService {
             patch.memo = input.memo
         }
 
+        if (input.reminderAt !== undefined) {
+            patch.reminderAt = input.reminderAt
+                ? new Date(input.reminderAt)
+                : null
+        }
+
         if (input.isFavorite !== undefined) {
             patch.isFavorite = input.isFavorite
         }
 
         const row = await this.linkRepository.update(userId, linkId, patch)
 
-        // 메모가 바뀌면 임베딩 대상 텍스트가 달라지므로 best-effort로 재생성한다.
+        // 메모가 바뀌면 임베딩 대상 텍스트가 달라지므로 임베딩만 다시 실행한다.
+        // create와 같은 dispatcher를 거치므로 실패 시 재시도도 동일하게 적용된다.
         if (input.memo !== undefined) {
-            void this.embeddingService.embedLinkSafe(row)
+            this.linkAnalysisDispatcher.dispatch(
+                { linkId: row.id, userId, url: row.originalUrl },
+                ['EMBEDDING'],
+            )
         }
-
         return {
             linkId: row.id,
             folderId: row.folderId,
             memo: row.memo,
+            reminderAt: row.reminderAt,
             isFavorite: row.isFavorite,
             updatedAt: row.updatedAt,
         }
+    }
+
+    moveToFolder(userId: number, input: MoveLinksToFolderInput) {
+        return this.linkRepository.moveToFolder(
+            userId,
+            input.linkIds,
+            input.folderId,
+        )
     }
 
     async remove(userId: number, linkId: number) {
@@ -170,13 +193,15 @@ export class LinkService {
     }
 
     async markViewed(userId: number, linkId: number) {
-        await this.getOwnedLink(userId, linkId)
+        const link = await this.linkRepository.markViewed(
+            userId,
+            linkId,
+            new Date(),
+        )
 
-        const now = new Date()
-        await this.linkRepository.update(userId, linkId, {
-            viewedAt: now,
-            updatedAt: now,
-        })
+        if (!link) {
+            throw new BaseException(LINK_ERROR.NOT_FOUND)
+        }
     }
 
     createTag(
@@ -233,7 +258,7 @@ export class LinkService {
             rows,
             input.limit,
             (row) => ({
-                v: this.cursorValueOf(row, input.sortBy),
+                v: row.cursorValue,
                 id: row.id,
             }),
         )
@@ -248,7 +273,10 @@ export class LinkService {
     }
 
     private toListItems(
-        results: Array<{ row: LinkRow; score: number | null }>,
+        results: Array<{
+            row: LinkRow | SearchResultRow
+            score: number | null
+        }>,
     ) {
         return results.map(({ row, score }) => ({
             linkId: row.id,
@@ -258,23 +286,10 @@ export class LinkService {
             representativeTag: null,
             thumbnailUrl: pickThumbnailUrl(row.metadata),
             savedAt: row.createdAt,
+            reminderAt: row.reminderAt,
             // 점수 반올림은 커서 비교와 값을 맞추기 위해 search/search.util이 담당한다.
             score,
         }))
-    }
-
-    // 다음 커서에 담을 정렬 기준 값. 타임스탬프는 ISO 문자열, null이면 null.
-    private cursorValueOf(
-        row: LinkRow,
-        sortBy: ListLinksQueryInput['sortBy'],
-    ): string | null {
-        const value = {
-            savedAt: row.createdAt,
-            viewedAt: row.viewedAt,
-            deletedAt: row.deletedAt,
-        }[sortBy]
-
-        return value ? value.toISOString() : null
     }
 
     // 화면의 전체/미분류/즐겨찾기/최근삭제 링크 목록에 표시할 수를 한 번에 계산한다.
@@ -319,20 +334,6 @@ export class LinkService {
         )
     }
 
-    // 링크 저장 응답과 분석 작업을 분리하고, 현재 프로세스의 예상 밖 실패를 안전하게 기록한다.
-    private startLinkAnalysis(input: LinkAnalysisInput): void {
-        this.linkAnalysisService.analyze(input).catch((error: unknown) => {
-            const errorMessage =
-                error instanceof Error ? error.message : String(error)
-            const errorStack = error instanceof Error ? error.stack : undefined
-
-            this.logger.error(
-                `링크 분석 작업이 중단되었습니다. linkId=${input.linkId}: ${errorMessage}`,
-                errorStack,
-            )
-        })
-    }
-
     // 링크에 연결된 폴더 참조를 조회한다. 폴더가 없으면 null.
     private async findFolderRef(folderId: number | null) {
         if (!folderId) {
@@ -341,19 +342,51 @@ export class LinkService {
 
         const folder = await this.linkRepository.findFolder(folderId)
 
-        return folder ? { folderId: folder.id, folderName: folder.name } : null
+        return folder
+            ? {
+                  folderId: folder.id,
+                  folderName: folder.name,
+                  color: folder.color,
+              }
+            : null
     }
 
-    // 링크에 저장된 사용자·규칙·AI 태그를 표시 순서와 생성 순서대로 반환한다.
-    private async findTags(userId: number, linkId: number) {
-        const rows = await this.linkRepository.findTags(userId, linkId)
-
+    // 링크에 저장된 사용자·규칙·AI 태그를 API 응답 shape으로 바꾼다.
+    private toTagResponses(
+        rows: Awaited<ReturnType<LinkRepository['findTags']>>,
+    ) {
         return rows.map((row) => ({
             tagId: row.id,
             name: row.name,
             sourceType: row.sourceType,
             sortOrder: row.sortOrder,
         }))
+    }
+
+    // 관련 링크는 상세의 부가 결과다. 후보 조회가 실패해도 링크 본문은 반환한다.
+    private async findRelatedLinks(
+        userId: number,
+        link: LinkRow,
+        normalizedTags: string[],
+    ) {
+        try {
+            return await this.relatedLinkService.relatedLinks(userId, {
+                id: link.id,
+                folderId: link.folderId,
+                title: link.title,
+                embedding: link.embedding,
+                normalizedTags,
+            })
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error)
+
+            this.logger.warn(
+                `관련 링크 조회에 실패해 빈 목록을 반환합니다. linkId=${link.id} error=${message}`,
+            )
+
+            return []
+        }
     }
 
     // 링크 소유권을 확인하고, 없거나 타 사용자 소유면 404로 처리한다.

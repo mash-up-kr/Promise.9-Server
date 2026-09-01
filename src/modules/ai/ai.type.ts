@@ -8,7 +8,7 @@ import {
 } from '../../infrastructure/llm/llm.type'
 
 import { AiMetricGeneratedResult } from './metrics/ai-metric.type'
-import { AI_METRIC_STATUS, AiTaskType } from './ai.constants'
+import { AI_METRIC_STATUS, AiErrorTaskType, AiTaskType } from './ai.constants'
 
 /** 링크 요약과 태그 생성에 공통으로 사용하는 링크 정보. */
 export type AiLinkAnalysisInput = {
@@ -77,6 +77,6 @@ export type AiRecordMetricInput = {
 /** 내부 오류를 AiGenerationError로 변환할 때 필요한 context. */
 export type AiCreateGenerationErrorInput = {
     error: unknown
-    taskType: AiTaskType
+    taskType: AiErrorTaskType
     failure?: AiGenerationFailure
 }

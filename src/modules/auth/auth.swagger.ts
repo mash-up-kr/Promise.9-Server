@@ -6,6 +6,7 @@ import {
     ApiCommonErrorResponses,
     ApiCommonResponse,
 } from '../../common/swagger/api-response.decorator'
+import { USER_ERROR } from '../user/user-error.constant'
 
 import {
     KakaoExchangeDto,
@@ -41,6 +42,10 @@ Google, Kakao, Apple 소셜 로그인을 지원합니다.
 - \`provider=google\`: Google ID 토큰 검증 (OAuth2Client, audience=GOOGLE_CLIENT_ID)
 - \`provider=kakao\`: Kakao OIDC ID 토큰 검증 (JWKS, audience=KAKAO_CLIENT_ID)
 - \`provider=apple\`: Apple OIDC ID 토큰 검증 (JWKS, audience=APPLE_CLIENT_ID)
+
+이메일이 이미 다른 provider로 가입돼 있으면 자동으로 병합하지 않고
+\`409 Conflict\`(\`errorCode=960002\`)를 반환합니다. 같은 사람이어도
+provider마다 별개 계정이며, 기존에 가입한 provider로 로그인해야 합니다.
 `
 
 export const ApiSocialLogin = () =>
@@ -62,6 +67,7 @@ export const ApiSocialLogin = () =>
             COMMON_ERROR.VALIDATION,
             AUTH_ERROR.INVALID_SOCIAL_TOKEN,
             AUTH_ERROR.UNSUPPORTED_PROVIDER,
+            USER_ERROR.EMAIL_ALREADY_REGISTERED,
         ),
     )
 
@@ -71,6 +77,16 @@ const KAKAO_EXCHANGE_DESCRIPTION = `
 authorization code를 이 엔드포인트로 넘기면 서버가 대신 Kakao token
 endpoint와 교환해 idToken을 돌려줍니다. 이후 그 idToken을
 \`POST /auth/social\` (\`provider=kakao\`)에 그대로 넘겨 로그인을 완료하세요.
+
+⚠️ **선행 조건**: idToken은 순수 OAuth가 아니라 OIDC 확장 기능이라,
+이 code를 발급받는 authorize 요청의 \`scope\`에 \`openid\`가 반드시
+포함되어야 발급됩니다. 빠뜨리면 \`response_type=code\` 자체는 정상적으로
+code를 내주지만, token 교환 응답에 idToken이 없어 이 엔드포인트가 항상
+\`KAKAO_EXCHANGE_FAILED\`를 반환합니다.
+
+\`\`\`
+https://kauth.kakao.com/oauth/authorize?client_id=...&redirect_uri=...&response_type=code&scope=openid
+\`\`\`
 
 iOS/Android 네이티브 앱은 SDK가 idToken을 직접 발급하므로 이 엔드포인트가
 필요 없습니다.
@@ -94,7 +110,34 @@ export const ApiKakaoExchange = () =>
         ApiCommonErrorResponses(
             COMMON_ERROR.VALIDATION,
             AUTH_ERROR.KAKAO_EXCHANGE_FAILED,
+            AUTH_ERROR.KAKAO_UPSTREAM_UNAVAILABLE,
         ),
+    )
+
+const EXTENSION_TOKEN_DESCRIPTION = `
+웹/앱에서 로그인 완료 후, 익스텐션에 넘겨줄 별도의 토큰쌍을 발급받습니다.
+요청은 소셜 로그인으로 직접 발급된 Access Token(Authorization: Bearer)으로만
+인증됩니다. 이 endpoint가 발급한 익스텐션 토큰으로는 다시 호출할 수 없습니다
+(재귀 발급 차단). 응답으로 받은 토큰쌍은 원본 세션과 별개의 tokenFamily로
+발급되어 서로 독립적으로 회전/폐기됩니다 (한쪽을 로그아웃해도 다른 쪽엔 영향
+없음).
+
+⚠️ 발급된 토큰쌍을 익스텐션에 전달할 때 URL 쿼리스트링/리다이렉트는
+사용하지 마세요 (브라우저 히스토리·리퍼러에 노출됨). \`postMessage\` 등
+안전한 채널로 전달하세요.
+`
+
+export const ApiExtensionToken = () =>
+    applyDecorators(
+        ApiOperation({
+            summary: '익스텐션용 토큰쌍 발급 (웹 로그인 이후)',
+            description: EXTENSION_TOKEN_DESCRIPTION,
+        }),
+        ApiCommonResponse(TokenPairResponseDto, {
+            description: '발급 성공',
+            dataExample: TOKEN_PAIR_RESPONSE_EXAMPLE,
+        }),
+        ApiCommonErrorResponses(AUTH_ERROR.INVALID_TOKEN),
     )
 
 export const ApiRefreshToken = () =>

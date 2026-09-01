@@ -1,5 +1,8 @@
 import { ParsedLinkInformation, ParsedLinkPreview } from './link-content.type'
 
+const HTML_MARKUP_PATTERN =
+    /<(script|style|noscript)(?=[\t\n\f\r />])(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?(?:<\/\1(?=[\t\n\f\r />])(?:[^>"']|"[^"]*"|'[^']*')*>|$)|<!--[\s\S]*?(?:-->|$)|<(?:[^>"']|"[^"]*"|'[^']*')+>/gi
+
 // 요약과 태그 생성에 필요한 제목, 설명, 읽을 수 있는 본문을 HTML에서 추출한다.
 export function parseLinkInformation(html: string): ParsedLinkInformation {
     const content = extractReadableContent(html)
@@ -16,12 +19,20 @@ export function parseLinkInformation(html: string): ParsedLinkInformation {
 
 // 링크 저장 전 미리보기에 필요한 제목과 대표 이미지 경로를 HTML에서 추출한다.
 export function parseLinkPreview(html: string): ParsedLinkPreview {
+    const openGraphImage = findMetaContent(html, 'property', 'og:image')
+    const twitterImage = openGraphImage
+        ? null
+        : findMetaContent(html, 'name', 'twitter:image')
+
     return {
         title:
             findMetaContent(html, 'property', 'og:title') ?? extractTitle(html),
-        image:
-            findMetaContent(html, 'property', 'og:image') ??
-            findMetaContent(html, 'name', 'twitter:image'),
+        image: openGraphImage ?? twitterImage,
+        imageSource: openGraphImage
+            ? 'og:image'
+            : twitterImage
+              ? 'twitter:image'
+              : null,
     }
 }
 
@@ -56,19 +67,10 @@ function extractTitle(html: string): string | null {
     return decodeHtml(match[1]) || null
 }
 
-// AI 입력에 불필요한 실행 요소와 HTML 태그를 제거해 읽을 수 있는 본문으로 만든다.
+// HTML 주석, script/style/noscript 내용과 나머지 태그를 제거해 AI 입력용 본문을 만든다.
 function extractReadableContent(html: string): string {
     return decodeHtml(
-        html
-            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
-            .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
-            .replace(
-                /<noscript\b[^<]*(?:(?!<\/noscript>)<[^<]*)*<\/noscript>/gi,
-                ' ',
-            )
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim(),
+        html.replace(HTML_MARKUP_PATTERN, ' ').replace(/\s+/g, ' ').trim(),
     )
 }
 

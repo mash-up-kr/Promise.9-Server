@@ -53,6 +53,15 @@ export class CreateLinkResponseDto {
     savedAt!: string
 
     @ApiProperty({
+        type: String,
+        format: 'date-time',
+        example: '2026-08-20T12:00:00.000Z',
+        nullable: true,
+        description: '리마인드 시각. 설정하지 않았으면 null',
+    })
+    reminderAt!: string | null
+
+    @ApiProperty({
         example: 0.87342,
         nullable: true,
         description: '검색 결과 점수. 검색하지 않은 일반 목록에서는 null',
@@ -66,6 +75,9 @@ export class LinkFolderRefDto {
 
     @ApiProperty({ example: '개발 블로그', description: '폴더 이름' })
     folderName!: string
+
+    @ApiProperty({ example: '#d5d76a', description: '폴더 색상 hex' })
+    color!: string
 }
 
 export class RelatedLinkDto {
@@ -149,7 +161,7 @@ export class LinkDetailResponseDto {
     @ApiProperty({
         enum: ['PENDING', 'SUCCESS', 'NEEDS_REVIEW', 'FAILED'],
         example: 'PENDING',
-        description: 'AI 요약 비동기 처리 상태',
+        description: '요약·태그·임베딩 비동기 처리 상태',
     })
     processingStatus!: 'PENDING' | 'SUCCESS' | 'NEEDS_REVIEW' | 'FAILED'
 
@@ -157,7 +169,7 @@ export class LinkDetailResponseDto {
         example: null,
         nullable: true,
         description:
-            'AI 요약. processingStatus로 처리 중·실패·완료 상태를 구분',
+            'AI 요약. 전체 분석 상태와 별개로 부분 결과가 존재할 수 있음',
     })
     aiSummary!: string | null
 
@@ -173,6 +185,15 @@ export class LinkDetailResponseDto {
         description: '메모',
     })
     memo!: string | null
+
+    @ApiProperty({
+        type: String,
+        format: 'date-time',
+        example: '2026-08-20T12:00:00.000Z',
+        nullable: true,
+        description: '리마인드 시각. 설정하지 않았으면 null',
+    })
+    reminderAt!: string | null
 
     @ApiProperty({
         type: [RelatedLinkDto],
@@ -200,6 +221,15 @@ export class UpdateLinkResponseDto {
     memo!: string | null
 
     @ApiProperty({
+        type: String,
+        format: 'date-time',
+        example: '2026-08-20T12:00:00.000Z',
+        nullable: true,
+        description: '변경 후 리마인드 시각. 해제되었으면 null',
+    })
+    reminderAt!: string | null
+
+    @ApiProperty({
         example: true,
         description: '변경 후 즐겨찾기 여부',
     })
@@ -212,6 +242,33 @@ export class UpdateLinkResponseDto {
         description: '수정 시각 (ISO 8601)',
     })
     updatedAt!: string
+}
+
+export class MoveLinksToFolderResponseDto {
+    @ApiProperty({
+        example: 3,
+        description: '중복 제거 후 요청된 링크 수',
+    })
+    requestedCount!: number
+
+    @ApiProperty({
+        example: 2,
+        description: '목적지 폴더가 달라 실제로 이동한 링크 수',
+    })
+    movedCount!: number
+
+    @ApiProperty({
+        example: 1,
+        description: '이미 목적지에 있어 변경하지 않은 링크 수',
+    })
+    unchangedCount!: number
+
+    @ApiProperty({
+        example: 7,
+        nullable: true,
+        description: '이동한 목적지 폴더 ID (미분류면 null)',
+    })
+    folderId!: number | null
 }
 
 export class RestoreLinkResponseDto {
@@ -270,6 +327,15 @@ export class LinkListItemDto {
         description: '저장 시각 (ISO 8601)',
     })
     savedAt!: string
+
+    @ApiProperty({
+        type: String,
+        format: 'date-time',
+        example: '2026-08-20T12:00:00.000Z',
+        nullable: true,
+        description: '리마인드 시각. 설정하지 않았으면 null',
+    })
+    reminderAt!: string | null
 }
 
 export class ListLinksResponseDto {

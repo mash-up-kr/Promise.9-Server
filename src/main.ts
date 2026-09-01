@@ -14,7 +14,11 @@ async function bootstrap() {
     app.use(httpLoggerMiddleware)
 
     app.enableCors({
-        origin: ['http://localhost:8090', 'https://link-ding-dong.com'],
+        origin: [
+            'http://localhost:8090',
+            'https://link-ding-dong.com',
+            'https://promise9-ranking-lab.dltmdcks.chatgpt.site',
+        ],
         credentials: true,
     })
 
@@ -22,6 +26,10 @@ async function bootstrap() {
     app.useGlobalInterceptors(new CommonResponseInterceptor())
     app.useGlobalPipes(new ValidationPipe({ whitelist: true }))
     app.setGlobalPrefix('api/v1')
+
+    // SIGTERM에서 onModuleDestroy를 실행해, 배포 중 진행 중인 링크 분석과
+    // SQS consumer polling을 정리할 시간을 준다.
+    app.enableShutdownHooks()
 
     swaggerConfig(app)
 

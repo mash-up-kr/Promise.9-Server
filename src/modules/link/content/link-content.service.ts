@@ -6,6 +6,7 @@ import { LINK_ERROR } from '../link-error.constant'
 
 import {
     LINK_CONTENT_FETCH,
+    LINK_CONTENT_IMAGE_URL_MAX_LENGTH,
     LINK_CONTENT_REDIRECT_STATUSES,
     LINK_CONTENT_REQUEST_HEADERS,
     LINK_CONTENT_TEXT_LIMIT,
@@ -20,6 +21,8 @@ import {
 } from './link-content.type'
 import { isRobotsPathAllowed } from './robots.parser'
 
+class RobotsDisallowedError extends Error {}
+
 @Injectable()
 export class LinkContentService {
     private readonly logger = new Logger(LinkContentService.name)
@@ -33,18 +36,24 @@ export class LinkContentService {
 
         return {
             title,
-            thumbnailUrl: this.toAbsoluteImage(image, finalUrl),
+            thumbnailUrl: await this.toSafeAbsoluteImage(image, finalUrl),
             source: this.toSource(finalUrl),
         }
     }
 
-    // robots.txt가 허용한 링크에서 요약과 태그 생성에 필요한 정보를 수집한다.
+    // null은 정상적으로 수집할 내용이 없거나 robots.txt가 명시적으로 차단한 경우다.
+    // 네트워크·타임아웃·원격 5xx는 호출부가 재시도할 수 있도록 예외를 유지한다.
     async collect(url: string): Promise<CollectedLinkContent | null> {
         try {
-            const { html } = await this.fetchHtml(url, {
+            const { html, finalUrl } = await this.fetchHtml(url, {
                 beforeRequest: this.validateCrawlingAllowed,
             })
             const information = parseLinkInformation(html)
+            const preview = parseLinkPreview(html)
+            const imageUrl = await this.toSafeAbsoluteImage(
+                preview.image,
+                finalUrl,
+            )
             const collected = {
                 title: this.limitText(
                     information.title,
@@ -58,11 +67,18 @@ export class LinkContentService {
                     information.content,
                     LINK_CONTENT_TEXT_LIMIT.content,
                 ),
+                image:
+                    imageUrl && preview.imageSource
+                        ? { url: imageUrl, source: preview.imageSource }
+                        : null,
+            }
+            return this.hasCollectedContent(collected) ? collected : null
+        } catch (error) {
+            if (error instanceof RobotsDisallowedError) {
+                return null
             }
 
-            return this.hasCollectedContent(collected) ? collected : null
-        } catch {
-            return null
+            throw error
         }
     }
 
@@ -70,7 +86,9 @@ export class LinkContentService {
         requestUrl: URL,
     ): Promise<void> => {
         if (!(await this.isCrawlingAllowed(requestUrl))) {
-            throw new Error('robots.txt에서 크롤링을 허용하지 않았습니다.')
+            throw new RobotsDisallowedError(
+                'robots.txt에서 크롤링을 허용하지 않았습니다.',
+            )
         }
     }
 
@@ -89,7 +107,10 @@ export class LinkContentService {
             return await this.followAndRead(rawUrl, controller.signal, options)
         } catch (error) {
             // URL 검증 실패(400)·비정상 응답(502) 등 이미 구분된 HTTP 예외는 그대로 전달한다.
-            if (error instanceof HttpException) {
+            if (
+                error instanceof HttpException ||
+                error instanceof RobotsDisallowedError
+            ) {
                 throw error
             }
 
@@ -128,8 +149,15 @@ export class LinkContentService {
                 return true
             }
 
+            // 401·403은 robots.txt 전체 차단으로 취급하고, 그 밖의 4xx도
+            // 보수적으로 크롤링하지 않는다. 429·5xx는 일시 장애일 수 있어 재시도한다.
             if (!response.ok) {
                 this.cancelBody(response)
+
+                if (response.status === 429 || response.status >= 500) {
+                    throw new BaseException(LINK_ERROR.PREVIEW_FETCH_FAILED)
+                }
+
                 return false
             }
 
@@ -138,19 +166,40 @@ export class LinkContentService {
                 url.pathname + url.search,
                 LINK_CONTENT_USER_AGENT,
             )
-        } catch {
-            return false
+        } catch (error) {
+            if (error instanceof HttpException) {
+                throw error
+            }
+
+            if (this.isAbortError(error)) {
+                throw new BaseException(LINK_ERROR.PREVIEW_TIMEOUT)
+            }
+
+            throw new BaseException(LINK_ERROR.PREVIEW_FETCH_FAILED)
         } finally {
             clearTimeout(timeout)
         }
     }
 
-    // 대표 이미지 상대 경로를 최종 링크 URL 기준의 절대 경로로 변환한다.
-    private toAbsoluteImage(image: string | null, baseUrl: URL): string | null {
+    // 대표 이미지는 공개 HTTP(S) URL만 허용하고, 저장·응답 가능한 길이로 제한한다.
+    private async toSafeAbsoluteImage(
+        image: string | null,
+        baseUrl: URL,
+    ): Promise<string | null> {
         if (!image) return null
+        if (image.length > LINK_CONTENT_IMAGE_URL_MAX_LENGTH) return null
 
         try {
-            return new URL(image, baseUrl).toString()
+            const imageUrl = this.urlSecurity.parseHttpUrl(image, baseUrl)
+            const normalizedUrl = imageUrl.toString()
+
+            if (normalizedUrl.length > LINK_CONTENT_IMAGE_URL_MAX_LENGTH) {
+                return null
+            }
+
+            await this.urlSecurity.resolvePublicUrl(imageUrl)
+
+            return normalizedUrl
         } catch {
             return null
         }
@@ -163,7 +212,12 @@ export class LinkContentService {
 
     // 제목, 설명, 본문 중 하나라도 수집됐는지 확인한다.
     private hasCollectedContent(content: CollectedLinkContent): boolean {
-        return Boolean(content.title || content.description || content.content)
+        return Boolean(
+            content.title ||
+            content.description ||
+            content.content ||
+            content.image,
+        )
     }
 
     // HTML에서 수집한 문자열을 저장·AI 입력에 허용된 길이까지만 유지한다.

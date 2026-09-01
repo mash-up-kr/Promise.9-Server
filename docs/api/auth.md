@@ -61,13 +61,13 @@
 
 ## 토큰 정책
 
-| 항목                   | 내용                                |
-| ---------------------- | ----------------------------------- |
-| 발급 방식              | 자체 JWT                            |
-| accessToken 만료 시간  | 상수 관리 (추후 확정)               |
-| refreshToken 만료 시간 | 상수 관리 (추후 확정)               |
-| refreshToken 저장      | REFRESH_TOKENS 테이블               |
-| Refresh Token Rotation | 재발급 시 기존 토큰 폐기, 신규 발급 |
+| 항목                   | 내용                                 |
+| ---------------------- | ------------------------------------ |
+| 발급 방식              | 자체 JWT                             |
+| accessToken 만료 시간  | `JWT_ACCESS_EXPIRES_IN`, 기본 `15m`  |
+| refreshToken 만료 시간 | `JWT_REFRESH_EXPIRES_IN`, 기본 `30d` |
+| refreshToken 저장      | REFRESH_TOKENS 테이블                |
+| Refresh Token Rotation | 재발급 시 기존 토큰 폐기, 신규 발급  |
 
 ---
 
@@ -176,7 +176,7 @@ POST /auth/refresh
 }
 ```
 
-> Refresh Token Rotation 적용 — 재발급 시 기존 refreshToken 폐기, 신규 발급
+> 재발급 시 사용한 refreshToken을 폐기하고 새 refreshToken을 발급한다.
 
 ---
 

@@ -16,10 +16,10 @@ GET /folders
 
 전체·미분류·즐겨찾기·최근 삭제 링크 수와 사용자 폴더 목록을 반환한다. 응답의 `systemFolders`는 실제 폴더 목록이 아니라 `GET /links` 조회 조건별 통계이고, `folders`만 실제 사용자 폴더 목록이다.
 
-| Query         | 타입    | 기본값  | 설명                                                                            |
-| ------------- | ------- | ------- | ------------------------------------------------------------------------------- |
-| `lastSavedAt` | boolean | `false` | `true`면 마지막 저장 시각(`lastSavedAt`) 최신순 정렬. 홈 화면 최근 저장 폴더용   |
-| `limit`       | number  | -       | 선택적 결과 개수 제한. 생략하면 전체 반환, 최대 `30`                             |
+| Query         | 타입    | 기본값  | 설명                                                                           |
+| ------------- | ------- | ------- | ------------------------------------------------------------------------------ |
+| `lastSavedAt` | boolean | `false` | `true`면 마지막 저장 시각(`lastSavedAt`) 최신순 정렬. 홈 화면 최근 저장 폴더용 |
+| `limit`       | number  | -       | 선택적 결과 개수 제한. 생략하면 전체 반환, 최대 `30`                           |
 
 폴더는 사용자가 편집한 순서(`PUT /folders/order`)대로 반환한다. 순서를 편집한 적이 없으면 생성순이다. 별도의 정렬 기준(`sortBy`/`order`) 파라미터는 없으며, 정의되지 않은 query를 넘기면 `400`으로 거부한다.
 
@@ -29,7 +29,7 @@ GET /folders
 GET /folders?lastSavedAt=true&limit=3
 ```
 
-`lastSavedAt=true`면 `lastSavedAt`(해당 폴더에 마지막으로 링크가 저장된 시각, 폴더 수정 시각이 아님) 최신순으로 정렬하며, 저장 이력이 없는 폴더는 항상 뒤로 간다.
+`lastSavedAt=true`면 `lastSavedAt`(해당 폴더에 마지막으로 링크가 저장된 시각, 폴더 수정 시각이 아님) 최신순으로 정렬하며, 저장 이력이 없는 폴더는 항상 뒤로 간다. `viewCount`는 폴더 내 링크를 5초 이상 조회한 누적 횟수다.
 
 폴더 목록에는 cursor 페이지네이션을 적용하지 않는다. 따라서 응답에 `pagination`과 `totalCount`가 없으며, `limit`은 다음 페이지 조회를 위한 값이 아니라 홈 화면처럼 필요한 개수만 제한하는 용도다.
 
@@ -50,6 +50,7 @@ GET /folders?lastSavedAt=true&limit=3
                 "folderId": 3,
                 "folderName": "디자인",
                 "linkCount": 12,
+                "viewCount": 24,
                 "lastSavedAt": "2026-07-13T00:00:00.000Z"
             }
         ]

@@ -75,7 +75,7 @@ export class KakaoExchangeDto {
     @ApiProperty({
         example: '4/0AY0e-g7...',
         description:
-            '[필수] Kakao authorization code (response_type=code로 발급받은 값)',
+            '[필수] Kakao authorization code. authorize 요청 시 response_type=code&scope=openid로 발급받아야 함',
     })
     code!: string
 

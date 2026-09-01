@@ -11,12 +11,23 @@
 ## 홈
 
 <img src="./screens/home.png" alt="홈 화면" width="240" />
+<img src="./screens/home-frequent-keywords.png" alt="홈 화면의 자주 저장한 키워드 섹션" width="240" />
 
-| 화면 영역            | API                                                  | 상태 | 남은 작업                                 |
-| -------------------- | ---------------------------------------------------- | :--: | ----------------------------------------- |
-| 최근 저장            | `GET /links?sortBy=savedAt&order=desc&limit=9`       |  △   | 정렬·cursor 페이지네이션 연결             |
-| 최근 저장한 폴더     | `GET /folders?lastSavedAt=true&limit=3`              |  △   | `lastSavedAt` 집계·정렬 연결              |
-| 폴더별 링크 미리보기 | 현재 정책 결정 필요                                  |  X   | 폴더별 호출 또는 홈 전용 집계 API 중 선택 |
+| 화면 영역            | API                                                            | 상태 | 남은 작업                                 |
+| -------------------- | -------------------------------------------------------------- | :--: | ----------------------------------------- |
+| 최근 저장            | `GET /links?sortBy=savedAt&order=desc&limit=9`                 |  △   | 정렬·cursor 페이지네이션 연결             |
+| 다시 볼 링크         | `GET /links?reminder=true&sortBy=reminderAt&order=asc&limit=9` |  O   | 프론트 query 연결 필요                    |
+| 자주 저장한 키워드   | `GET /recommendations`                                         |  O   | `data=null`이면 섹션 전체 미노출          |
+| 최근 저장한 폴더     | `GET /folders?lastSavedAt=true&limit=3`                        |  △   | `lastSavedAt` 집계·정렬 연결              |
+| 폴더별 링크 미리보기 | 현재 정책 결정 필요                                            |  X   | 폴더별 호출 또는 홈 전용 집계 API 중 선택 |
+
+### 자주 저장한 키워드 노출 조건
+
+홈에서는 `GET /recommendations`를 query 없이 호출해 기본 최대 12개를 요청합니다. 활성 링크가 3개 이상 연결된 폴더와 태그만 후보가 되며, `items`의 한 목록에 섞인 `label`을 키워드 칩에 표시합니다.
+
+- 링크 수 기준을 통과한 폴더·태그 후보가 3개 이상: `data.items`로 섹션을 구성합니다.
+- 링크 수 기준을 통과한 후보가 2개 이하: API가 `data: null`을 반환하며 섹션 제목과 칩을 모두 렌더링하지 않습니다.
+- 후보 수 판정은 `limit`을 적용하기 전에 수행하므로, 홈 화면의 노출 여부가 요청 개수에 따라 달라지지 않습니다.
 
 ## 보관함과 폴더별 링크
 
@@ -31,6 +42,7 @@
 | 즐겨찾기                     | `GET /links?favorite=true`                            |  △   | 즐겨찾기 필터·cursor 페이지네이션 연결  |
 | 최근 삭제                    | `GET /links?deleted=true&sortBy=deletedAt&order=desc` |  △   | 삭제 시각 정렬·cursor 페이지네이션 연결 |
 | 사용자 폴더 상세             | `GET /links?folderId={folderId}`                      |  △   | cursor 페이지네이션 연결                |
+| 선택 링크 일괄 폴더 이동     | `PATCH /links/folder`                                 |  O   | 출처 화면과 무관하게 활성 링크만 이동   |
 
 전체·미분류·즐겨찾기·최근 삭제는 화면에서는 폴더처럼 표시되지만 DB의 `folders` row가 아닙니다. `folderId`가 없고 폴더 CRUD 대상도 아닙니다. `GET /folders`는 각 링크 상태의 개수만 제공하며, 항목을 눌렀을 때는 위 표처럼 `GET /links` Query를 조합합니다. 최근 삭제는 삭제된 폴더가 아니라 soft delete된 링크 목록입니다.
 
@@ -41,8 +53,8 @@
 
 | 화면 영역         | API                                                        | 상태 | 남은 작업                               |
 | ----------------- | ---------------------------------------------------------- | :--: | --------------------------------------- |
-| 검색 결과         | `GET /links?q={keyword}`                                   |  △   | cursor 페이지네이션 연결                |
-| 필터 범위 내 검색 | `GET /links?folderId={folderId}&favorite=true&q={keyword}` |  △   | 즐겨찾기 필터·cursor 페이지네이션 연결  |
+| 검색 결과         | `GET /links?q={keyword}`                                   |  O   | -                                       |
+| 필터 범위 내 검색 | `GET /links?folderId={folderId}&favorite=true&q={keyword}` |  O   | -                                       |
 | 최근 본 링크      | `GET /links?sortBy=viewedAt&order=desc&limit=9`            |  △   | 조회 시각 정렬·cursor 페이지네이션 연결 |
 | 최근 검색어       | 현재 정책 결정 필요                                        |  X   | 기기 로컬 저장 또는 서버 저장 여부 결정 |
 
@@ -50,15 +62,15 @@
 
 <img src="./screens/link-detail.png" alt="링크 상세 화면" width="240" />
 
-| 화면 동작              | API                                   | 상태 | 비고                                                  |
-| ---------------------- | ------------------------------------- | :--: | ----------------------------------------------------- |
-| 상세 정보 조회         | `GET /links/{linkId}`                 |  △   | 발행일·태그·연관 링크 조회 연결 필요                  |
-| 화면 노출 시 조회 기록 | `POST /links/{linkId}/view`           |  O   | Request Body 없이 서버 현재 시각을 `viewedAt`에 저장  |
-| 즐겨찾기 설정·해제     | `PATCH /links/{linkId}`               |  O   | `{ "isFavorite": true }` 또는 `false`                 |
-| 폴더 이동·미분류 이동  | `PATCH /links/{linkId}`               |  O   | `folderId` 지정, 미분류 이동은 `{ "folderId": null }` |
-| 사용자 태그 추가       | `POST /links/{linkId}/tags`           |  △   | Endpoint·계약만 존재, 현재 501·DB 저장 TODO           |
-| 사용자 태그 삭제       | `DELETE /links/{linkId}/tags/{tagId}` |  △   | Endpoint·계약만 존재, 현재 501·DB 삭제 TODO           |
-| 폴더 선택 목록         | `GET /folders`                        |  O   | 전체 사용자 폴더 반환                                 |
+| 화면 동작                  | API                                   | 상태 | 비고                                                  |
+| -------------------------- | ------------------------------------- | :--: | ----------------------------------------------------- |
+| 상세 정보 조회             | `GET /links/{linkId}`                 |  △   | 발행일 수집 TODO                                      |
+| 5초 이상 조회 시 열람 기록 | `POST /links/{linkId}/view`           |  O   | `viewedAt` 갱신 및 현재 폴더 `viewCount` 1 증가       |
+| 즐겨찾기 설정·해제         | `PATCH /links/{linkId}`               |  O   | `{ "isFavorite": true }` 또는 `false`                 |
+| 폴더 이동·미분류 이동      | `PATCH /links/{linkId}`               |  O   | `folderId` 지정, 미분류 이동은 `{ "folderId": null }` |
+| 사용자 태그 추가           | `POST /links/{linkId}/tags`           |  △   | Endpoint·계약만 존재, 현재 501·DB 저장 TODO           |
+| 사용자 태그 삭제           | `DELETE /links/{linkId}/tags/{tagId}` |  △   | Endpoint·계약만 존재, 현재 501·DB 삭제 TODO           |
+| 폴더 선택 목록             | `GET /folders`                        |  O   | 전체 사용자 폴더 반환                                 |
 
 ## 카테고리 둘러보기
 

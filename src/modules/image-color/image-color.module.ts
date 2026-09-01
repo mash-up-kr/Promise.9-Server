@@ -6,6 +6,7 @@ import { NodeVibrantImageColorAnalyzer } from './analyzers/node-vibrant-image-co
 import { SharpImageColorAnalyzer } from './analyzers/sharp-image-color.analyzer'
 import { ImageFetcherService } from './image-fetcher/image-fetcher.service'
 import { ImageResponseReader } from './image-fetcher/image-response.reader'
+import { ImageAnalysisPreprocessor } from './image-analysis-preprocessor.service'
 import { ImageColorService } from './image-color.service'
 
 @Module({
@@ -13,6 +14,7 @@ import { ImageColorService } from './image-color.service'
     providers: [
         ImageFetcherService,
         ImageResponseReader,
+        ImageAnalysisPreprocessor,
         ImageColorService,
         NodeVibrantImageColorAnalyzer,
         SharpImageColorAnalyzer,
