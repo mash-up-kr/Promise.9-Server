@@ -31,6 +31,50 @@ describe('LinkRepository', () => {
         await expect(result).rejects.toHaveProperty('status', 400)
     })
 
+    describe('insert', () => {
+        it('선검사 이후 경합으로 unique 제약을 위반하면 기존 링크 ID와 함께 409로 변환한다', async () => {
+            const conflictError = Object.assign(new Error('duplicate key'), {
+                code: '23505',
+            })
+            const insertQuery = {
+                values: jest.fn(),
+                returning: jest.fn().mockRejectedValue(conflictError),
+            }
+            insertQuery.values.mockReturnValue(insertQuery)
+
+            const selectQuery = {
+                from: jest.fn(),
+                where: jest.fn(),
+                limit: jest.fn().mockResolvedValue([{ id: 55 }]),
+            }
+            selectQuery.from.mockReturnValue(selectQuery)
+            selectQuery.where.mockReturnValue(selectQuery)
+
+            const db = {
+                insert: jest.fn().mockReturnValue(insertQuery),
+                select: jest.fn().mockReturnValue(selectQuery),
+            }
+            const repository = new LinkRepository({
+                db,
+            } as unknown as DatabaseService)
+
+            const result = repository.insert({
+                userId: 1,
+                normalizedUrl: 'https://example.com',
+            } as unknown as Parameters<LinkRepository['insert']>[0])
+
+            await expect(result).rejects.toMatchObject({
+                status: 409,
+                response: {
+                    error: expect.objectContaining({
+                        errorCode: 930003,
+                        linkId: 55,
+                    }),
+                },
+            })
+        })
+    })
+
     describe('moveToFolder', () => {
         const selectQuery = <T>(rows: T[]) => {
             const query = {

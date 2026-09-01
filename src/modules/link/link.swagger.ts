@@ -101,6 +101,10 @@ URL과 사용자 입력값을 먼저 저장한 뒤 링크 정보 수집, AI 요�
 
 - URL, 폴더, 메모, 리마인드 시각을 저장한 뒤 링크 정보 수집과 AI 요약·태그·임베딩 생성을 시작합니다.
 - 메시지 큐와 재시도 정책은 아직 적용하지 않았습니다.
+
+### 중복 저장
+
+같은 사용자가 이미 저장한(삭제되지 않은) 동일 URL(정규화 기준)을 다시 저장하면 \`409 Conflict\`(\`errorCode=930003\`)를 반환합니다. 이때 응답의 \`error.linkId\`에 기존 링크 ID가 포함되므로, 새로 만들지 않고 그 링크로 바로 이동시키는 등의 처리에 사용할 수 있습니다.
 `
 
 const LINK_DETAIL_DESCRIPTION = `
@@ -319,7 +323,10 @@ export const ApiCreateLink = () =>
             COMMON_ERROR.VALIDATION,
             AUTH_ERROR.INVALID_TOKEN,
             FOLDER_ERROR.NOT_FOUND,
-            LINK_ERROR.ALREADY_EXISTS,
+            {
+                ...LINK_ERROR.ALREADY_EXISTS,
+                exampleData: { linkId: 42 },
+            },
         ),
     )
 

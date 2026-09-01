@@ -412,7 +412,10 @@ export class LinkService {
         )
 
         if (existing) {
-            throw new BaseException(LINK_ERROR.ALREADY_EXISTS)
+            throw new BaseException({
+                ...LINK_ERROR.ALREADY_EXISTS,
+                data: { linkId: existing.id },
+            })
         }
     }
 
