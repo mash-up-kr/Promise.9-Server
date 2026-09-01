@@ -66,6 +66,82 @@ describe('LinkContentService', () => {
         })
     })
 
+    it('YouTube 미리보기는 oEmbed 제목과 썸네일을 사용한다', async () => {
+        fetchSpy.mockResolvedValueOnce(
+            jsonResponse({
+                title: '식인섬에서 살아남기',
+                thumbnail_url:
+                    'https://i.ytimg.com/vi/8Pbt-Aum5Q4/hqdefault.jpg',
+            }),
+        )
+
+        const resourceUrl = 'https://www.youtube.com/watch?v=8Pbt-Aum5Q4&t=14s'
+        const result = await service.preview(resourceUrl)
+
+        expect(result).toEqual({
+            title: '식인섬에서 살아남기',
+            thumbnailUrl: 'https://i.ytimg.com/vi/8Pbt-Aum5Q4/hqdefault.jpg',
+            source: 'youtube.com',
+        })
+        expect(fetchSpy).toHaveBeenCalledTimes(1)
+
+        const [requestUrl, requestOptions] = fetchSpy.mock.calls[0]
+        const endpoint = requestUrl as URL
+
+        expect(endpoint.origin + endpoint.pathname).toBe(
+            'https://www.youtube.com/oembed',
+        )
+        expect(endpoint.searchParams.get('url')).toBe(resourceUrl)
+        expect(endpoint.searchParams.get('format')).toBe('json')
+        expect(requestOptions?.headers).toMatchObject({
+            Accept: 'application/json',
+        })
+    })
+
+    it('YouTube 저장 수집은 oEmbed 제목과 썸네일만 반환한다', async () => {
+        fetchSpy.mockResolvedValueOnce(
+            jsonResponse({
+                title: '영상 제목',
+                thumbnail_url: 'https://i.ytimg.com/vi/video/hqdefault.jpg',
+            }),
+        )
+
+        const result = await service.collect('https://youtu.be/video?t=14')
+
+        expect(result).toEqual({
+            title: '영상 제목',
+            description: null,
+            content: null,
+            image: {
+                url: 'https://i.ytimg.com/vi/video/hqdefault.jpg',
+                source: 'oembed',
+            },
+        })
+        expect(fetchSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('YouTube oEmbed가 실패하면 기존 OG 수집으로 폴백한다', async () => {
+        fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 503 }))
+            .mockResolvedValueOnce(
+                htmlResponse(`
+                    <meta property="og:title" content="폴백 제목" />
+                    <meta property="og:image" content="/fallback.jpg" />
+                `),
+            )
+
+        const result = await service.preview(
+            'https://www.youtube.com/watch?v=video',
+        )
+
+        expect(result).toEqual({
+            title: '폴백 제목',
+            thumbnailUrl: 'https://www.youtube.com/fallback.jpg',
+            source: 'youtube.com',
+        })
+        expect(fetchSpy).toHaveBeenCalledTimes(2)
+    })
+
     it('robots.txt가 허용한 링크에서 제목, 설명, 본문을 수집한다', async () => {
         fetchSpy
             .mockResolvedValueOnce(
@@ -302,6 +378,15 @@ function htmlResponse(html: string): Response {
         status: 200,
         headers: {
             'content-type': 'text/html; charset=utf-8',
+        },
+    })
+}
+
+function jsonResponse(value: unknown): Response {
+    return new Response(JSON.stringify(value), {
+        status: 200,
+        headers: {
+            'content-type': 'application/json; charset=utf-8',
         },
     })
 }

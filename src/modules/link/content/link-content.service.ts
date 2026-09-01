@@ -20,6 +20,12 @@ import {
     LinkPreview,
 } from './link-content.type'
 import { isRobotsPathAllowed } from './robots.parser'
+import {
+    buildYoutubeOEmbedUrl,
+    isYoutubeUrl,
+    parseYoutubeOEmbed,
+    YoutubeOEmbedPreview,
+} from './youtube-oembed'
 
 class RobotsDisallowedError extends Error {}
 
@@ -31,6 +37,19 @@ export class LinkContentService {
 
     // 저장 전 화면에 사용할 링크 제목, 대표 이미지, 출처를 수집한다.
     async preview(url: string): Promise<LinkPreview> {
+        const youtube = await this.fetchYoutubeOEmbed(url)
+
+        if (youtube) {
+            return {
+                title: youtube.preview.title,
+                thumbnailUrl: await this.toSafeAbsoluteImage(
+                    youtube.preview.image,
+                    youtube.resourceUrl,
+                ),
+                source: 'youtube.com',
+            }
+        }
+
         const { html, finalUrl } = await this.fetchHtml(url)
         const { title, image } = parseLinkPreview(html)
 
@@ -44,6 +63,26 @@ export class LinkContentService {
     // null은 정상적으로 수집할 내용이 없거나 robots.txt가 명시적으로 차단한 경우다.
     // 네트워크·타임아웃·원격 5xx는 호출부가 재시도할 수 있도록 예외를 유지한다.
     async collect(url: string): Promise<CollectedLinkContent | null> {
+        const youtube = await this.fetchYoutubeOEmbed(url)
+
+        if (youtube) {
+            const imageUrl = await this.toSafeAbsoluteImage(
+                youtube.preview.image,
+                youtube.resourceUrl,
+            )
+            const collected: CollectedLinkContent = {
+                title: this.limitText(
+                    youtube.preview.title,
+                    LINK_CONTENT_TEXT_LIMIT.title,
+                ),
+                description: null,
+                content: null,
+                image: imageUrl ? { url: imageUrl, source: 'oembed' } : null,
+            }
+
+            return this.hasCollectedContent(collected) ? collected : null
+        }
+
         try {
             const { html, finalUrl } = await this.fetchHtml(url, {
                 beforeRequest: this.validateCrawlingAllowed,
@@ -79,6 +118,61 @@ export class LinkContentService {
             }
 
             throw error
+        }
+    }
+
+    // YouTube 페이지는 서버 환경에서 제목과 썸네일을 제공하지 않을 수 있다.
+    // 따라서 oEmbed로 먼저 조회하고, 실패하면 기존 HTML 수집을 시도한다.
+    private async fetchYoutubeOEmbed(rawUrl: string): Promise<{
+        resourceUrl: URL
+        preview: YoutubeOEmbedPreview
+    } | null> {
+        let resourceUrl: URL
+
+        try {
+            resourceUrl = this.urlSecurity.parseHttpUrl(rawUrl)
+        } catch {
+            return null
+        }
+
+        if (!isYoutubeUrl(resourceUrl)) return null
+
+        const endpoint = buildYoutubeOEmbedUrl(resourceUrl)
+        const controller = new AbortController()
+        const timeout = setTimeout(
+            () => controller.abort(),
+            LINK_CONTENT_FETCH.timeoutMs,
+        )
+
+        try {
+            await this.urlSecurity.resolvePublicUrl(endpoint)
+
+            const response = await fetch(endpoint, {
+                headers: {
+                    ...LINK_CONTENT_REQUEST_HEADERS,
+                    Accept: 'application/json',
+                },
+                redirect: 'manual',
+                signal: controller.signal,
+            })
+
+            if (!response.ok) {
+                this.cancelBody(response)
+                return null
+            }
+
+            const parsed = parseYoutubeOEmbed(
+                JSON.parse(await this.readLimitedText(response)) as unknown,
+            )
+
+            return parsed ? { resourceUrl, preview: parsed } : null
+        } catch (error) {
+            this.logger.warn(
+                `YouTube oEmbed 수집에 실패해 일반 OG로 폴백합니다: ${this.describeError(error)}`,
+            )
+            return null
+        } finally {
+            clearTimeout(timeout)
         }
     }
 
@@ -228,6 +322,10 @@ export class LinkContentService {
     // 네트워크 예외가 AbortController의 타임아웃 취소인지 구분한다.
     private isAbortError(error: unknown): boolean {
         return error instanceof Error && error.name === 'AbortError'
+    }
+
+    private describeError(error: unknown): string {
+        return error instanceof Error ? error.message : String(error)
     }
 
     // 리다이렉트의 각 URL을 다시 검증하고 최종 HTML 응답을 읽는다.
