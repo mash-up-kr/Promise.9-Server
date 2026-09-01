@@ -1,8 +1,6 @@
 // 링크 페이지 정보 수집 요청 설정
 
-export const LINK_CONTENT_USER_AGENT =
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
-    '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+export const LINK_CONTENT_USER_AGENT = 'Promise9Bot/1.0'
 
 // 일반적인 HTML 응답 형식을 요청하고 한국어 콘텐츠를 우선한다.
 export const LINK_CONTENT_REQUEST_HEADERS = {

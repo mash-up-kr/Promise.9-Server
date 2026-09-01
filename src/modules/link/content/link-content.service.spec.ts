@@ -53,6 +53,19 @@ describe('LinkContentService', () => {
         expect(fetchSpy).toHaveBeenCalledTimes(1)
     })
 
+    it('브라우저가 아닌 링크 수집기 User-Agent로 HTML을 요청한다', async () => {
+        fetchSpy.mockResolvedValueOnce(htmlResponse('<title>링크 제목</title>'))
+
+        await service.preview('https://example.com/article')
+
+        const [requestUrl, requestOptions] = fetchSpy.mock.calls[0]
+
+        expect(requestUrl).toEqual(new URL('https://example.com/article'))
+        expect(requestOptions?.headers).toMatchObject({
+            'User-Agent': 'Promise9Bot/1.0',
+        })
+    })
+
     it('robots.txt가 허용한 링크에서 제목, 설명, 본문을 수집한다', async () => {
         fetchSpy
             .mockResolvedValueOnce(
