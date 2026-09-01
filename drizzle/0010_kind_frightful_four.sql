@@ -1,0 +1,1 @@
+ALTER TABLE "refresh_tokens" ADD COLUMN "purpose" varchar(20) DEFAULT 'primary' NOT NULL;
