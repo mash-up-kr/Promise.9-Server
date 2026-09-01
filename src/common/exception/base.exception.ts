@@ -17,10 +17,13 @@ export class BaseException extends HttpException {
         code,
         errorCode,
         message,
+        data,
     }: {
         code: HttpStatus
         errorCode: number
         message: string
+        // 클라이언트가 후속 처리에 쓸 수 있는 부가 정보 (예: 중복 충돌 시 기존 리소스 ID)
+        data?: Record<string, unknown>
     }) {
         super(
             {
@@ -30,6 +33,7 @@ export class BaseException extends HttpException {
                     errorCode,
                     message,
                     timestamp: new Date().toISOString(),
+                    ...data,
                 },
             },
             code,
