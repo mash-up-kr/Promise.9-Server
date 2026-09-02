@@ -1,6 +1,9 @@
 import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
 
-import { LINK_CONTENT_IMAGE_URL_MAX_LENGTH } from './link-content.constants'
+import {
+    LINK_CONTENT_BROWSER_USER_AGENT,
+    LINK_CONTENT_IMAGE_URL_MAX_LENGTH,
+} from './link-content.constants'
 import { LinkContentService } from './link-content.service'
 
 describe('LinkContentService', () => {
@@ -53,7 +56,7 @@ describe('LinkContentService', () => {
         expect(fetchSpy).toHaveBeenCalledTimes(1)
     })
 
-    it('브라우저가 아닌 링크 수집기 User-Agent로 HTML을 요청한다', async () => {
+    it('일반 링크는 기존 브라우저 User-Agent로 HTML을 요청한다', async () => {
         fetchSpy.mockResolvedValueOnce(htmlResponse('<title>링크 제목</title>'))
 
         await service.preview('https://example.com/article')
@@ -62,8 +65,39 @@ describe('LinkContentService', () => {
 
         expect(requestUrl).toEqual(new URL('https://example.com/article'))
         expect(requestOptions?.headers).toMatchObject({
+            'User-Agent': LINK_CONTENT_BROWSER_USER_AGENT,
+        })
+    })
+
+    it('Brunch 링크만 링크 수집기 User-Agent로 HTML을 요청한다', async () => {
+        fetchSpy.mockResolvedValueOnce(
+            htmlResponse('<title>Brunch 제목</title>'),
+        )
+
+        await service.preview('https://brunch.co.kr/@author/1')
+
+        const [requestUrl, requestOptions] = fetchSpy.mock.calls[0]
+
+        expect(requestUrl).toEqual(new URL('https://brunch.co.kr/@author/1'))
+        expect(requestOptions?.headers).toMatchObject({
             'User-Agent': 'Promise9Bot/1.0',
         })
+    })
+
+    it('Brunch 저장 수집은 robots.txt와 HTML에 같은 전용 User-Agent를 사용한다', async () => {
+        fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 404 }))
+            .mockResolvedValueOnce(htmlResponse('<title>Brunch 제목</title>'))
+
+        await service.collect('https://brunch.co.kr/@author/1')
+
+        expect(fetchSpy).toHaveBeenCalledTimes(2)
+
+        for (const [, requestOptions] of fetchSpy.mock.calls) {
+            expect(requestOptions?.headers).toMatchObject({
+                'User-Agent': 'Promise9Bot/1.0',
+            })
+        }
     })
 
     it('YouTube 미리보기는 oEmbed 제목과 썸네일을 사용한다', async () => {
@@ -140,6 +174,14 @@ describe('LinkContentService', () => {
             source: 'youtube.com',
         })
         expect(fetchSpy).toHaveBeenCalledTimes(2)
+        const [fallbackUrl, fallbackOptions] = fetchSpy.mock.calls[1]
+
+        expect(fallbackUrl).toEqual(
+            new URL('https://www.youtube.com/watch?v=video'),
+        )
+        expect(fallbackOptions?.headers).toMatchObject({
+            'User-Agent': LINK_CONTENT_BROWSER_USER_AGENT,
+        })
     })
 
     it('robots.txt가 허용한 링크에서 제목, 설명, 본문을 수집한다', async () => {
