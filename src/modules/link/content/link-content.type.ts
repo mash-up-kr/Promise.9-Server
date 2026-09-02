@@ -1,4 +1,5 @@
-export type LinkImageSource = 'og:image' | 'twitter:image' | 'oembed'
+export type LinkImageSource =
+    'og:image' | 'twitter:image' | 'oembed' | 'tinyfish'
 
 export type CollectedLinkImage = {
     url: string
@@ -11,6 +12,7 @@ export type CollectedLinkContent = {
     description: string | null
     content: string | null
     image: CollectedLinkImage | null
+    analysisUnavailableReason?: string
 }
 
 // 저장 전 링크 미리보기에 필요한 응답 정보.
@@ -24,11 +26,6 @@ export type LinkPreview = {
 export type FetchedLinkHtml = {
     html: string
     finalUrl: URL
-}
-
-// 각 HTML 요청 직전에 실행할 추가 검증 함수.
-export type FetchLinkHtmlOptions = {
-    beforeRequest?: (url: URL) => Promise<void>
 }
 
 export type ParsedLinkInformation = {

@@ -1,5 +1,3 @@
-import { LINK_CONTENT_BROWSER_USER_AGENT } from '../link-content.constants'
-
 import { resolveLinkContentStrategy } from './link-content-strategy.registry'
 
 describe('resolveLinkContentStrategy', () => {
@@ -16,25 +14,34 @@ describe('resolveLinkContentStrategy', () => {
     })
 
     it.each([
-        'https://brunch.co.kr/@author/1',
-        'https://api.brunch.co.kr/article/1',
-    ])('Brunch URL에 전용 User-Agent 전략을 적용한다: %s', (rawUrl) => {
-        const strategy = resolveLinkContentStrategy(new URL(rawUrl))
+        ['https://x.com/OpenAI/status/2041581000120267067', 'x'],
+        ['https://x.com/i/web/status/2041581000120267067', 'x'],
+        ['https://twitter.com/OpenAI', 'x'],
+        ['https://www.instagram.com/instagram/', 'instagram'],
+        ['https://www.instagram.com/p/example/', 'instagram'],
+        ['https://www.instagram.com/reel/example/', 'instagram'],
+    ])(
+        '지원하는 소셜 URL에 사이트별 TinyFish 전략을 적용한다: %s',
+        (rawUrl, expectedName) => {
+            const strategy = resolveLinkContentStrategy(new URL(rawUrl))
 
-        expect(strategy.name).toBe('brunch')
-        expect(strategy.kind).toBe('html')
-        expect(strategy.userAgent).toBe('Promise9Bot/1.0')
-    })
+            expect(strategy.name).toBe(expectedName)
+            expect(strategy.kind).toBe('tinyfish')
+        },
+    )
 
     it.each([
         'https://example.com/article',
         'https://youtube.com.evil.example/watch?v=video',
         'https://brunch.co.kr.evil.example/article',
+        'https://x.com.evil.example/OpenAI/status/1',
+        'https://instagram.com.evil.example/p/example',
+        'https://x.com/login',
+        'https://www.instagram.com/accounts/login/',
     ])('등록되지 않은 URL에는 기본 OG 전략을 적용한다: %s', (rawUrl) => {
         const strategy = resolveLinkContentStrategy(new URL(rawUrl))
 
         expect(strategy.name).toBe('default')
         expect(strategy.kind).toBe('html')
-        expect(strategy.userAgent).toBe(LINK_CONTENT_BROWSER_USER_AGENT)
     })
 })

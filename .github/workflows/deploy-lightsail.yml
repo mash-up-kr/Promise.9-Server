@@ -79,6 +79,7 @@ jobs:
           KAKAO_NATIVE_APP_KEY: ${{ secrets.KAKAO_NATIVE_APP_KEY }}
           APPLE_CLIENT_ID: ${{ secrets.APPLE_CLIENT_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TINY_FISH_API_KEY: ${{ secrets.TINY_FISH_API_KEY }}
           MASTER_ACCESS_TOKEN: ${{ secrets.MASTER_ACCESS_TOKEN }}
           MASTER_USER_ID: ${{ secrets.MASTER_USER_ID }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -96,6 +97,7 @@ jobs:
           : "${KAKAO_NATIVE_APP_KEY:?KAKAO_NATIVE_APP_KEY is required}"
           : "${APPLE_CLIENT_ID:?APPLE_CLIENT_ID is required}"
           : "${OPENAI_API_KEY:?OPENAI_API_KEY is required}"
+          : "${TINY_FISH_API_KEY:?TINY_FISH_API_KEY is required}"
 
           {
             printf 'APP_ENV=production\n'
@@ -107,6 +109,7 @@ jobs:
             printf 'KAKAO_NATIVE_APP_KEY=%s\n' "$KAKAO_NATIVE_APP_KEY"
             printf 'APPLE_CLIENT_ID=%s\n' "$APPLE_CLIENT_ID"
             printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
+            printf 'TINY_FISH_API_KEY=%s\n' "$TINY_FISH_API_KEY"
 
             if [ -n "$KAKAO_CLIENT_SECRET" ]; then
               printf 'KAKAO_CLIENT_SECRET=%s\n' "$KAKAO_CLIENT_SECRET"
