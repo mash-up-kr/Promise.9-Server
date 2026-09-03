@@ -7,6 +7,8 @@ export interface ApiErrorDefinition {
     code: HttpStatus
     errorCode: number
     message: string
+    // Swagger 예시에만 반영되는 부가 데이터 (예: 중복 충돌 시 기존 리소스 ID)
+    exampleData?: Record<string, unknown>
 }
 
 const ERROR_TIMESTAMP_EXAMPLE = '2026-07-13T09:41:00.000Z'
@@ -99,6 +101,7 @@ export const ApiCommonErrorResponses = (...errors: ApiErrorDefinition[]) => {
                                             errorCode: error.errorCode,
                                             message: error.message,
                                             timestamp: ERROR_TIMESTAMP_EXAMPLE,
+                                            ...error.exampleData,
                                         },
                                     },
                                 },

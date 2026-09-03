@@ -1,5 +1,5 @@
 {
-  "id": "6ecba5b7-b930-400e-8348-e30127de23e8",
+  "id": "efb3350a-7921-4eee-92e9-cd57b1a3da74",
   "prevId": "c99d478f-aaf6-4b8b-aef3-aa6bb031eed1",
   "version": "7",
   "dialect": "postgresql",
@@ -168,6 +168,13 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'primary'"
         },
         "expires_at": {
           "name": "expires_at",
@@ -601,22 +608,6 @@
           ],
           "isUnique": false,
           "where": "\"links\".\"deleted_at\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "links_reminder_at_active_idx": {
-          "name": "links_reminder_at_active_idx",
-          "columns": [
-            {
-              "expression": "reminder_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"links\".\"deleted_at\" is null and \"links\".\"reminder_at\" is not null",
           "concurrently": false,
           "method": "btree",
           "with": {}

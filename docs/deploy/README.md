@@ -7,3 +7,4 @@ Promise.9 서버 배포 문서입니다.
 | 문서                                                 | 내용                                                |
 | ---------------------------------------------------- | --------------------------------------------------- |
 | [Lightsail Docker Deployment](./lightsail-docker.md) | AWS Lightsail의 API·PostgreSQL Docker 배포          |
+| [링크 분석 SQS 설정](./sqs-link-analysis.md)         | 링크 분석 실패 작업 재시도 큐 설정, IAM, 동작 흐름  |

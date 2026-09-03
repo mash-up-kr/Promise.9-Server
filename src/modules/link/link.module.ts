@@ -6,6 +6,9 @@ import { AiModule } from '../ai/ai.module'
 import { AuthModule } from '../auth/auth.module'
 import { ImageColorModule } from '../image-color/image-color.module'
 
+import { LinkAnalysisQueueConsumer } from './analysis/link-analysis.consumer'
+import { LinkAnalysisDispatcher } from './analysis/link-analysis.dispatcher'
+import { LinkAnalysisQueuePublisher } from './analysis/link-analysis.publisher'
 import { LinkAnalysisService } from './analysis/link-analysis.service'
 import { LinkContentService } from './content/link-content.service'
 import { EmbeddingService } from './embedding/embedding.service'
@@ -33,6 +36,9 @@ import { LinkService } from './link.service'
         SearchRepository,
         SearchService,
         LinkAnalysisService,
+        LinkAnalysisDispatcher,
+        LinkAnalysisQueuePublisher,
+        LinkAnalysisQueueConsumer,
         LinkContentService,
         RelatedLinkRepository,
         RelatedLinkService,

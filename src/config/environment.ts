@@ -5,7 +5,10 @@ import { LLM_MODEL } from '../common/constants/llm'
 export type RuntimeEnvironment = 'development' | 'production'
 
 const DEFAULT_LLM_REQUEST_TIMEOUT_MS = 30_000
+const DEFAULT_SQS_WAIT_TIME_SECONDS = 20
+const DEFAULT_SQS_VISIBILITY_TIMEOUT_SECONDS = 300
 const DEFAULT_EMAIL_SES_REGION = 'ap-northeast-2'
+const PRODUCTION_LINK_ANALYSIS_QUEUE_NAME = 'promise9-link-analysis'
 
 // drizzle.config.ts에서 사용 — DB 접속 정보만 검증
 const dbEnvSchema = z
@@ -46,6 +49,9 @@ const appEnvSchema = z
         KAKAO_CLIENT_ID: z.string().min(1),
         // 카카오 로그인 콘솔에서 Client Secret 사용을 켠 경우에만 필요 (기본값 OFF)
         KAKAO_CLIENT_SECRET: z.string().min(1).optional(),
+        // 네이티브(iOS/Android) SDK가 발급하는 id_token의 aud는 REST API 키가 아니라
+        // 네이티브 앱 키라, 두 값을 모두 audience로 허용해야 앱 로그인이 검증된다.
+        KAKAO_NATIVE_APP_KEY: z.string().min(1),
         APPLE_CLIENT_ID: z.string().min(1),
         MASTER_ACCESS_TOKEN: z.string().optional(),
         MASTER_USER_ID: z.coerce.number().int().positive().optional(),
@@ -58,6 +64,25 @@ const appEnvSchema = z
             .default(DEFAULT_LLM_REQUEST_TIMEOUT_MS),
         OPENAI_API_KEY: z.string().min(1).optional(),
         GEMINI_API_KEY: z.string().min(1).optional(),
+        AWS_REGION: z.string().min(1).default('ap-northeast-2'),
+        SQS_LINK_ANALYSIS_QUEUE_URL: z.url().optional(),
+        SQS_ENDPOINT: z.url().optional(),
+        SQS_CONSUMER_ENABLED: z
+            .enum(['true', 'false'])
+            .default('false')
+            .transform((value) => value === 'true'),
+        SQS_WAIT_TIME_SECONDS: z.coerce
+            .number()
+            .int()
+            .min(1)
+            .max(20)
+            .default(DEFAULT_SQS_WAIT_TIME_SECONDS),
+        SQS_VISIBILITY_TIMEOUT_SECONDS: z.coerce
+            .number()
+            .int()
+            .min(1)
+            .max(43_200)
+            .default(DEFAULT_SQS_VISIBILITY_TIMEOUT_SECONDS),
         EMAIL_SES_REGION: z.string().min(1).default(DEFAULT_EMAIL_SES_REGION),
         EMAIL_FROM_ADDRESS: z.email().optional(),
         EMAIL_CONFIGURATION_SET: z.string().min(1).optional(),
@@ -104,6 +129,22 @@ const appEnvSchema = z
                 message: 'production 환경에서는 OPENAI_API_KEY가 필요합니다.',
             })
         }
+
+        if (
+            env.APP_ENV === 'development' &&
+            env.SQS_CONSUMER_ENABLED &&
+            isProductionLinkAnalysisQueue(
+                env.SQS_LINK_ANALYSIS_QUEUE_URL,
+                env.SQS_ENDPOINT,
+            )
+        ) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['SQS_LINK_ANALYSIS_QUEUE_URL'],
+                message:
+                    'development 환경에서 production 링크 분석 큐를 소비할 수 없습니다. LocalStack(SQS_ENDPOINT)을 사용하거나 SQS_CONSUMER_ENABLED=false로 설정하세요.',
+            })
+        }
     })
     .transform((env) => ({
         ...env,
@@ -147,4 +188,16 @@ function getDatabaseUrlKey(appEnv: RuntimeEnvironment) {
     return appEnv === 'production'
         ? 'DATABASE_URL_PRODUCTION'
         : 'DATABASE_URL_DEVELOPMENT'
+}
+
+function isProductionLinkAnalysisQueue(
+    queueUrl: string | undefined,
+    endpoint: string | undefined,
+): boolean {
+    if (!queueUrl || endpoint) return false
+
+    return (
+        new URL(queueUrl).pathname.split('/').filter(Boolean).at(-1) ===
+        PRODUCTION_LINK_ANALYSIS_QUEUE_NAME
+    )
 }

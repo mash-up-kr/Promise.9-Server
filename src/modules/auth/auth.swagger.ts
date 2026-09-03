@@ -114,6 +114,32 @@ export const ApiKakaoExchange = () =>
         ),
     )
 
+const EXTENSION_TOKEN_DESCRIPTION = `
+웹/앱에서 로그인 완료 후, 익스텐션에 넘겨줄 별도의 토큰쌍을 발급받습니다.
+요청은 소셜 로그인으로 직접 발급된 Access Token(Authorization: Bearer)으로만
+인증됩니다. 이 endpoint가 발급한 익스텐션 토큰으로는 다시 호출할 수 없습니다
+(재귀 발급 차단). 응답으로 받은 토큰쌍은 원본 세션과 별개의 tokenFamily로
+발급되어 서로 독립적으로 회전/폐기됩니다 (한쪽을 로그아웃해도 다른 쪽엔 영향
+없음).
+
+⚠️ 발급된 토큰쌍을 익스텐션에 전달할 때 URL 쿼리스트링/리다이렉트는
+사용하지 마세요 (브라우저 히스토리·리퍼러에 노출됨). \`postMessage\` 등
+안전한 채널로 전달하세요.
+`
+
+export const ApiExtensionToken = () =>
+    applyDecorators(
+        ApiOperation({
+            summary: '익스텐션용 토큰쌍 발급 (웹 로그인 이후)',
+            description: EXTENSION_TOKEN_DESCRIPTION,
+        }),
+        ApiCommonResponse(TokenPairResponseDto, {
+            description: '발급 성공',
+            dataExample: TOKEN_PAIR_RESPONSE_EXAMPLE,
+        }),
+        ApiCommonErrorResponses(AUTH_ERROR.INVALID_TOKEN),
+    )
+
 export const ApiRefreshToken = () =>
     applyDecorators(
         ApiOperation({ summary: '토큰 재발급 (Refresh Token Rotation)' }),

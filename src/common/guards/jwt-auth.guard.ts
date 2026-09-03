@@ -5,11 +5,14 @@ import { Request } from 'express'
 import { Observable } from 'rxjs'
 
 import { ValidatedEnvironment } from '../../config/environment'
+import { TokenPurpose } from '../../modules/auth/auth.constants'
 import { AUTH_ERROR } from '../../modules/auth/auth-error.constant'
 import { BaseException } from '../exception/base.exception'
 
 export interface AuthUser {
     userId: number
+    // MASTER_ACCESS_TOKEN 우회 경로로 만들어진 AuthUser는 이 값이 없다.
+    purpose?: TokenPurpose
 }
 
 @Injectable()
