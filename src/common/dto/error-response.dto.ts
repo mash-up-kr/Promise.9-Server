@@ -28,6 +28,15 @@ export class ErrorDataDto implements ErrorData {
         description: '에러 발생 시각 (ISO 8601)',
     })
     timestamp!: string
+
+    @ApiProperty({
+        type: Number,
+        required: false,
+        example: 42,
+        description:
+            '링크 중복 저장 충돌(errorCode 930003)일 때만 포함되는 기존 링크 ID',
+    })
+    linkId?: number
 }
 
 export class ErrorResponseDto implements ErrorResponse {

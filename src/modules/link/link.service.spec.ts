@@ -192,4 +192,28 @@ describe('LinkService', () => {
 
         loggerWarnSpy.mockRestore()
     })
+
+    it('이미 저장한 동일 URL이면 기존 링크 ID와 함께 409로 거부한다', async () => {
+        const linkRepository = {
+            findActiveByNormalizedUrl: jest.fn().mockResolvedValue({ id: 55 }),
+        }
+        const service = new LinkService(
+            linkRepository as unknown as LinkRepository,
+            {} as never,
+            {} as never,
+            {} as never,
+        )
+
+        await expect(
+            service.create(1, { url: 'https://example.com' }),
+        ).rejects.toMatchObject({
+            status: 409,
+            response: {
+                error: expect.objectContaining({
+                    errorCode: 930003,
+                    linkId: 55,
+                }),
+            },
+        })
+    })
 })

@@ -15,7 +15,12 @@ import { GoogleProvider } from './providers/google.provider'
 import { KakaoProvider } from './providers/kakao.provider'
 import { SocialProvider } from './providers/social-provider.interface'
 import { RefreshTokenRepository } from './repository/refresh-token.repository'
-import { TOKEN_TYPE, TokenType } from './auth.constants'
+import {
+    TOKEN_PURPOSE,
+    TOKEN_TYPE,
+    TokenPurpose,
+    TokenType,
+} from './auth.constants'
 import { AUTH_ERROR } from './auth-error.constant'
 import { hashToken } from './crypto.utils'
 import { parseExpiresIn } from './time.utils'
@@ -115,10 +120,16 @@ export class AuthService {
         }
 
         // Refresh Token Rotation: 기존 토큰을 soft revoke하고 새 토큰 쌍을 발급한다.
-        // 동일 family를 이어받아 rotation 체인을 유지한다.
+        // 동일 family와 purpose를 이어받아 rotation 체인을 유지한다. purpose를
+        // 이어받지 않으면 extension 토큰이 refresh 한 번으로 primary 권한을
+        // 얻어버린다.
         await this.refreshTokenRepository.revokeById(stored.id)
 
-        return this.issueTokens(payload.sub, stored.tokenFamily)
+        return this.issueTokens(
+            payload.sub,
+            stored.tokenFamily,
+            stored.purpose as TokenPurpose,
+        )
     }
 
     async logout(rawRefreshToken: string): Promise<void> {
@@ -168,20 +179,27 @@ export class AuthService {
         return resolved
     }
 
-    private async issueTokens(
+    // 웹 세션(access token)으로 인증된 사용자에게 익스텐션 전용 토큰쌍을 새로
+    // 발급할 때(POST /auth/extension-token)도 컨트롤러에서 직접 호출한다.
+    // 새 tokenFamily를 쓰므로 웹 쪽 토큰과 독립적으로 회전/폐기된다.
+    async issueTokens(
         userId: number,
         tokenFamily: string = randomUUID(),
+        purpose: TokenPurpose = TOKEN_PURPOSE.PRIMARY,
     ): Promise<TokenPair> {
         const accessToken = this.jwtService.sign(
-            { sub: userId, type: TOKEN_TYPE.ACCESS },
+            { sub: userId, type: TOKEN_TYPE.ACCESS, purpose },
             {
                 secret: this.accessSecret,
                 expiresIn: this.accessExpiresIn as StringValue,
             },
         )
 
+        // jti 없이 sub+type만 서명하면 같은 유저에게 같은 초(iat)에 두 번 발급할 때
+        // 완전히 동일한 토큰 문자열이 나와 refresh_tokens.token_hash 유니크 제약과
+        // 충돌한다(예: extension-token을 로그인 직후 연달아 호출하는 경우).
         const rawRefreshToken = this.jwtService.sign(
-            { sub: userId, type: TOKEN_TYPE.REFRESH },
+            { sub: userId, type: TOKEN_TYPE.REFRESH, jti: randomUUID() },
             {
                 secret: this.refreshSecret,
                 expiresIn: this.refreshExpiresIn as StringValue,
@@ -192,6 +210,7 @@ export class AuthService {
             userId,
             tokenHash: hashToken(rawRefreshToken),
             tokenFamily,
+            purpose,
             expiresAt: parseExpiresIn(this.refreshExpiresIn),
         })
 

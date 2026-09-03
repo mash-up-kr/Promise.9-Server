@@ -142,8 +142,10 @@ export class LinkRepository {
     }
 
     async insert(values: typeof links.$inferInsert): Promise<LinkRow> {
-        const [row] = await this.throwOnDuplicateUrl(() =>
-            this.db.insert(links).values(values).returning(),
+        const [row] = await this.throwOnDuplicateUrl(
+            () => this.db.insert(links).values(values).returning(),
+            values.userId,
+            values.normalizedUrl,
         )
 
         return row
@@ -678,7 +680,11 @@ export class LinkRepository {
     }
 
     // 선검사와 저장 사이의 경합으로 partial unique index를 위반할 때 나는 23505를 도메인 예외로 변환한다.
-    private async throwOnDuplicateUrl<T>(run: () => Promise<T>): Promise<T> {
+    private async throwOnDuplicateUrl<T>(
+        run: () => Promise<T>,
+        userId: number,
+        normalizedUrl: string,
+    ): Promise<T> {
         try {
             return await run()
         } catch (error) {
@@ -687,7 +693,14 @@ export class LinkRepository {
                 'code' in error &&
                 error.code === '23505'
             ) {
-                throw new BaseException(LINK_ERROR.ALREADY_EXISTS)
+                const existing = await this.findActiveByNormalizedUrl(
+                    userId,
+                    normalizedUrl,
+                )
+                throw new BaseException({
+                    ...LINK_ERROR.ALREADY_EXISTS,
+                    data: existing ? { linkId: existing.id } : undefined,
+                })
             }
             throw error
         }
