@@ -23,6 +23,8 @@ export const refreshTokens = pgTable(
         tokenHash: varchar({ length: 64 }).notNull(),
         // 회전 체인 식별자
         tokenFamily: uuid().notNull(),
+        // 'primary' | 'extension' — refresh 시 이 값을 그대로 이어받아 재발급한다
+        purpose: varchar({ length: 20 }).notNull().default('primary'),
         expiresAt: timestamp({ withTimezone: true }).notNull(),
         // null이면 유효, 값이 있으면 폐기됨
         revokedAt: timestamp({ withTimezone: true }),

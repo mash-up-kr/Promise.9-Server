@@ -42,6 +42,7 @@ export class RefreshTokenRepository {
             userId: number
             tokenHash: string
             tokenFamily: string
+            purpose: string
             expiresAt: Date
         },
         executor: DbExecutor = this.db,

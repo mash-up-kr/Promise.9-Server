@@ -7,6 +7,7 @@ import type {
 } from '@google/genai'
 import { ApiError, FinishReason, GoogleGenAI } from '@google/genai'
 
+import { describeError } from '../../../../common/exception/error.util'
 import { ValidatedEnvironment } from '../../../../config/environment'
 import { LLM_PROVIDER } from '../../llm.constants'
 import { LlmConfigurationError, LlmProviderError } from '../../llm.exception'
@@ -151,12 +152,10 @@ export class GeminiProvider implements LlmProvider {
             )
         }
 
-        const message = error instanceof Error ? error.message : String(error)
-
         throw new LlmProviderError(
             this.name,
             GEMINI_ERROR_CODE.REQUEST_FAILED,
-            `Gemini 요청에 실패했습니다: ${message}`,
+            `Gemini 요청에 실패했습니다: ${describeError(error)}`,
             undefined,
             { cause: error },
         )

@@ -5,7 +5,7 @@ import { DatabaseService } from '../../../config/database/database.service'
 import { users } from '../../user/schema/user.schema'
 import { links } from '../link.schema'
 
-import { DueReminder } from './reminder.type'
+import { ReminderEmailTarget } from './reminder.type'
 
 @Injectable()
 export class ReminderRepository {
@@ -15,7 +15,7 @@ export class ReminderRepository {
         return this.databaseService.db
     }
 
-    async findDue(batchStartedAt: Date): Promise<DueReminder[]> {
+    async findDue(batchStartedAt: Date): Promise<ReminderEmailTarget[]> {
         const rows = await this.db
             .select({
                 linkId: links.id,

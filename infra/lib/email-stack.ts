@@ -22,7 +22,7 @@ export class EmailStack extends Stack {
         const sender = new iam.User(this, 'ProductionEmailSender', {
             userName: EMAIL_SENDER_USER_NAME,
         })
-        identity.grant(sender, 'ses:SendEmail')
+        identity.grant(sender, 'ses:SendEmail', 'ses:SendBulkEmail')
 
         new CfnOutput(this, 'ProductionEmailSenderUserName', {
             value: sender.userName,

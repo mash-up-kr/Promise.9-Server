@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 
 import { SendBulkEmailInput } from '../../../infrastructure/email/email.type'
 
-import { DueReminder } from './reminder.type'
+import { ReminderEmailData } from './reminder.type'
 
 const template = readFileSync(
     resolve(process.cwd(), 'email/link-reminder-email.html'),
@@ -14,20 +14,19 @@ const poster = readFileSync(
 )
 
 export function buildReminderBulkEmail(
-    reminders: readonly DueReminder[],
+    reminders: readonly ReminderEmailData[],
 ): SendBulkEmailInput {
     return {
         entries: reminders.map((reminder) => {
             const title = reminder.title?.trim() || '저장한 링크'
-            const url = pickSafeUrl(reminder)
 
             return {
                 to: reminder.recipientEmail,
                 templateData: {
                     linkTitle: escapeHtml(title),
                     linkTitleText: title,
-                    linkUrl: escapeHtml(url ?? '#'),
-                    linkUrlText: url ?? '',
+                    linkUrl: escapeHtml(reminder.url ?? '#'),
+                    linkUrlText: reminder.url ?? '',
                 },
             }
         }),
@@ -54,24 +53,6 @@ export function buildReminderBulkEmail(
         ],
         tags: { kind: 'link-reminder' },
     }
-}
-
-function pickSafeUrl(reminder: DueReminder): string | undefined {
-    for (const candidate of [reminder.finalUrl, reminder.originalUrl]) {
-        if (!candidate) continue
-
-        try {
-            const url = new URL(candidate)
-
-            if (url.protocol === 'http:' || url.protocol === 'https:') {
-                return url.toString()
-            }
-        } catch {
-            continue
-        }
-    }
-
-    return undefined
 }
 
 function escapeHtml(value: string): string {

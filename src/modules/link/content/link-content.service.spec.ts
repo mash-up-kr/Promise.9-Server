@@ -213,6 +213,26 @@ describe('LinkContentService', () => {
         expect(fetchSpy).toHaveBeenCalledTimes(1)
     })
 
+    it('robots.txt 조회의 일시적 5xx는 호출부가 재시도할 수 있도록 예외로 전달한다', async () => {
+        fetchSpy.mockResolvedValueOnce(new Response('', { status: 503 }))
+
+        await expect(
+            service.collect('https://example.com/article'),
+        ).rejects.toHaveProperty('status', 502)
+        expect(fetchSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('페이지 요청의 네트워크 실패는 호출부가 재시도할 수 있도록 예외로 전달한다', async () => {
+        fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 404 }))
+            .mockRejectedValueOnce(new Error('network failed'))
+
+        await expect(
+            service.collect('https://example.com/article'),
+        ).rejects.toHaveProperty('status', 502)
+        expect(fetchSpy).toHaveBeenCalledTimes(2)
+    })
+
     it('수집한 제목·설명·본문을 각 입력 제한 길이로 자른다', async () => {
         fetchSpy
             .mockResolvedValueOnce(new Response('', { status: 404 }))
