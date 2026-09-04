@@ -13,14 +13,14 @@ export class ReminderScheduler {
         name: 'link-reminder',
         waitForCompletion: true,
     })
-    async sendDueReminders() {
+    async sendReminderEmails() {
         try {
-            const result = await this.reminderService.sendDueReminders()
+            const result = await this.reminderService.sendReminderEmails()
 
-            if (result.dueCount === 0) return
+            if (result.targetCount === 0) return
 
             this.logger.log(
-                `리마인드 이메일 배치를 완료했습니다. due=${result.dueCount} sent=${result.sentCount} failed=${result.failedCount}`,
+                `리마인드 이메일 배치를 완료했습니다. target=${result.targetCount} sent=${result.sentCount} failed=${result.failedCount}`,
             )
         } catch (error) {
             const message =

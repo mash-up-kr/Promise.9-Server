@@ -6,8 +6,8 @@ import { ReminderService } from './reminder.service'
 describe('ReminderScheduler', () => {
     it('리마인드 배치를 실행하고 처리 건수를 기록한다', async () => {
         const reminderService = {
-            sendDueReminders: jest.fn().mockResolvedValue({
-                dueCount: 3,
+            sendReminderEmails: jest.fn().mockResolvedValue({
+                targetCount: 3,
                 sentCount: 2,
                 failedCount: 1,
             }),
@@ -19,11 +19,11 @@ describe('ReminderScheduler', () => {
             reminderService as unknown as ReminderService,
         )
 
-        await scheduler.sendDueReminders()
+        await scheduler.sendReminderEmails()
 
-        expect(reminderService.sendDueReminders).toHaveBeenCalledTimes(1)
+        expect(reminderService.sendReminderEmails).toHaveBeenCalledTimes(1)
         expect(loggerSpy).toHaveBeenCalledWith(
-            '리마인드 이메일 배치를 완료했습니다. due=3 sent=2 failed=1',
+            '리마인드 이메일 배치를 완료했습니다. target=3 sent=2 failed=1',
         )
 
         loggerSpy.mockRestore()
@@ -31,7 +31,7 @@ describe('ReminderScheduler', () => {
 
     it('배치 실행 실패를 기록하고 다음 실행을 위해 예외를 삼킨다', async () => {
         const reminderService = {
-            sendDueReminders: jest
+            sendReminderEmails: jest
                 .fn()
                 .mockRejectedValue(new Error('DB error')),
         }
@@ -42,7 +42,7 @@ describe('ReminderScheduler', () => {
             reminderService as unknown as ReminderService,
         )
 
-        await expect(scheduler.sendDueReminders()).resolves.toBeUndefined()
+        await expect(scheduler.sendReminderEmails()).resolves.toBeUndefined()
         expect(loggerSpy).toHaveBeenCalledWith(
             '리마인드 이메일 배치에 실패했습니다. error=DB error',
             expect.any(String),
