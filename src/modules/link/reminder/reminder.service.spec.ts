@@ -35,7 +35,7 @@ describe('ReminderService', () => {
             }),
         ]
         const reminderRepository = {
-            findDue: jest.fn().mockResolvedValue(reminders),
+            findEmailTargets: jest.fn().mockResolvedValue(reminders),
             markSent: jest.fn().mockResolvedValue(true),
         }
         const sendBulkMock = jest.fn<
@@ -53,9 +53,11 @@ describe('ReminderService', () => {
             urlSecurityService,
         )
 
-        const result = await service.sendDueReminders(batchStartedAt)
+        const result = await service.sendReminderEmails(batchStartedAt)
 
-        expect(reminderRepository.findDue).toHaveBeenCalledWith(batchStartedAt)
+        expect(reminderRepository.findEmailTargets).toHaveBeenCalledWith(
+            batchStartedAt,
+        )
         expect(sendBulkMock).toHaveBeenCalledTimes(1)
         const sentEmail = sendBulkMock.mock.calls[0]?.[0]
         expect(sentEmail?.entries[0]).toMatchObject({
@@ -86,7 +88,7 @@ describe('ReminderService', () => {
         })
         expect(reminderRepository.markSent).toHaveBeenCalledTimes(2)
         expect(result).toEqual({
-            dueCount: 2,
+            targetCount: 2,
             sentCount: 2,
             failedCount: 0,
         })
@@ -100,7 +102,7 @@ describe('ReminderService', () => {
             }),
         )
         const reminderRepository = {
-            findDue: jest.fn().mockResolvedValue(reminders),
+            findEmailTargets: jest.fn().mockResolvedValue(reminders),
             markSent: jest.fn().mockResolvedValue(true),
         }
         const sendBulkMock = jest.fn<
@@ -133,14 +135,14 @@ describe('ReminderService', () => {
             urlSecurityService,
         )
 
-        const result = await service.sendDueReminders()
+        const result = await service.sendReminderEmails()
 
         expect(sendBulkMock).toHaveBeenCalledTimes(2)
         expect(sendBulkMock.mock.calls[0]?.[0].entries).toHaveLength(50)
         expect(sendBulkMock.mock.calls[1]?.[0].entries).toHaveLength(1)
         expect(reminderRepository.markSent).toHaveBeenCalledTimes(51)
         expect(result).toEqual({
-            dueCount: 51,
+            targetCount: 51,
             sentCount: 51,
             failedCount: 0,
         })
@@ -155,7 +157,7 @@ describe('ReminderService', () => {
             }),
         ]
         const reminderRepository = {
-            findDue: jest.fn().mockResolvedValue(reminders),
+            findEmailTargets: jest.fn().mockResolvedValue(reminders),
             markSent: jest.fn().mockResolvedValue(true),
         }
         const sendBulkMock = jest.fn<
@@ -176,7 +178,7 @@ describe('ReminderService', () => {
             urlSecurityService,
         )
 
-        const result = await service.sendDueReminders()
+        const result = await service.sendReminderEmails()
 
         expect(sendBulkMock).toHaveBeenCalledTimes(1)
         expect(reminderRepository.markSent).toHaveBeenCalledTimes(1)
@@ -186,7 +188,7 @@ describe('ReminderService', () => {
             expect.any(Date),
         )
         expect(result).toEqual({
-            dueCount: 2,
+            targetCount: 2,
             sentCount: 1,
             failedCount: 1,
         })
@@ -199,7 +201,7 @@ describe('ReminderService', () => {
 
     it('고정 템플릿의 링크 제목을 escape하고 URL을 삽입한다', async () => {
         const reminderRepository = {
-            findDue: jest.fn().mockResolvedValue([
+            findEmailTargets: jest.fn().mockResolvedValue([
                 createReminder({
                     title: '<script>alert("xss")</script>',
                     originalUrl: 'https://example.com/original',
@@ -222,7 +224,7 @@ describe('ReminderService', () => {
             urlSecurityService,
         )
 
-        await service.sendDueReminders()
+        await service.sendReminderEmails()
 
         const sentEmail = sendBulkMock.mock.calls[0]?.[0]
         const templateData = sentEmail?.entries[0]?.templateData

@@ -14,7 +14,7 @@ export type ReminderEmailData = {
 }
 
 export type ReminderBatchResult = {
-    dueCount: number
+    targetCount: number
     sentCount: number
     failedCount: number
 }
