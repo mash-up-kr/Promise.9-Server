@@ -17,10 +17,11 @@ export class ReminderService {
         private readonly urlSecurityService: UrlSecurityService,
     ) {}
 
-    async sendDueReminders(
+    async sendReminderEmails(
         batchStartedAt: Date = new Date(),
     ): Promise<ReminderBatchResult> {
-        const reminders = await this.reminderRepository.findDue(batchStartedAt)
+        const reminders =
+            await this.reminderRepository.findEmailTargets(batchStartedAt)
         let sentCount = 0
 
         for (let offset = 0; offset < reminders.length; offset += 50) {
@@ -56,7 +57,7 @@ export class ReminderService {
         }
 
         return {
-            dueCount: reminders.length,
+            targetCount: reminders.length,
             sentCount,
             failedCount: reminders.length - sentCount,
         }

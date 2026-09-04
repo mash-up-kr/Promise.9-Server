@@ -15,7 +15,9 @@ export class ReminderRepository {
         return this.databaseService.db
     }
 
-    async findDue(batchStartedAt: Date): Promise<ReminderEmailTarget[]> {
+    async findEmailTargets(
+        batchStartedAt: Date,
+    ): Promise<ReminderEmailTarget[]> {
         const rows = await this.db
             .select({
                 linkId: links.id,
