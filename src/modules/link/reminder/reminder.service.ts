@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common'
 
+import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
 import { EmailService } from '../../../infrastructure/email/email.service'
 
 import { ReminderRepository } from './reminder.repository'
-import { DueReminder, ReminderBatchResult } from './reminder.type'
+import { ReminderBatchResult, ReminderEmailTarget } from './reminder.type'
 import { buildReminderBulkEmail } from './reminder-email.template'
 
 @Injectable()
@@ -13,6 +14,7 @@ export class ReminderService {
     constructor(
         private readonly reminderRepository: ReminderRepository,
         private readonly emailService: EmailService,
+        private readonly urlSecurityService: UrlSecurityService,
     ) {}
 
     async sendDueReminders(
@@ -24,7 +26,17 @@ export class ReminderService {
         for (let offset = 0; offset < reminders.length; offset += 50) {
             const entries = reminders.slice(offset, offset + 50)
             const sendResults = await this.emailService.sendBulk(
-                buildReminderBulkEmail(entries),
+                buildReminderBulkEmail(
+                    entries.map((reminder) => ({
+                        recipientEmail: reminder.recipientEmail,
+                        title: reminder.title,
+                        url: this.urlSecurityService
+                            .parseHttpUrl(
+                                reminder.finalUrl ?? reminder.originalUrl,
+                            )
+                            .toString(),
+                    })),
+                ),
             )
 
             for (const [index, reminder] of entries.entries()) {
@@ -50,7 +62,7 @@ export class ReminderService {
         }
     }
 
-    private async markSent(reminder: DueReminder): Promise<boolean> {
+    private async markSent(reminder: ReminderEmailTarget): Promise<boolean> {
         try {
             const marked = await this.reminderRepository.markSent(
                 reminder.linkId,

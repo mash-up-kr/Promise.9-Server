@@ -1,14 +1,17 @@
 import { Logger } from '@nestjs/common'
 import { BulkEmailEntryResult } from '@aws-sdk/client-sesv2'
 
+import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
 import { EmailService } from '../../../infrastructure/email/email.service'
 import { SendBulkEmailInput } from '../../../infrastructure/email/email.type'
 
 import { ReminderRepository } from './reminder.repository'
 import { ReminderService } from './reminder.service'
-import { DueReminder } from './reminder.type'
+import { ReminderEmailTarget } from './reminder.type'
 
-const createReminder = (values: Partial<DueReminder> = {}): DueReminder => ({
+const createReminder = (
+    values: Partial<ReminderEmailTarget> = {},
+): ReminderEmailTarget => ({
     linkId: 1,
     recipientEmail: 'user@example.com',
     title: '읽어볼 링크',
@@ -19,6 +22,8 @@ const createReminder = (values: Partial<DueReminder> = {}): DueReminder => ({
 })
 
 describe('ReminderService', () => {
+    const urlSecurityService = new UrlSecurityService()
+
     it('발송 시각이 지난 리마인드를 수신자별로 발송하고 해제한다', async () => {
         const batchStartedAt = new Date('2026-08-24T03:15:00.000Z')
         const reminders = [
@@ -45,6 +50,7 @@ describe('ReminderService', () => {
         const service = new ReminderService(
             reminderRepository as unknown as ReminderRepository,
             emailService as unknown as EmailService,
+            urlSecurityService,
         )
 
         const result = await service.sendDueReminders(batchStartedAt)
@@ -124,6 +130,7 @@ describe('ReminderService', () => {
         const service = new ReminderService(
             reminderRepository as unknown as ReminderRepository,
             emailService as unknown as EmailService,
+            urlSecurityService,
         )
 
         const result = await service.sendDueReminders()
@@ -166,6 +173,7 @@ describe('ReminderService', () => {
         const service = new ReminderService(
             reminderRepository as unknown as ReminderRepository,
             emailService as unknown as EmailService,
+            urlSecurityService,
         )
 
         const result = await service.sendDueReminders()
@@ -189,12 +197,12 @@ describe('ReminderService', () => {
         loggerErrorSpy.mockRestore()
     })
 
-    it('고정 템플릿의 링크 제목을 escape하고 안전하지 않은 URL을 삽입하지 않는다', async () => {
+    it('고정 템플릿의 링크 제목을 escape하고 URL을 삽입한다', async () => {
         const reminderRepository = {
             findDue: jest.fn().mockResolvedValue([
                 createReminder({
                     title: '<script>alert("xss")</script>',
-                    originalUrl: 'javascript:alert(1)',
+                    originalUrl: 'https://example.com/original',
                     finalUrl: null,
                 }),
             ]),
@@ -211,6 +219,7 @@ describe('ReminderService', () => {
         const service = new ReminderService(
             reminderRepository as unknown as ReminderRepository,
             emailService as unknown as EmailService,
+            urlSecurityService,
         )
 
         await service.sendDueReminders()
@@ -224,8 +233,8 @@ describe('ReminderService', () => {
         expect(templateData?.linkTitleText).toBe(
             '<script>alert("xss")</script>',
         )
-        expect(templateData?.linkUrl).toBe('#')
-        expect(templateData?.linkUrlText).toBe('')
+        expect(templateData?.linkUrl).toBe('https://example.com/original')
+        expect(templateData?.linkUrlText).toBe('https://example.com/original')
         expect(sentEmail?.html).not.toContain('{{motionGifUrl}}')
     })
 })
