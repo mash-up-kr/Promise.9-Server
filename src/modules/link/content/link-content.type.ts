@@ -1,4 +1,4 @@
-export type LinkImageSource = 'og:image' | 'twitter:image'
+export type LinkImageSource = 'og:image' | 'twitter:image' | 'oembed'
 
 export type CollectedLinkImage = {
     url: string
