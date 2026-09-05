@@ -6,20 +6,23 @@ RDS 같은 managed DB를 쓰지 않기 때문에 snapshot이나 백업을 로컬
 
 - `.env` 또는 실행 환경에 `DATABASE_URL_DEVELOPMENT`, `DATABASE_URL_PRODUCTION`이 있어야 한다.
 - 백업/검증/복구는 PostgreSQL client tools의 `pg_dump`, `pg_restore`를 사용한다.
-- Lightsail 운영 DB 접속에는 AWS CLI의 `promise9` profile과 OpenSSH client가 필요하다.
-- `aws login --profile promise9` 로그인이 유효해야 한다.
+- Lightsail 운영 DB 접속에는 OpenSSH client가 필요하다.
+- 기본 접속 방식은 AWS CLI의 `promise9` profile과 유효한 `aws login --profile promise9`
+  로그인이다.
+- AWS CLI 로그인을 사용할 수 없을 때는 팀에서 안전하게 전달받은 Lightsail PEM 키를
+  fallback으로 사용할 수 있다.
 - 팀원의 일반 Lightsail shell 접속은 `bun run lightsail:ssh`를 사용한다.
 
 ## 명령어
 
-| 목적         | 명령어                                                                         |
-| ------------ | ------------------------------------------------------------------------------ |
-| 백업         | `bun run db:backup -- --env=development`                                       |
-| 백업 검증    | `bun run db:backup:verify -- --file=backups/database/example.dump`             |
-| 복구         | `bun run db:restore -- --env=development --file=backups/database/example.dump` |
-| 상태 확인    | `bun run db:health -- --env=development`                                       |
-| 운영 DB 터널 | `bun run db:tunnel`                                                            |
-| Mermaid ERD  | `bun run db:visualize_mermaid -- --env=development`                            |
+| 목적                  | 명령어                                                                         |
+| --------------------- | ------------------------------------------------------------------------------ |
+| 백업                  | `bun run db:backup -- --env=development`                                       |
+| 백업 검증             | `bun run db:backup:verify -- --file=backups/database/example.dump`             |
+| 복구                  | `bun run db:restore -- --env=development --file=backups/database/example.dump` |
+| 상태 확인             | `bun run db:health -- --env=development`                                       |
+| 운영 DB 터널(AWS CLI) | `bun run db:tunnel`                                                            |
+| Mermaid ERD           | `bun run db:visualize_mermaid -- --env=development`                            |
 
 `--env`를 지정하지 않으면 `APP_ENV`를 사용하고, 없으면 `development`로 동작한다.
 백업 기본 저장 위치는 `backups/database`이며 `.gitignore` 대상이다.
@@ -38,8 +41,11 @@ bun run db:visualize_mermaid -- --env=development
 ## Lightsail 운영 DB 접속
 
 운영 PostgreSQL은 외부에 공개하지 않고 Lightsail 내부의 `127.0.0.1:5432`에만
-연결한다. 다음 명령은 AWS CLI에서 인스턴스용 임시 SSH 접속 정보를 받은 뒤 로컬
-`127.0.0.1:15432`로 터널을 연다.
+연결한다. 로컬에서는 SSH 터널의 `127.0.0.1:15432`를 통해 접근한다.
+
+### AWS CLI 임시 인증
+
+다음 명령은 AWS CLI에서 인스턴스용 임시 SSH 접속 정보를 받은 뒤 터널을 연다.
 
 ```bash
 bun run db:tunnel
@@ -84,6 +90,13 @@ private key와 certificate도 출력하지 않는다. AWS 로그인이 만료됐
 ```bash
 aws login --profile promise9
 ```
+
+### PEM 키 직접 인증
+
+AWS CLI 로그인을 사용할 수 없고 팀에서 Lightsail PEM 키를 전달받았다면
+[pgAdmin SSH Tunnel의 로컬 OpenSSH 터널 절차](./pgadmin-ssh-tunnel.md#방법-a-로컬-openssh-터널--pgadmin-권장)를
+따른다. 이 터널은 pgAdmin뿐 아니라 위의 `db:health`, `db:backup` 같은 운영 DB 명령에도
+동일하게 사용한다. PEM 키는 repository 안에 복사하거나 커밋하지 않는다.
 
 ## 운영 환경 주의사항
 
