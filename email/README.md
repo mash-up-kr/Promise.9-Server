@@ -1,6 +1,7 @@
 # 링크 리마인드 이메일
 
-저장한 링크를 다시 보여주는 Promise.9 이메일 템플릿과 모션 에셋입니다. 현재 폴더에는 실제 이메일 발송 로직이 포함되어 있지 않습니다.
+저장한 링크를 다시 보여주는 Promise.9 이메일 템플릿과 모션 에셋입니다.
+서버의 링크 리마인더가 `link-reminder-email.html`을 읽어 실제 이메일 본문으로 사용합니다.
 
 ## 파일 구성
 
@@ -50,6 +51,9 @@ function getMotionGifUrl(variant: MotionVariant, assetBaseUrl: string) {
 | `{{motionGifUrl}}` | 선택한 모션 에셋의 공개 HTTPS URL |
 
 정적 포스터는 `multipart/related` 첨부 파일로 넣고 `Content-ID`를 `link-reminder-poster`로 지정합니다. 템플릿은 이를 `cid:link-reminder-poster`로 참조합니다.
+
+외부 GIF 이미지는 이메일 템플릿 확정 후 공개 HTTPS URL로 서빙할 수 있을 때 추가합니다.
+그 전까지는 CID 정적 포스터를 사용합니다.
 
 ## 로컬 미리보기
 

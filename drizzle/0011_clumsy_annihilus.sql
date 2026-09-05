@@ -1,0 +1,1 @@
+CREATE INDEX "links_reminder_at_active_idx" ON "links" USING btree ("reminder_at") WHERE "links"."deleted_at" is null and "links"."reminder_at" is not null;

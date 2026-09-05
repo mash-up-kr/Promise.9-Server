@@ -127,6 +127,10 @@ CREATE INDEX user_links_user_id_deleted_at_idx
 CREATE INDEX user_links_deleted_at_idx
   ON user_links (deleted_at)
   WHERE deleted_at IS NOT NULL;
+
+CREATE INDEX links_reminder_at_active_idx
+  ON links (reminder_at)
+  WHERE deleted_at IS NULL AND reminder_at IS NOT NULL;
 ```
 
 - `id + user_id` (유니크 제약): `tags`의 `(link_id, user_id)` 복합 FK 참조 대상. 태그·링크 소유자 정합성 보장용.
@@ -135,6 +139,7 @@ CREATE INDEX user_links_deleted_at_idx
 - `user_id + folder_id + created_at`: 폴더별 링크 목록 조회용.
 - `user_id + deleted_at`: 사용자별 최근 삭제된 항목 조회용.
 - `deleted_at`: 전체 영구 삭제 배치 대상 조회용.
+- `reminder_at`: 삭제되지 않은 링크 중 발송 시각이 지난 리마인드 조회용.
 
 ## 향후 확장
 

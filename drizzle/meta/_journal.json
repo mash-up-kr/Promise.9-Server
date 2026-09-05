@@ -78,6 +78,13 @@
       "when": 1788184628669,
       "tag": "0010_kind_frightful_four",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788444550152,
+      "tag": "0011_clumsy_annihilus",
+      "breakpoints": true
     }
   ]
 }

@@ -10,7 +10,7 @@
 | SES Email identity | `link-ding-dong.com`               | 도메인 내 발신 주소 검증 및 DKIM 서명 |
 | IAM User           | `promise9-email-sender-production` | 운영 이메일 발송                      |
 
-IAM User에는 SES identity의 `ses:SendEmail`만 허용한다.
+IAM User에는 SES identity의 `ses:SendEmail`, `ses:SendBulkEmail`만 허용한다.
 
 CDK는 장기 access key를 만들거나 출력하지 않는다. CloudFormation output에 secret access
 key가 남는 것을 방지하기 위해서다.
