@@ -1,66 +1,79 @@
-import { HttpException, Injectable, Logger } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 
 import { BaseException } from '../../../common/exception/base.exception'
 import { describeError } from '../../../common/exception/error.util'
 import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
 import { LINK_ERROR } from '../link-error.constant'
 
+import { LinkContentHtmlFetcher } from './html/link-content-html.fetcher'
 import { resolveLinkContentStrategy } from './strategy/link-content-strategy.registry'
 import {
     LinkContentOEmbedPreview,
     LinkContentOEmbedStrategy,
+    LinkContentTinyFishStrategy,
 } from './strategy/link-content-strategy.type'
+import { TinyFishFetchClient } from './tinyfish/tinyfish-fetch.client'
+import { TinyFishFetchError } from './tinyfish/tinyfish-fetch.error'
 import {
     buildLinkContentRequestHeaders,
+    LINK_CONTENT_BROWSER_USER_AGENT,
     LINK_CONTENT_FETCH,
     LINK_CONTENT_IMAGE_URL_MAX_LENGTH,
-    LINK_CONTENT_REDIRECT_STATUSES,
     LINK_CONTENT_TEXT_LIMIT,
 } from './link-content.constants'
 import { parseLinkInformation, parseLinkPreview } from './link-content.parser'
 import {
     CollectedLinkContent,
-    FetchedLinkHtml,
-    FetchLinkHtmlOptions,
+    LinkImageSource,
     LinkPreview,
 } from './link-content.type'
-import { isRobotsPathAllowed } from './robots.parser'
+import {
+    cancelLinkContentResponse,
+    readLinkContentText,
+} from './link-content-response.reader'
 
-class RobotsDisallowedError extends Error {}
+type LinkContentPurpose = 'preview' | 'analysis'
+
+type ResolvedLinkContent = {
+    title: string | null
+    description: string | null
+    content: string | null
+    image: string | null
+    imageSource: LinkImageSource | null
+    imageBaseUrl: URL
+    source: string
+    analysisUnavailableReason?: string
+}
 
 @Injectable()
 export class LinkContentService {
     private readonly logger = new Logger(LinkContentService.name)
 
-    constructor(private readonly urlSecurity: UrlSecurityService) {}
+    constructor(
+        private readonly urlSecurity: UrlSecurityService,
+        private readonly htmlFetcher: LinkContentHtmlFetcher,
+        private readonly tinyFishFetchClient: TinyFishFetchClient,
+    ) {}
 
-    // 저장 전 화면에 사용할 링크 제목, 대표 이미지, 출처를 수집한다.
     async preview(url: string): Promise<LinkPreview> {
         const resourceUrl = this.urlSecurity.parseHttpUrl(url)
-        const strategy = resolveLinkContentStrategy(resourceUrl)
-        const oEmbed =
-            strategy.kind === 'oembed'
-                ? await this.fetchOEmbed(resourceUrl, strategy)
-                : null
+        const resolved = await this.resolveContent(resourceUrl, 'preview')
 
-        if (oEmbed) {
+        if (!resolved) {
             return {
-                title: oEmbed.title,
-                thumbnailUrl: await this.toSafeAbsoluteImage(
-                    oEmbed.image,
-                    resourceUrl,
-                ),
-                source: strategy.source ?? this.toSource(resourceUrl),
+                title: null,
+                thumbnailUrl: null,
+                source: this.toSource(resourceUrl),
             }
         }
 
-        const { html, finalUrl } = await this.fetchHtml(resourceUrl.toString())
-        const { title, image } = parseLinkPreview(html)
-
         return {
-            title,
-            thumbnailUrl: await this.toSafeAbsoluteImage(image, finalUrl),
-            source: this.toSource(finalUrl),
+            title: resolved.title,
+            thumbnailUrl: await this.toSafeAbsoluteImage(
+                resolved.image,
+                resolved.imageBaseUrl,
+            ),
+            source: resolved.source,
         }
     }
 
@@ -68,68 +81,182 @@ export class LinkContentService {
     // 네트워크·타임아웃·원격 5xx는 호출부가 재시도할 수 있도록 예외를 유지한다.
     async collect(url: string): Promise<CollectedLinkContent | null> {
         const resourceUrl = this.urlSecurity.parseHttpUrl(url)
-        const strategy = resolveLinkContentStrategy(resourceUrl)
-        const oEmbed =
-            strategy.kind === 'oembed'
-                ? await this.fetchOEmbed(resourceUrl, strategy)
-                : null
+        const resolved = await this.resolveContent(resourceUrl, 'analysis')
 
-        if (oEmbed) {
-            const imageUrl = await this.toSafeAbsoluteImage(
-                oEmbed.image,
-                resourceUrl,
-            )
-            const collected: CollectedLinkContent = {
-                title: this.limitText(
-                    oEmbed.title,
-                    LINK_CONTENT_TEXT_LIMIT.title,
-                ),
-                description: null,
-                content: null,
-                image: imageUrl ? { url: imageUrl, source: 'oembed' } : null,
-            }
+        if (!resolved) return null
 
-            return this.hasCollectedContent(collected) ? collected : null
+        const imageUrl = await this.toSafeAbsoluteImage(
+            resolved.image,
+            resolved.imageBaseUrl,
+        )
+        const collected: CollectedLinkContent = {
+            title: this.limitText(
+                resolved.title,
+                LINK_CONTENT_TEXT_LIMIT.title,
+            ),
+            description: this.limitText(
+                resolved.description,
+                LINK_CONTENT_TEXT_LIMIT.description,
+            ),
+            content: this.limitText(
+                resolved.content,
+                LINK_CONTENT_TEXT_LIMIT.content,
+            ),
+            image:
+                imageUrl && resolved.imageSource
+                    ? { url: imageUrl, source: resolved.imageSource }
+                    : null,
+            ...(resolved.analysisUnavailableReason
+                ? {
+                      analysisUnavailableReason:
+                          resolved.analysisUnavailableReason,
+                  }
+                : {}),
         }
 
-        try {
-            const { html, finalUrl } = await this.fetchHtml(
-                resourceUrl.toString(),
-                {
-                    beforeRequest: this.validateCrawlingAllowed,
-                },
-            )
-            const information = parseLinkInformation(html)
-            const preview = parseLinkPreview(html)
-            const imageUrl = await this.toSafeAbsoluteImage(
-                preview.image,
-                finalUrl,
-            )
-            const collected = {
-                title: this.limitText(
-                    information.title,
-                    LINK_CONTENT_TEXT_LIMIT.title,
-                ),
-                description: this.limitText(
-                    information.description,
-                    LINK_CONTENT_TEXT_LIMIT.description,
-                ),
-                content: this.limitText(
-                    information.content,
-                    LINK_CONTENT_TEXT_LIMIT.content,
-                ),
-                image:
-                    imageUrl && preview.imageSource
-                        ? { url: imageUrl, source: preview.imageSource }
-                        : null,
+        return collected.analysisUnavailableReason ||
+            this.hasCollectedContent(collected)
+            ? collected
+            : null
+    }
+
+    private async resolveContent(
+        resourceUrl: URL,
+        purpose: LinkContentPurpose,
+    ): Promise<ResolvedLinkContent | null> {
+        const strategy = resolveLinkContentStrategy(resourceUrl)
+
+        switch (strategy.kind) {
+            case 'html':
+                return this.resolveHtmlContent(resourceUrl, purpose)
+            case 'oembed': {
+                const oEmbed = await this.resolveOEmbedContent(
+                    resourceUrl,
+                    strategy,
+                )
+
+                return oEmbed ?? this.resolveHtmlContent(resourceUrl, purpose)
             }
-            return this.hasCollectedContent(collected) ? collected : null
-        } catch (error) {
-            if (error instanceof RobotsDisallowedError) {
-                return null
+            case 'tinyfish':
+                return this.tinyFishFetchClient.isEnabled()
+                    ? this.resolveTinyFishContent(
+                          resourceUrl,
+                          purpose,
+                          strategy,
+                      )
+                    : this.resolveHtmlContent(resourceUrl, purpose)
+        }
+    }
+
+    private async resolveHtmlContent(
+        resourceUrl: URL,
+        purpose: LinkContentPurpose,
+    ): Promise<ResolvedLinkContent | null> {
+        const fetched = await this.htmlFetcher.fetch(resourceUrl, {
+            respectRobots: purpose === 'analysis',
+        })
+
+        if (!fetched) return null
+
+        const preview = parseLinkPreview(fetched.html)
+        const information =
+            purpose === 'analysis'
+                ? parseLinkInformation(fetched.html)
+                : {
+                      title: preview.title,
+                      description: null,
+                      content: null,
+                  }
+
+        return {
+            ...information,
+            image: preview.image,
+            imageSource: preview.imageSource,
+            imageBaseUrl: fetched.finalUrl,
+            source: this.toSource(fetched.finalUrl),
+        }
+    }
+
+    private async resolveOEmbedContent(
+        resourceUrl: URL,
+        strategy: LinkContentOEmbedStrategy,
+    ): Promise<ResolvedLinkContent | null> {
+        const oEmbed = await this.fetchOEmbed(resourceUrl, strategy)
+
+        if (!oEmbed) return null
+
+        return {
+            title: oEmbed.title,
+            description: null,
+            content: null,
+            image: oEmbed.image,
+            imageSource: oEmbed.image ? 'oembed' : null,
+            imageBaseUrl: resourceUrl,
+            source: strategy.source ?? this.toSource(resourceUrl),
+        }
+    }
+
+    private async resolveTinyFishContent(
+        resourceUrl: URL,
+        purpose: LinkContentPurpose,
+        strategy: LinkContentTinyFishStrategy,
+    ): Promise<ResolvedLinkContent> {
+        try {
+            const outcome = await this.tinyFishFetchClient.fetch(
+                strategy.prepareUrl(resourceUrl),
+            )
+
+            if (outcome.status === 'UNAVAILABLE') {
+                return {
+                    title: null,
+                    description: null,
+                    content: null,
+                    image: null,
+                    imageSource: null,
+                    imageBaseUrl: resourceUrl,
+                    source: this.toSource(resourceUrl),
+                    analysisUnavailableReason: outcome.reason,
+                }
             }
 
-            throw error
+            const content = outcome.content.content
+            const image = strategy.selectImage(
+                resourceUrl,
+                outcome.content.imageLinks,
+            )
+
+            return {
+                title:
+                    purpose === 'preview'
+                        ? this.limitText(
+                              outcome.content.title,
+                              LINK_CONTENT_TEXT_LIMIT.title,
+                          )
+                        : outcome.content.title,
+                description: outcome.content.description,
+                content,
+                image,
+                imageSource: image ? 'tinyfish' : null,
+                imageBaseUrl: resourceUrl,
+                source: this.toSource(resourceUrl),
+                ...(purpose === 'analysis' && !content
+                    ? {
+                          analysisUnavailableReason:
+                              'TinyFish에서 분석할 본문을 수집하지 못했습니다.',
+                      }
+                    : {}),
+            }
+        } catch (error) {
+            if (purpose === 'analysis') throw error
+
+            this.logger.warn(
+                `TinyFish 링크 미리보기 수집에 실패했습니다: ${describeError(error)}`,
+            )
+            throw new BaseException(
+                error instanceof TinyFishFetchError && !error.retryable
+                    ? LINK_ERROR.PREVIEW_BAD_STATUS
+                    : LINK_ERROR.PREVIEW_FETCH_FAILED,
+            )
         }
     }
 
@@ -150,7 +277,9 @@ export class LinkContentService {
 
             const response = await fetch(endpoint, {
                 headers: {
-                    ...buildLinkContentRequestHeaders(strategy.userAgent),
+                    ...buildLinkContentRequestHeaders(
+                        LINK_CONTENT_BROWSER_USER_AGENT,
+                    ),
                     Accept: 'application/json',
                 },
                 redirect: 'manual',
@@ -158,12 +287,12 @@ export class LinkContentService {
             })
 
             if (!response.ok) {
-                this.cancelBody(response)
+                cancelLinkContentResponse(response)
                 return null
             }
 
             return strategy.oEmbed.parse(
-                JSON.parse(await this.readLimitedText(response)) as unknown,
+                JSON.parse(await readLinkContentText(response)) as unknown,
             )
         } catch (error) {
             this.logger.warn(
@@ -175,107 +304,6 @@ export class LinkContentService {
         }
     }
 
-    private readonly validateCrawlingAllowed = async (
-        requestUrl: URL,
-    ): Promise<void> => {
-        if (!(await this.isCrawlingAllowed(requestUrl))) {
-            throw new RobotsDisallowedError(
-                'robots.txt에서 크롤링을 허용하지 않았습니다.',
-            )
-        }
-    }
-
-    // 사용자 URL의 HTML을 SSRF 방어와 함께 받아온다 (타임아웃·리다이렉트·용량 제한).
-    private async fetchHtml(
-        rawUrl: string,
-        options: FetchLinkHtmlOptions = {},
-    ): Promise<FetchedLinkHtml> {
-        const controller = new AbortController()
-        const timeout = setTimeout(
-            () => controller.abort(),
-            LINK_CONTENT_FETCH.timeoutMs,
-        )
-
-        try {
-            return await this.followAndRead(rawUrl, controller.signal, options)
-        } catch (error) {
-            // URL 검증 실패(400)·비정상 응답(502) 등 이미 구분된 HTTP 예외는 그대로 전달한다.
-            if (
-                error instanceof HttpException ||
-                error instanceof RobotsDisallowedError
-            ) {
-                throw error
-            }
-
-            // 타임아웃(abort)과 그 외 네트워크 오류를 구분해 원인을 드러낸다.
-            if (this.isAbortError(error)) {
-                throw new BaseException(LINK_ERROR.PREVIEW_TIMEOUT)
-            }
-
-            throw new BaseException(LINK_ERROR.PREVIEW_FETCH_FAILED)
-        } finally {
-            clearTimeout(timeout)
-        }
-    }
-
-    // 페이지 요청과 같은 UA로 robots.txt를 확인하며, 확인 실패 시 보수적으로 차단한다.
-    private async isCrawlingAllowed(url: URL): Promise<boolean> {
-        const controller = new AbortController()
-        const strategy = resolveLinkContentStrategy(url)
-        const timeout = setTimeout(
-            () => controller.abort(),
-            LINK_CONTENT_FETCH.timeoutMs,
-        )
-
-        try {
-            const robotsUrl = new URL('/robots.txt', url.origin)
-            const response = await fetch(robotsUrl, {
-                headers: {
-                    ...buildLinkContentRequestHeaders(strategy.userAgent),
-                    Accept: 'text/plain,*/*',
-                },
-                redirect: 'manual',
-                signal: controller.signal,
-            })
-
-            if (response.status === 404) {
-                this.cancelBody(response)
-                return true
-            }
-
-            // 401·403은 robots.txt 전체 차단으로 취급하고, 그 밖의 4xx도
-            // 보수적으로 크롤링하지 않는다. 429·5xx는 일시 장애일 수 있어 재시도한다.
-            if (!response.ok) {
-                this.cancelBody(response)
-
-                if (response.status === 429 || response.status >= 500) {
-                    throw new BaseException(LINK_ERROR.PREVIEW_FETCH_FAILED)
-                }
-
-                return false
-            }
-
-            return isRobotsPathAllowed(
-                await this.readLimitedText(response),
-                url.pathname + url.search,
-                strategy.userAgent,
-            )
-        } catch (error) {
-            if (error instanceof HttpException) {
-                throw error
-            }
-
-            if (this.isAbortError(error)) {
-                throw new BaseException(LINK_ERROR.PREVIEW_TIMEOUT)
-            }
-
-            throw new BaseException(LINK_ERROR.PREVIEW_FETCH_FAILED)
-        } finally {
-            clearTimeout(timeout)
-        }
-    }
-
-    // 대표 이미지는 공개 HTTP(S) URL만 허용하고, 저장·응답 가능한 길이로 제한한다.
     private async toSafeAbsoluteImage(
         image: string | null,
         baseUrl: URL,
@@ -299,12 +327,10 @@ export class LinkContentService {
         }
     }
 
-    // 최종 URL의 호스트에서 표시용 도메인(선행 www. 제거)을 만든다.
     private toSource(finalUrl: URL): string {
         return finalUrl.hostname.replace(/^www\./, '')
     }
 
-    // 제목, 설명, 본문 중 하나라도 수집됐는지 확인한다.
     private hasCollectedContent(content: CollectedLinkContent): boolean {
         return Boolean(
             content.title ||
@@ -314,136 +340,7 @@ export class LinkContentService {
         )
     }
 
-    // HTML에서 수집한 문자열을 저장·AI 입력에 허용된 길이까지만 유지한다.
     private limitText(value: string | null, maxLength: number): string | null {
         return value?.slice(0, maxLength) || null
-    }
-
-    // 네트워크 예외가 AbortController의 타임아웃 취소인지 구분한다.
-    private isAbortError(error: unknown): boolean {
-        return error instanceof Error && error.name === 'AbortError'
-    }
-
-    // 리다이렉트의 각 URL을 다시 검증하고 최종 HTML 응답을 읽는다.
-    private async followAndRead(
-        rawUrl: string,
-        signal: AbortSignal,
-        options: FetchLinkHtmlOptions,
-    ): Promise<FetchedLinkHtml> {
-        let currentUrl = this.urlSecurity.parseHttpUrl(rawUrl)
-
-        for (
-            let redirectCount = 0;
-            redirectCount <= LINK_CONTENT_FETCH.maxRedirects;
-            redirectCount++
-        ) {
-            // 리다이렉트 대상도 매 홉마다 같은 SSRF 기준으로 다시 검증한다.
-            await this.urlSecurity.resolvePublicUrl(currentUrl)
-            await options.beforeRequest?.(currentUrl)
-            const strategy = resolveLinkContentStrategy(currentUrl)
-
-            const response = await fetch(currentUrl, {
-                headers: buildLinkContentRequestHeaders(strategy.userAgent),
-                redirect: 'manual',
-                signal,
-            })
-
-            if (!LINK_CONTENT_REDIRECT_STATUSES.includes(response.status)) {
-                return this.readHtml(response, currentUrl)
-            }
-
-            this.cancelBody(response)
-            currentUrl = this.getRedirectUrl(response, currentUrl)
-        }
-
-        // maxRedirects를 초과할 때까지 최종 페이지에 도달하지 못한 경우
-        this.logger.warn(
-            `링크 미리보기 리다이렉트가 너무 많습니다: ${currentUrl.toString()}`,
-        )
-        throw new BaseException(LINK_ERROR.PREVIEW_REDIRECT_FAILED)
-    }
-
-    private async readHtml(
-        response: Response,
-        finalUrl: URL,
-    ): Promise<FetchedLinkHtml> {
-        if (!response.ok) {
-            this.cancelBody(response)
-            // 원문 서버가 2xx가 아닌 상태(봇 차단 403·404·5xx 등)를 응답한 경우.
-            // 실제 상태 코드를 로그와 응답 message 양쪽에 남겨 원인을 드러낸다.
-            this.logger.warn(
-                `링크 미리보기 대상이 비정상 응답을 반환했습니다: ${response.status} ${finalUrl.toString()}`,
-            )
-            throw new BaseException({
-                ...LINK_ERROR.PREVIEW_BAD_STATUS,
-                message: `링크 미리보기 대상 페이지가 ${response.status} 상태로 응답했습니다.`,
-            })
-        }
-
-        const html = await this.readLimitedText(response)
-
-        return { html, finalUrl }
-    }
-
-    private getRedirectUrl(response: Response, baseUrl: URL): URL {
-        const location = response.headers.get('location')
-
-        if (!location) {
-            throw new BaseException(LINK_ERROR.PREVIEW_REDIRECT_FAILED)
-        }
-
-        return this.urlSecurity.parseHttpUrl(location, baseUrl)
-    }
-
-    // 본문을 maxBytes까지만 읽어 초대형 문서로 메모리가 터지는 것을 막는다.
-    private async readLimitedText(response: Response): Promise<string> {
-        if (!response.body) {
-            return ''
-        }
-
-        const reader = response.body.getReader()
-        const chunks: Uint8Array[] = []
-        let receivedBytes = 0
-
-        try {
-            while (true) {
-                const { done, value } = await reader.read()
-
-                if (done) break
-                if (!value) continue
-
-                receivedBytes += value.byteLength
-                chunks.push(value)
-
-                if (receivedBytes >= LINK_CONTENT_FETCH.maxBytes) {
-                    await reader.cancel()
-                    break
-                }
-            }
-        } finally {
-            reader.releaseLock()
-        }
-
-        return this.decodeBody(
-            Buffer.concat(chunks),
-            response.headers.get('content-type'),
-        )
-    }
-
-    // Content-Type의 charset을 존중해 디코딩한다 (EUC-KR 등). 실패 시 utf-8 폴백.
-    private decodeBody(buffer: Buffer, contentType: string | null): string {
-        const charset = contentType
-            ? /charset=([^;]+)/i.exec(contentType)?.[1]?.trim().toLowerCase()
-            : undefined
-
-        try {
-            return new TextDecoder(charset || 'utf-8').decode(buffer)
-        } catch {
-            return buffer.toString('utf8')
-        }
-    }
-
-    private cancelBody(response: Response) {
-        void response.body?.cancel().catch(() => undefined)
     }
 }

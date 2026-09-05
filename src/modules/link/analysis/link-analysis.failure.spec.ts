@@ -2,6 +2,7 @@ import { NotFoundException, ServiceUnavailableException } from '@nestjs/common'
 
 import { AI_TASK_TYPE } from '../../ai/ai.constants'
 import { AiGenerationError } from '../../ai/ai.exception'
+import { TinyFishFetchError } from '../content/tinyfish/tinyfish-fetch.error'
 
 import { classifyFailure } from './link-analysis.failure'
 
@@ -25,6 +26,25 @@ describe('classifyFailure', () => {
         expect(classifyFailure(new ServiceUnavailableException())).toBe(
             'RETRYABLE',
         )
+    })
+
+    it('TinyFish 실패는 client가 판단한 retryable을 따른다', () => {
+        expect(
+            classifyFailure(
+                new TinyFishFetchError({
+                    message: 'timeout',
+                    retryable: true,
+                }),
+            ),
+        ).toBe('RETRYABLE')
+        expect(
+            classifyFailure(
+                new TinyFishFetchError({
+                    message: 'invalid',
+                    retryable: false,
+                }),
+            ),
+        ).toBe('PERMANENT')
     })
 
     it('status를 알 수 없는 실패는 재시도한다', () => {
