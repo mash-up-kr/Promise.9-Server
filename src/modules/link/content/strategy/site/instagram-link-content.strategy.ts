@@ -5,7 +5,7 @@ import { withoutSearchParams } from '../link-content-url.util'
 const INSTAGRAM_HOSTNAMES = new Set(['instagram.com', 'www.instagram.com'])
 const INSTAGRAM_CONTENT_PATHS = new Set(['p', 'reel', 'reels', 'tv'])
 const INSTAGRAM_POST_TITLE_MAX_LENGTH = 100
-const INSTAGRAM_TITLE_SEPARATOR = ' on Instagram:'
+const INSTAGRAM_TITLE_PREFIX_PATTERN = / on Instagram:\s*(["“])/g
 const INSTAGRAM_RESERVED_PATHS = new Set([
     'accounts',
     'developer',
@@ -32,22 +32,30 @@ export function normalizeInstagramTitle(
 ): string | null {
     if (!title || !isInstagramContentUrl(resourceUrl)) return title
 
-    const separatorIndex = title.indexOf(INSTAGRAM_TITLE_SEPARATOR)
-    if (separatorIndex < 0) {
-        return title.slice(0, INSTAGRAM_POST_TITLE_MAX_LENGTH) || null
-    }
+    const titlePrefix = Array.from(
+        title.matchAll(INSTAGRAM_TITLE_PREFIX_PATTERN),
+    ).at(-1)
+    if (!titlePrefix) return limitInstagramPostTitle(title)
 
-    const caption = title
-        .slice(separatorIndex + INSTAGRAM_TITLE_SEPARATOR.length)
-        .trim()
-        .replace(/^["“]/, '')
+    const closingQuote = titlePrefix[1] === '“' ? '”' : '"'
+    const captionStart = (titlePrefix.index ?? 0) + titlePrefix[0].length
+    const captionWithClosingQuote = title.slice(captionStart).trim()
+    const caption = captionWithClosingQuote.endsWith(closingQuote)
+        ? captionWithClosingQuote.slice(0, -closingQuote.length).trimEnd()
+        : captionWithClosingQuote
     const firstLine = caption
         .split(/\r?\n/)
         .map((line) => line.trim())
         .find(Boolean)
-        ?.replace(/["”]$/, '')
 
-    return firstLine?.slice(0, INSTAGRAM_POST_TITLE_MAX_LENGTH) || null
+    return firstLine ? limitInstagramPostTitle(firstLine) : null
+}
+
+function limitInstagramPostTitle(title: string): string | null {
+    return (
+        Array.from(title).slice(0, INSTAGRAM_POST_TITLE_MAX_LENGTH).join('') ||
+        null
+    )
 }
 
 export function selectInstagramImage(

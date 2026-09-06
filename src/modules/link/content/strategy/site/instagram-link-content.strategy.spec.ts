@@ -36,6 +36,42 @@ describe('INSTAGRAM_LINK_CONTENT_STRATEGY', () => {
         ).toBe('제'.repeat(100))
     })
 
+    it('100자 경계의 이모지를 나누지 않는다', () => {
+        expect(
+            normalizeInstagramTitle(
+                new URL('https://instagram.com/p/example'),
+                `작성자 on Instagram: "${'제'.repeat(99)}😀나머지"`,
+            ),
+        ).toBe(`${'제'.repeat(99)}😀`)
+    })
+
+    it('여러 줄 캡션 첫 줄의 사용자 인용부호를 유지한다', () => {
+        expect(
+            normalizeInstagramTitle(
+                new URL('https://instagram.com/p/example'),
+                '작성자 on Instagram: "그는 "안녕"이라고 말했다"\n다음 내용"',
+            ),
+        ).toBe('그는 "안녕"이라고 말했다"')
+    })
+
+    it('작성자 이름에 포함된 구분자 대신 캡션 앞 구분자를 사용한다', () => {
+        expect(
+            normalizeInstagramTitle(
+                new URL('https://instagram.com/p/example'),
+                'Tips on Instagram: Daily on Instagram: "실제 캡션"',
+            ),
+        ).toBe('실제 캡션')
+    })
+
+    it('곡선 인용부호로 감싼 캡션도 정규화한다', () => {
+        expect(
+            normalizeInstagramTitle(
+                new URL('https://instagram.com/p/example'),
+                '작성자 on Instagram: “실제 캡션”',
+            ),
+        ).toBe('실제 캡션')
+    })
+
     it('프로필 제목은 작성자 정보를 유지한다', () => {
         expect(
             normalizeInstagramTitle(
