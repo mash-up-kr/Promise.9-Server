@@ -36,6 +36,7 @@
         "infra:synth": "bun run --cwd infra synth",
         "infra:diff": "bun run --cwd infra diff",
         "infra:deploy": "bun run --cwd infra deploy",
+        "assets:publish": "bun run script/assets/publish.ts",
         "infra:typecheck": "bun run --cwd infra typecheck",
         "ui": "bun run script/ui/index.ts",
         "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" \"drizzle.config.ts\"",

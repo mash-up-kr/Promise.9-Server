@@ -24,6 +24,29 @@ const productionEnvironment = {
 }
 
 describe('validateEnvironment', () => {
+    it.each([
+        'http://example.com',
+        'https://user:pass@example.com',
+        'https://example.com?token=x',
+        'https://example.com/#fragment',
+    ])('이메일 에셋 URL의 잘못된 설정을 거부한다: %s', (value) => {
+        expect(() =>
+            validateEnvironment({
+                ...developmentEnvironment,
+                EMAIL_ASSET_BASE_URL: value,
+            }),
+        ).toThrow()
+    })
+    it('버전 경로가 포함된 HTTPS 에셋 URL을 허용한다', () => {
+        const value = 'https://assets.example.com/email/reminder/v1'
+        expect(
+            validateEnvironment({
+                ...developmentEnvironment,
+                EMAIL_ASSET_BASE_URL: value,
+            }).EMAIL_ASSET_BASE_URL,
+        ).toBe(value)
+    })
+
     it('SQS consumer를 기본으로 비활성화한다', () => {
         expect(
             validateEnvironment(developmentEnvironment).SQS_CONSUMER_ENABLED,

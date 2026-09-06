@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { and, asc, eq, isNotNull, isNull, lte } from 'drizzle-orm'
 
 import { DatabaseService } from '../../../config/database/database.service'
+import { folders } from '../../folder/folder.schema'
 import { users } from '../../user/schema/user.schema'
 import { links } from '../link.schema'
 
@@ -26,9 +27,21 @@ export class ReminderRepository {
                 originalUrl: links.originalUrl,
                 finalUrl: links.finalUrl,
                 reminderAt: links.reminderAt,
+                createdAt: links.createdAt,
+                memo: links.memo,
+                folderName: folders.name,
+                folderColor: folders.color,
             })
             .from(links)
             .innerJoin(users, eq(users.id, links.userId))
+            .leftJoin(
+                folders,
+                and(
+                    eq(folders.id, links.folderId),
+                    eq(folders.userId, links.userId),
+                    isNull(folders.deletedAt),
+                ),
+            )
             .where(
                 and(
                     isNotNull(links.reminderAt),

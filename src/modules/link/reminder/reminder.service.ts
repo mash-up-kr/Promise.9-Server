@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 
 import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
+import { ValidatedEnvironment } from '../../../config/environment'
 import { EmailService } from '../../../infrastructure/email/email.service'
 
 import { ReminderRepository } from './reminder.repository'
@@ -15,6 +17,7 @@ export class ReminderService {
         private readonly reminderRepository: ReminderRepository,
         private readonly emailService: EmailService,
         private readonly urlSecurityService: UrlSecurityService,
+        private readonly config: ConfigService<ValidatedEnvironment, true>,
     ) {}
 
     async sendReminderEmails(
@@ -31,12 +34,19 @@ export class ReminderService {
                     entries.map((reminder) => ({
                         recipientEmail: reminder.recipientEmail,
                         title: reminder.title,
+                        linkId: reminder.linkId,
+                        reminderAt: reminder.reminderAt,
+                        createdAt: reminder.createdAt,
+                        memo: reminder.memo,
+                        folderName: reminder.folderName,
+                        folderColor: reminder.folderColor,
                         url: this.urlSecurityService
                             .parseHttpUrl(
                                 reminder.finalUrl ?? reminder.originalUrl,
                             )
                             .toString(),
                     })),
+                    this.config.get('EMAIL_ASSET_BASE_URL', { infer: true }),
                 ),
             )
 

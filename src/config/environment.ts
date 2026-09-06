@@ -85,6 +85,19 @@ const appEnvSchema = z
             .max(43_200)
             .default(DEFAULT_SQS_VISIBILITY_TIMEOUT_SECONDS),
         EMAIL_SES_REGION: z.string().min(1).default(DEFAULT_EMAIL_SES_REGION),
+        EMAIL_ASSET_BASE_URL: z
+            .url()
+            .refine((value) => {
+                const url = new URL(value)
+                return (
+                    url.protocol === 'https:' &&
+                    !url.username &&
+                    !url.password &&
+                    !url.search &&
+                    !url.hash
+                )
+            }, 'EMAIL_ASSET_BASE_URL은 인증정보·쿼리·fragment가 없는 HTTPS URL이어야 합니다.')
+            .optional(),
         EMAIL_FROM_ADDRESS: z.email().optional(),
         EMAIL_CONFIGURATION_SET: z.string().min(1).optional(),
         AWS_ACCESS_KEY_ID: z.string().min(1).optional(),

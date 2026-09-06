@@ -5,12 +5,22 @@ export type ReminderEmailTarget = {
     originalUrl: string
     finalUrl: string | null
     reminderAt: Date
+    createdAt: Date
+    memo: string | null
+    folderName: string | null
+    folderColor: string | null
 }
 
 export type ReminderEmailData = {
     recipientEmail: string
     title: string | null
-    url?: string
+    url: string
+    linkId: number
+    reminderAt: Date
+    createdAt: Date
+    memo: string | null
+    folderName: string | null
+    folderColor: string | null
 }
 
 export type ReminderBatchResult = {

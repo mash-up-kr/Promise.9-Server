@@ -1,86 +1,54 @@
 # 링크 리마인드 이메일
 
-저장한 링크를 다시 보여주는 Promise.9 이메일 템플릿과 모션 에셋입니다.
-서버의 링크 리마인더가 `link-reminder-email.html`을 읽어 실제 이메일 본문으로 사용합니다.
+현재 발송용 `link-reminder-email.html`은 Figma E-mail 페이지의 본문 디자인을 구현합니다.
+메일 앱의 뒤로 가기·발신자 정보 등은 수신 앱이 표시하므로 HTML에 포함하지 않습니다.
 
-## 파일 구성
+- 디자인: https://www.figma.com/design/g4STf8Sl2f7y6oYyGn69QP?node-id=5288-110774
+- 라이트 기본 + `prefers-color-scheme: dark` 대응
+- 노란 브랜드 배너, 예약 시간, 링크 제목, 폴더·도메인·저장일, 메모, 원문·AI 요약 버튼, 문의 푸터
+- 480px 이하에서는 메타정보와 버튼을 세로로 배치합니다.
+- 메모가 없으면 안내 문구와 ‘메모 작성하기’ 링크를 표시합니다.
+- 폴더 색상 13종은 `reminder-folder-colors.json`의 Figma 팔레트를 사용합니다.
 
-- `link-reminder-email.html`: 실제 발송용 HTML 템플릿
-- `link-reminder-email-preview.html`: 세 모션을 선택할 수 있는 로컬 미리보기
-- `assets/link-reminder-motion.gif`: 기본 모션 최종본
-- `assets/link-reminder-motion-gentle.gif`: 부드러운 모션 최종본
-- `assets/link-reminder-motion-playful.gif`: 타원 궤도 모션 최종본
-- `assets/link-reminder-motion-poster.png`: 애니메이션 미지원 환경용 공용 포스터
-- `assets/ddingddong.png`: 초기 콘셉트에서 사용하는 캐릭터 이미지
-- `promise-light-motion-concept.html`: 초기 브라우저 모션 콘셉트 보존본
+## 서버 데이터와 버튼
 
-## 최종 모션 선택
+`src/modules/link/reminder/reminder-email.template.ts`가 수신자별 전체 치환값을 만듭니다.
+제목·폴더명·메모·URL은 HTML escape하며, 일반 텍스트 본문에는 원문을 사용합니다.
+예약 시간과 저장 날짜는 `Asia/Seoul` 기준입니다. 폴더가 없으면 ‘미분류’와 중립 색상을 사용합니다.
 
-세 변형은 모두 실제 발송에 사용할 수 있는 최종본입니다.
-
-| 키 | 최종 에셋 | 상태 |
-| --- | --- | --- |
-| `normal` | `link-reminder-motion.gif` | 최종본 |
-| `gentle` | `link-reminder-motion-gentle.gif` | 최종본 |
-| `playful` | `link-reminder-motion-playful.gif` | 최종본 |
-
-실제 이메일에서는 발송 전에 `normal`, `gentle`, `playful` 중 하나를 선택하고, 해당 에셋의 공개 HTTPS URL을 `{{motionGifUrl}}`에 넣습니다.
-
-```ts
-const motionFileByVariant = {
-  normal: "link-reminder-motion.gif",
-  gentle: "link-reminder-motion-gentle.gif",
-  playful: "link-reminder-motion-playful.gif",
-} as const;
-
-type MotionVariant = keyof typeof motionFileByVariant;
-
-function getMotionGifUrl(variant: MotionVariant, assetBaseUrl: string) {
-  return `${assetBaseUrl}/${motionFileByVariant[variant]}`;
-}
-```
-
-이메일 클라이언트 내부에서는 JavaScript 기반 선택 UI를 사용할 수 없으므로, 선택은 템플릿을 렌더링하기 전에 발송 코드에서 처리해야 합니다.
-
-## 템플릿 값
-
-| 값 | 설명 |
+| 버튼 | 목적지 |
 | --- | --- |
-| `{{linkTitle}}` | 저장한 링크 제목 |
-| `{{linkUrl}}` | 사용자가 열 실제 HTTPS URL |
-| `{{motionGifUrl}}` | 선택한 모션 에셋의 공개 HTTPS URL |
+| 원문 보러 가기 / 도메인 | `finalUrl` 우선, 없으면 `originalUrl` |
+| 링띵동에서 보기 / 별 / 메모 작성하기 / AI 요약 함께 보기 | `https://link-ding-dong.com/link/{linkId}` |
+| 브랜드 배너 | `https://link-ding-dong.com` |
+| 문의 | `mailto:promise.9@gmail.com` |
 
-정적 포스터는 `multipart/related` 첨부 파일로 넣고 `Content-ID`를 `link-reminder-poster`로 지정합니다. 템플릿은 이를 `cid:link-reminder-poster`로 참조합니다.
+별 버튼은 메일에서 즐겨찾기를 변경하지 않고 상세 화면을 엽니다.
+AI 요약 섹션 자동 스크롤은 이번 범위에 포함하지 않습니다.
+로컬 웹 저장소의 상세 화면은 확인 당시 목업 데이터 기반이므로 실제 상세 조회·편집은 웹 연동 작업이 필요합니다.
 
-외부 GIF 이미지는 이메일 템플릿 확정 후 공개 HTTPS URL로 서빙할 수 있을 때 추가합니다.
-그 전까지는 CID 정적 포스터를 사용합니다.
+## 이미지
+
+`assets/reminder/`의 배너·로고·아이콘은 Figma 노드에서 내보낸 파일입니다.
+폴더 편집 원본은 `assets/reminder/folder.svg` 하나로 관리합니다. `currentColor`에 `reminder-folder-colors.json`의 `lightIcon`/`darkIcon` 색상을 적용하고 `lightIconOpacity`/`darkIconOpacity`를 path의 `fill-opacity`에 적용하면 각 변형을 만들 수 있습니다. 다크 모드 중립 아이콘은 흰색 50% 투명도입니다.
+발송에는 메일 앱 호환성을 위해 색상 13종 × 테마 2종의 PNG를 사용합니다. 현재 PNG는 Figma에서 내보낸 결과를 유지하며, 원본을 수정할 때는 14×14 SVG를 28×28 PNG로 내보내 해당 파일을 갱신합니다.
+`EMAIL_ASSET_BASE_URL`이 설정되면 서버가 `cid:reminder-*` 참조를 버전별 CloudFront HTTPS URL로 바꾸고 첨부를 생략합니다. 설정이 없으면 해당 PNG를 기존 방식으로 인라인 첨부합니다.
+이미지 배포·환경변수 설정은 [공용 정적 에셋](../docs/infrastructure/assets.md)을 참고합니다. 만료되는 Figma URL은 사용하지 않습니다. Docker 이미지에도 이 디렉터리와 팔레트를 복사합니다.
+기존 모션 GIF·포스터는 과거 시안 에셋으로 보존하며 현재 발송에는 사용하지 않습니다.
 
 ## 로컬 미리보기
 
-저장소 루트를 `4174` 포트의 정적 파일 서버로 연 뒤 아래 주소에 접속하면, 화면 하단에서 세 모션을 전환할 수 있습니다.
-
-```text
-http://127.0.0.1:4174/email/link-reminder-email-preview.html
+```bash
+python3 -m http.server 4174 --bind 127.0.0.1 --directory email
 ```
 
-쿼리로 변형을 바로 지정할 수도 있습니다.
+http://127.0.0.1:4174/link-reminder-email-preview.html
 
-- 기본: `?motion=normal`
-- gentle: `?motion=gentle`
-- playful: `?motion=playful`
+미리보기에서 테마, 메모 유무·길이, 폴더명 길이, 폴더 색상, 481/375/320px 너비를 선택할 수 있습니다.
+샘플 데이터는 브라우저 미리보기에만 사용됩니다. 실제 메일은 서버 조회 데이터를 사용합니다.
 
-## TODO
+## 검증 범위
 
-- [ ] 실제 이메일에 사용하는 GIF 3개와 공용 포스터 PNG를 CDN, S3 같은 외부 오브젝트 스토리지에 배포하고 공개 HTTPS URL을 확보합니다.
-- [ ] 발송 환경 설정에 에셋 기본 URL을 추가하고, 선택한 모션의 CDN URL을 `{{motionGifUrl}}`에 주입합니다.
-- [ ] 공용 포스터를 현재처럼 CID 첨부로 유지할지 CDN URL로 전환할지 결정합니다. CDN으로 전환하면 HTML 배경 fallback과 Outlook VML 경로도 함께 변경해야 합니다.
-- [ ] CDN 응답의 `Content-Type`, 캐시 정책, 외부 접근 가능 여부를 실제 이메일 클라이언트에서 확인합니다.
-
-## 발송 시 주의사항
-
-- 템플릿 치환 시 `{{linkTitle}}`은 HTML escape하고, `{{linkUrl}}`과 `{{motionGifUrl}}`에는 검증된 HTTPS URL만 허용해야 합니다.
-- 애니메이션을 지원하지 않는 환경을 위해 CID 포스터 fallback을 구성했습니다. 실제 표시 방식은 이메일 클라이언트에 따라 다를 수 있습니다.
-- Windows용 Outlook처럼 CSS 배경 GIF 지원이 제한적인 환경에서는 VML을 통해 정적 포스터를 사용합니다.
-- 이메일 본문은 이미지와 독립된 실제 HTML이므로 이미지가 보이지 않아도 읽고 링크를 열 수 있습니다.
-- Pretendard를 사용할 수 없는 이메일 클라이언트에서는 `sans-serif`로 fallback됩니다.
-- 템플릿 폭은 최대 `600px`이며 작은 화면에서는 너비가 줄어듭니다.
+브라우저 미리보기와 단위 테스트로 레이아웃 및 데이터·CID 연결을 검증합니다.
+실제 SES 발송과 Gmail·Outlook·Apple Mail 수신 검증은 별도로 필요합니다.
+메일 클라이언트의 웹폰트·다크 모드·모서리 라운드 지원에 따라 표현이 달라질 수 있습니다.
