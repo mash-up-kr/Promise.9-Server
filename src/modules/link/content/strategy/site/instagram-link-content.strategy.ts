@@ -4,6 +4,8 @@ import { withoutSearchParams } from '../link-content-url.util'
 
 const INSTAGRAM_HOSTNAMES = new Set(['instagram.com', 'www.instagram.com'])
 const INSTAGRAM_CONTENT_PATHS = new Set(['p', 'reel', 'reels', 'tv'])
+const INSTAGRAM_POST_TITLE_MAX_LENGTH = 100
+const INSTAGRAM_TITLE_SEPARATOR = ' on Instagram:'
 const INSTAGRAM_RESERVED_PATHS = new Set([
     'accounts',
     'developer',
@@ -20,7 +22,32 @@ export const INSTAGRAM_LINK_CONTENT_STRATEGY: LinkContentTinyFishStrategy = {
     name: 'instagram',
     supports: supportsInstagramUrl,
     prepareUrl: withoutSearchParams,
+    normalizeTitle: normalizeInstagramTitle,
     selectImage: selectInstagramImage,
+}
+
+export function normalizeInstagramTitle(
+    resourceUrl: URL,
+    title: string | null,
+): string | null {
+    if (!title || !isInstagramContentUrl(resourceUrl)) return title
+
+    const separatorIndex = title.indexOf(INSTAGRAM_TITLE_SEPARATOR)
+    if (separatorIndex < 0) {
+        return title.slice(0, INSTAGRAM_POST_TITLE_MAX_LENGTH) || null
+    }
+
+    const caption = title
+        .slice(separatorIndex + INSTAGRAM_TITLE_SEPARATOR.length)
+        .trim()
+        .replace(/^["“]/, '')
+    const firstLine = caption
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find(Boolean)
+        ?.replace(/["”]$/, '')
+
+    return firstLine?.slice(0, INSTAGRAM_POST_TITLE_MAX_LENGTH) || null
 }
 
 export function selectInstagramImage(
@@ -51,6 +78,14 @@ function supportsInstagramUrl(url: URL): boolean {
     return (
         segments.length === 1 &&
         !INSTAGRAM_RESERVED_PATHS.has(segments[0].toLowerCase())
+    )
+}
+
+function isInstagramContentUrl(url: URL): boolean {
+    const [firstSegment] = url.pathname.split('/').filter(Boolean)
+
+    return Boolean(
+        firstSegment && INSTAGRAM_CONTENT_PATHS.has(firstSegment.toLowerCase()),
     )
 }
 
