@@ -176,7 +176,7 @@ SQS와 SES는 같은 `AWS_*` 키를 사용하며, 전환 절차는 [SES](../infr
 ## GitHub Secrets
 
 배포 워크플로가 아래 secret을 `.env`로 내려보낸다. 운영 배포는 AWS 키 한 쌍과 큐 URL,
-SES 발신 주소를 필수로 검사하고, STS 인증 주체가 `Promise9AppRuntime`인지 확인한다.
+SES 발신 주소를 필수로 검사한다.
 
 | Secret | 사용하는 워크플로 | 값 |
 | --- | --- | --- |

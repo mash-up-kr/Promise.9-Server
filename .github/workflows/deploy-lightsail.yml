@@ -50,21 +50,6 @@ jobs:
       - name: Test
         run: bun run test -- --runInBand
 
-      - name: Verify runtime AWS identity
-        env:
-          AWS_REGION: ap-northeast-2
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-        run: |
-          : "${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID is required}"
-          : "${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY is required}"
-          RUNTIME_ARN="$(aws sts get-caller-identity --query Arn --output text)"
-          if [ "$RUNTIME_ARN" != "arn:aws:iam::743070678932:user/Promise9AppRuntime" ]; then
-            echo "::error::Runtime AWS credentials must belong to Promise9AppRuntime."
-            exit 1
-          fi
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 

@@ -107,6 +107,3 @@ SQS `AccessDenied`가 발생했다. 키만 기존 `Promise9AppRuntime`으로 바
 실행 중인 API의 이메일 인증이 끊긴다. QueueStack은 기존 IAM 사용자와 큐의 logical ID를
 유지하며, SES ARN을 도메인 상수로 구성해 이 선적용에 EmailStack 배포가 딸려오지 않게 한다.
 SES identity와 DKIM 리소스는 교체하지 않는다.
-
-배포 workflow는 STS로 키의 소유자가 `Promise9AppRuntime`인지 검사한다. 이 검사는
-인증 주체 혼선을 방지하며, 서비스별 IAM 권한 검증을 대신하지 않는다.
