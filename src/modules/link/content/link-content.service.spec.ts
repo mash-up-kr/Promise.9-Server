@@ -1,5 +1,9 @@
+import { BaseException } from '../../../common/exception/base.exception'
 import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
 
+import { LinkContentHtmlFetcher } from './html/link-content-html.fetcher'
+import { TinyFishFetchClient } from './tinyfish/tinyfish-fetch.client'
+import { TinyFishFetchError } from './tinyfish/tinyfish-fetch.error'
 import {
     LINK_CONTENT_BROWSER_USER_AGENT,
     LINK_CONTENT_IMAGE_URL_MAX_LENGTH,
@@ -12,6 +16,9 @@ describe('LinkContentService', () => {
         Pick<UrlSecurityService, 'parseHttpUrl' | 'resolvePublicUrl'>
     >
     let fetchSpy: jest.SpiedFunction<typeof fetch>
+    let tinyFishFetchClient: jest.Mocked<
+        Pick<TinyFishFetchClient, 'isEnabled' | 'fetch'>
+    >
 
     beforeEach(() => {
         urlSecurity = {
@@ -29,8 +36,16 @@ describe('LinkContentService', () => {
             }),
         }
         fetchSpy = jest.spyOn(global, 'fetch')
+        tinyFishFetchClient = {
+            isEnabled: jest.fn().mockReturnValue(false),
+            fetch: jest.fn(),
+        }
         service = new LinkContentService(
             urlSecurity as unknown as UrlSecurityService,
+            new LinkContentHtmlFetcher(
+                urlSecurity as unknown as UrlSecurityService,
+            ),
+            tinyFishFetchClient as unknown as TinyFishFetchClient,
         )
     })
 
@@ -100,6 +115,28 @@ describe('LinkContentService', () => {
         }
     })
 
+    it('HTML 리다이렉트마다 도메인에 맞는 User-Agent를 다시 선택한다', async () => {
+        fetchSpy
+            .mockResolvedValueOnce(
+                new Response(null, {
+                    status: 302,
+                    headers: {
+                        location: 'https://brunch.co.kr/@author/1',
+                    },
+                }),
+            )
+            .mockResolvedValueOnce(htmlResponse('<title>Brunch 제목</title>'))
+
+        await service.preview('https://example.com/redirect')
+
+        expect(fetchSpy.mock.calls[0][1]?.headers).toMatchObject({
+            'User-Agent': LINK_CONTENT_BROWSER_USER_AGENT,
+        })
+        expect(fetchSpy.mock.calls[1][1]?.headers).toMatchObject({
+            'User-Agent': 'Promise9Bot/1.0',
+        })
+    })
+
     it('YouTube 미리보기는 oEmbed 제목과 썸네일을 사용한다', async () => {
         fetchSpy.mockResolvedValueOnce(
             jsonResponse({
@@ -130,6 +167,92 @@ describe('LinkContentService', () => {
         expect(requestOptions?.headers).toMatchObject({
             Accept: 'application/json',
         })
+    })
+
+    it('X 미리보기는 TinyFish 결과만 사용하고 로컬 OG를 요청하지 않는다', async () => {
+        tinyFishFetchClient.isEnabled.mockReturnValueOnce(true)
+        tinyFishFetchClient.fetch.mockResolvedValueOnce({
+            status: 'SUCCESS',
+            content: {
+                title: 'X 게시물 제목',
+                description: 'X 게시물 설명',
+                content: 'X 게시물 본문',
+                imageLinks: ['https://pbs.twimg.com/media/example.jpg'],
+            },
+        })
+
+        const result = await service.preview(
+            'https://x.com/OpenAI/status/2041581000120267067?ref_src=test',
+        )
+
+        expect(result).toEqual({
+            title: 'X 게시물 제목',
+            thumbnailUrl: 'https://pbs.twimg.com/media/example.jpg',
+            source: 'x.com',
+        })
+        expect(tinyFishFetchClient.fetch).toHaveBeenCalledWith(
+            new URL('https://x.com/OpenAI/status/2041581000120267067'),
+        )
+        expect(fetchSpy).not.toHaveBeenCalled()
+    })
+
+    it('TinyFish API key가 없으면 원본 URL로 HTML 수집을 계속한다', async () => {
+        fetchSpy.mockResolvedValueOnce(htmlResponse('<title>폴백 제목</title>'))
+
+        const resourceUrl =
+            'https://x.com/OpenAI/status/2041581000120267067?ref_src=test'
+        const result = await service.preview(resourceUrl)
+
+        expect(result.title).toBe('폴백 제목')
+        expect(fetchSpy).toHaveBeenCalledWith(
+            new URL(resourceUrl),
+            expect.any(Object),
+        )
+        expect(tinyFishFetchClient.fetch).not.toHaveBeenCalled()
+    })
+
+    it('Instagram 저장 수집은 TinyFish 본문과 검증된 대표 이미지를 반환한다', async () => {
+        tinyFishFetchClient.isEnabled.mockReturnValueOnce(true)
+        tinyFishFetchClient.fetch.mockResolvedValueOnce({
+            status: 'SUCCESS',
+            content: {
+                title: 'Instagram 게시물',
+                description: '게시물 설명',
+                content: '게시물 본문',
+                imageLinks: [
+                    'https://scontent.cdninstagram.com/v/t51.2885-15/image.jpg?ig_cache_key=abc',
+                ],
+            },
+        })
+
+        const result = await service.collect(
+            'https://www.instagram.com/p/example/',
+        )
+
+        expect(result).toEqual({
+            title: 'Instagram 게시물',
+            description: '게시물 설명',
+            content: '게시물 본문',
+            image: {
+                url: 'https://scontent.cdninstagram.com/v/t51.2885-15/image.jpg?ig_cache_key=abc',
+                source: 'tinyfish',
+            },
+        })
+        expect(fetchSpy).not.toHaveBeenCalled()
+    })
+
+    it('TinyFish 내부 예외는 공통 API 예외 형식으로 변환한다', async () => {
+        tinyFishFetchClient.isEnabled.mockReturnValueOnce(true)
+        tinyFishFetchClient.fetch.mockRejectedValueOnce(
+            new TinyFishFetchError({
+                message: 'TinyFish 요청 실패',
+                retryable: false,
+            }),
+        )
+
+        await expect(
+            service.preview('https://x.com/OpenAI/status/1'),
+        ).rejects.toBeInstanceOf(BaseException)
     })
 
     it('YouTube 저장 수집은 oEmbed 제목과 썸네일만 반환한다', async () => {

@@ -84,17 +84,30 @@ export class LinkAnalysisService {
                 )
             }
 
+            const unavailableReason = content?.analysisUnavailableReason
             const aiInput = this.buildAiInput(input, content)
             const aiResults = await Promise.all([
                 requested.has('SUMMARY')
-                    ? this.runTask(input, 'SUMMARY', () =>
-                          this.generateAndSaveSummary(input, aiInput),
-                      )
+                    ? unavailableReason
+                        ? this.skipUnavailableAnalysis(
+                              input,
+                              'SUMMARY',
+                              unavailableReason,
+                          )
+                        : this.runTask(input, 'SUMMARY', () =>
+                              this.generateAndSaveSummary(input, aiInput),
+                          )
                     : undefined,
                 requested.has('TAGS')
-                    ? this.runTask(input, 'TAGS', () =>
-                          this.generateAndSaveTags(input, aiInput),
-                      )
+                    ? unavailableReason
+                        ? this.skipUnavailableAnalysis(
+                              input,
+                              'TAGS',
+                              unavailableReason,
+                          )
+                        : this.runTask(input, 'TAGS', () =>
+                              this.generateAndSaveTags(input, aiInput),
+                          )
                     : undefined,
             ])
 
@@ -127,6 +140,22 @@ export class LinkAnalysisService {
         }
 
         return results
+    }
+
+    private async skipUnavailableAnalysis(
+        input: LinkAnalysisInput,
+        task: 'SUMMARY' | 'TAGS',
+        reason: string,
+    ): Promise<LinkAnalysisTaskResult> {
+        if (task === 'SUMMARY') {
+            try {
+                await this.markSummaryFailed(input)
+            } catch (error) {
+                return this.toFailedTaskResult(input, task, error)
+            }
+        }
+
+        return { task, status: 'SKIPPED', reason }
     }
 
     private async collectIfNeeded(
@@ -364,16 +393,20 @@ export class LinkAnalysisService {
         input: LinkAnalysisInput,
     ): Promise<void> {
         try {
-            await this.linkRepository.updateActive(input.userId, input.linkId, {
-                aiSummaryStatus: 'FAILED',
-                updatedAt: new Date(),
-            })
+            await this.markSummaryFailed(input)
         } catch (error) {
             this.logger.error(
                 `AI 요약 실패 상태 저장에 실패했습니다. linkId=${input.linkId}: ${describeError(error)}`,
                 describeErrorStack(error),
             )
         }
+    }
+
+    private async markSummaryFailed(input: LinkAnalysisInput): Promise<void> {
+        await this.linkRepository.updateActive(input.userId, input.linkId, {
+            aiSummaryStatus: 'FAILED',
+            updatedAt: new Date(),
+        })
     }
 
     private mergeCollectedMetadata(

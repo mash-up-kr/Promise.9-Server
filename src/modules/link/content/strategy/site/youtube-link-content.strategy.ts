@@ -1,9 +1,8 @@
-import { LINK_CONTENT_BROWSER_USER_AGENT } from '../../link-content.constants'
 import {
     LinkContentOEmbedPreview,
     LinkContentStrategy,
 } from '../link-content-strategy.type'
-import { matchesHostname } from '../link-content-url.matcher'
+import { matchesHostname } from '../link-content-url.util'
 
 const YOUTUBE_OEMBED_ENDPOINT = 'https://www.youtube.com/oembed'
 
@@ -12,7 +11,6 @@ export const YOUTUBE_LINK_CONTENT_STRATEGY: LinkContentStrategy = {
     name: 'youtube',
     supports: (url) =>
         matchesHostname(url, 'youtube.com') || matchesHostname(url, 'youtu.be'),
-    userAgent: LINK_CONTENT_BROWSER_USER_AGENT,
     source: 'youtube.com',
     oEmbed: {
         buildEndpoint: buildYoutubeOEmbedUrl,
