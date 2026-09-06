@@ -9,6 +9,8 @@ import {
 } from 'aws-cdk-lib'
 import { Construct } from 'constructs'
 
+import { EMAIL_DOMAIN, RUNTIME_USER_NAME } from './constants'
+
 // 링크 분석 재시도 큐. 애플리케이션의 SQS_LINK_ANALYSIS_QUEUE_URL이 이 큐를 가리킨다.
 const QUEUE_NAME = 'promise9-link-analysis'
 // 시도 횟수는 코드의 LINK_ANALYSIS_MAX_ATTEMPTS가 제어하므로, redrive는 파싱 실패와
@@ -19,8 +21,6 @@ const VISIBILITY_TIMEOUT = Duration.seconds(300)
 const RETENTION_PERIOD = Duration.days(4)
 // 빈 큐를 반복 호출하지 않도록 long polling 상한을 쓴다.
 const RECEIVE_WAIT_TIME = Duration.seconds(20)
-// Lightsail 인스턴스는 IAM role을 붙일 수 없어 런타임이 액세스 키로 인증한다.
-const RUNTIME_USER_NAME = 'Promise9AppRuntime'
 
 // 메시지에 사용자 링크 URL이 담기므로 저장 암호화와 HTTPS 전송을 기본값에 맡기지 않는다.
 // SQS 관리형 키를 쓰면 KMS 비용 없이 저장 암호화를 켤 수 있다.
@@ -93,5 +93,25 @@ export class QueueStack extends Stack {
                 resources: [queue.queueArn],
             }),
         )
+
+        // 기존 IAM 사용자의 logical ID를 유지한다. SES identity는 EmailStack이 관리하며,
+        // ARN을 구성해 권한 선적용 시 EmailStack의 이전 사용자 삭제가 함께 실행되지 않게 한다.
+        runtimeUser.addToPolicy(
+            new iam.PolicyStatement({
+                actions: ['ses:SendEmail', 'ses:SendBulkEmail'],
+                resources: [
+                    this.formatArn({
+                        service: 'ses',
+                        resource: 'identity',
+                        resourceName: EMAIL_DOMAIN,
+                    }),
+                ],
+            }),
+        )
+
+        new CfnOutput(this, 'RuntimeUserName', {
+            value: runtimeUser.userName,
+            description: 'SQS와 SES가 공통으로 사용하는 운영 IAM 사용자',
+        })
     }
 }

@@ -50,6 +50,21 @@ jobs:
       - name: Test
         run: bun run test -- --runInBand
 
+      - name: Verify runtime AWS identity
+        env:
+          AWS_REGION: ap-northeast-2
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+        run: |
+          : "${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID is required}"
+          : "${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY is required}"
+          RUNTIME_ARN="$(aws sts get-caller-identity --query Arn --output text)"
+          if [ "$RUNTIME_ARN" != "arn:aws:iam::743070678932:user/Promise9AppRuntime" ]; then
+            echo "::error::Runtime AWS credentials must belong to Promise9AppRuntime."
+            exit 1
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -96,6 +111,10 @@ jobs:
           : "${KAKAO_NATIVE_APP_KEY:?KAKAO_NATIVE_APP_KEY is required}"
           : "${APPLE_CLIENT_ID:?APPLE_CLIENT_ID is required}"
           : "${OPENAI_API_KEY:?OPENAI_API_KEY is required}"
+          : "${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID is required}"
+          : "${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY is required}"
+          : "${SQS_LINK_ANALYSIS_QUEUE_URL:?SQS_LINK_ANALYSIS_QUEUE_URL is required}"
+          : "${EMAIL_FROM_ADDRESS:?EMAIL_FROM_ADDRESS is required}"
 
           {
             printf 'APP_ENV=production\n'

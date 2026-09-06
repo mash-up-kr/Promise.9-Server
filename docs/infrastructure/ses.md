@@ -1,16 +1,17 @@
 # AWS SES
 
-`Promise9EmailStack`은 링크 리마인드 이메일을 발송하기 위한 SES 발신 도메인과
-애플리케이션 IAM User를 관리한다.
+`Promise9EmailStack`은 링크 리마인드 이메일을 발송하기 위한 SES 발신 도메인을 관리한다.
+서버 인증은 `Promise9QueueStack`이 관리하는 `Promise9AppRuntime`으로 통일한다.
 
 ## 관리 리소스
 
 | 리소스             | 이름                               | 역할                                  |
 | ------------------ | ---------------------------------- | ------------------------------------- |
 | SES Email identity | `link-ding-dong.com`               | 도메인 내 발신 주소 검증 및 DKIM 서명 |
-| IAM User           | `promise9-email-sender-production` | 운영 이메일 발송                      |
+| IAM User (QueueStack) | `Promise9AppRuntime` | 운영 SQS 재시도와 SES 이메일 발송 |
 
-IAM User에는 SES identity의 `ses:SendEmail`, `ses:SendBulkEmail`만 허용한다.
+SES 권한은 이 도메인 identity의 `ses:SendEmail`, `ses:SendBulkEmail`로 제한한다.
+같은 사용자에 운영 분석 큐의 송신·수신·삭제 권한만 추가하며 인프라 관리 권한은 주지 않는다.
 
 CDK는 장기 access key를 만들거나 출력하지 않는다. CloudFormation output에 secret access
 key가 남는 것을 방지하기 위해서다.
@@ -24,6 +25,7 @@ bun run infra:typecheck
 bun run infra:synth --profile promise9
 bun run infra:diff Promise9EmailStack --profile promise9
 bun run infra:deploy Promise9EmailStack --profile promise9
+bun run infra:deploy Promise9QueueStack --profile promise9
 ```
 
 배포 output의 `DkimRecord1Name`~`DkimRecord3Name`과 각 `Value`를 도메인의 DNS에 CNAME
@@ -56,7 +58,8 @@ SES는 template 치환값을 HTML escape하지 않는다. 사용자 입력을 HT
 
 ## 런타임 자격 증명
 
-IAM access key는 환경별 IAM User에서 한 번 발급하고 다음 GitHub Secrets에 저장한다.
+`Promise9AppRuntime`의 access key 한 쌍을 다음 GitHub Actions repository Secrets에 저장한다.
+SQS와 SES가 같은 `AWS_*` 자격 증명을 사용하므로 이메일 전용 사용자의 키로 덮어쓰지 않는다.
 
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
@@ -80,3 +83,30 @@ bun run infra:diff Promise9EmailStack --profile promise9
 
 Email identity에는 `RemovalPolicy.RETAIN`을 적용하고 Stack에는 termination protection을
 적용한다. IAM 권한 확대나 identity 교체가 diff에 표시되면 배포 전에 별도로 검토한다.
+
+## 기존 이메일 전용 사용자에서 전환
+
+기존 운영 환경은 `promise9-email-sender-production`의 키로 SES와 SQS를 모두 호출해
+SQS `AccessDenied`가 발생했다. 키만 기존 `Promise9AppRuntime`으로 바꾸면 SES 권한이
+없어 이메일이 실패하므로 아래 순서를 지킨다.
+
+1. `Promise9QueueStack`만 먼저 diff/deploy하여 기존 `Promise9AppRuntime`에 SES 권한을 추가한다.
+2. IAM 정책 검증으로 운영 큐의 `SendMessage`, `ReceiveMessage`, `DeleteMessage`와
+   SES identity의 `SendEmail`, `SendBulkEmail`이 모두 허용되는지 확인한다.
+3. `Promise9AppRuntime` 키로 GitHub Secrets `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`를
+   함께 교체한다. 장기 IAM 사용자 키를 사용하므로 `AWS_SESSION_TOKEN`은 설정하지 않는다.
+   두 Secrets가 교체되는 동안 배포가 실행되지 않게 한다. 새 키의 시크릿은 생성 시에만
+   조회할 수 있으므로 로그나 파일에 남기지 않고 Secrets로 전달한다.
+4. `main`의 `Deploy To Lightsail`을 실행하고 실제 컨테이너 인증 주체와 SQS 오류 해소,
+   SES 권한, API health를 확인한다. GitHub Secrets 변경만으로 실행 중인 컨테이너는 바뀌지 않는다.
+5. 다른 사용처가 없는지 확인한 뒤 기존 이메일 전용 사용자의 access key를 비활성화·삭제한다.
+6. 마지막으로 `Promise9EmailStack`을 diff/deploy해 이전 사용자와 전용 정책을 삭제한다.
+   수동으로 발급한 access key가 남아 있으면 IAM 사용자 삭제가 실패할 수 있다.
+
+전환 전 두 스택을 한꺼번에 배포하지 않는다. EmailStack에서 이전 사용자가 먼저 삭제되면
+실행 중인 API의 이메일 인증이 끊긴다. QueueStack은 기존 IAM 사용자와 큐의 logical ID를
+유지하며, SES ARN을 도메인 상수로 구성해 이 선적용에 EmailStack 배포가 딸려오지 않게 한다.
+SES identity와 DKIM 리소스는 교체하지 않는다.
+
+배포 workflow는 STS로 키의 소유자가 `Promise9AppRuntime`인지 검사한다. 이 검사는
+인증 주체 혼선을 방지하며, 서비스별 IAM 권한 검증을 대신하지 않는다.
