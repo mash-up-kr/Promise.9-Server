@@ -121,7 +121,5 @@ migration, 복구할 때는 [Database Operations](../database/operations.md)의
 
 ### 서버 AWS 인증
 
-SQS와 SES는 `Promise9AppRuntime` 사용자 한 명의 키를 공유한다. AWS 키는 일반 GitHub
-Variables가 아닌 repository Secrets에 저장한다. 기존 키에서 전환할 때는
-[SES 전환 절차](../infrastructure/ses.md#기존-이메일-전용-사용자에서-전환)에 따라
-CDK 권한 적용 → Secrets 교체 → API 배포 → 이전 사용자 정리 순서로 진행한다.
+서버 인증과 키 관리는 [서버 런타임 권한 정책](../infrastructure/access.md#서버-런타임-권한-정책)을 따른다.
+기존 이메일 전용 키를 교체할 때는 [SES 전환 절차](../infrastructure/ses.md#기존-이메일-전용-사용자에서-전환)를 따른다.

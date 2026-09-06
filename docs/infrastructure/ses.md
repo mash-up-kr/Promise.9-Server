@@ -11,19 +11,15 @@
 | IAM User (QueueStack) | `Promise9AppRuntime` | 운영 SQS 재시도와 SES 이메일 발송 |
 
 SES 권한은 이 도메인 identity의 `ses:SendEmail`, `ses:SendBulkEmail`로 제한한다.
-같은 사용자에 운영 분석 큐의 송신·수신·삭제 권한만 추가하며 인프라 관리 권한은 주지 않는다.
-
-CDK는 장기 access key를 만들거나 출력하지 않는다. CloudFormation output에 secret access
-key가 남는 것을 방지하기 위해서다.
 
 ## 최초 설정
 
-Stack을 배포한다.
+새 환경의 설정 순서다. 기존 운영 환경은 아래 [전환 절차](#기존-이메일-전용-사용자에서-전환)를 따른다.
 
 ```bash
 bun run infra:typecheck
 bun run infra:synth --profile promise9
-bun run infra:diff Promise9EmailStack --profile promise9
+bun run infra:diff Promise9EmailStack Promise9QueueStack --profile promise9
 bun run infra:deploy Promise9EmailStack --profile promise9
 bun run infra:deploy Promise9QueueStack --profile promise9
 ```
@@ -58,20 +54,9 @@ SES는 template 치환값을 HTML escape하지 않는다. 사용자 입력을 HT
 
 ## 런타임 자격 증명
 
-서버 사용자와 개인 배포 계정의 책임 구분, 새 서비스의 권한 추가·제거 기준은
-[서버 런타임 권한 정책](./access.md#서버-런타임-권한-정책)을 따른다.
-
-`Promise9AppRuntime`의 access key 한 쌍을 다음 GitHub Actions repository Secrets에 저장한다.
-SQS와 SES가 같은 `AWS_*` 자격 증명을 사용하므로 이메일 전용 사용자의 키로 덮어쓰지 않는다.
-
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- 임시 자격 증명을 사용할 때만 `AWS_SESSION_TOKEN`
-- `EMAIL_FROM_ADDRESS` (`reminder@link-ding-dong.com` 등 identity 도메인 주소이며 실제
-  메일함은 필요하지 않음)
-
-키 값을 저장소, 로그, PR 또는 CDK output에 기록하지 않는다. 키가 노출되면 즉시 비활성화한
-뒤 교체한다.
+공유 AWS 키와 보관·교체 기준은 [서버 런타임 권한 정책](./access.md#서버-런타임-권한-정책)을 따른다.
+SES 발신 주소는 GitHub Secret `EMAIL_FROM_ADDRESS`에 identity 도메인 주소로 설정한다
+(예: `reminder@link-ding-dong.com`). 실제 메일함은 필요하지 않다.
 
 애플리케이션은 기본적으로 `ap-northeast-2`의 SES를 사용한다. 다른 리전을 사용하려면 그
 리전에도 identity를 별도로 검증하고 `EMAIL_SES_REGION`을 변경해야 한다.
@@ -80,8 +65,8 @@ SQS와 SES가 같은 `AWS_*` 자격 증명을 사용하므로 이메일 전용 �
 
 ```bash
 bun run infra:typecheck
-bun run infra:synth --quiet --no-notices
-bun run infra:diff Promise9EmailStack --profile promise9
+bun run infra:synth --profile promise9 --quiet --no-notices
+bun run infra:diff Promise9EmailStack Promise9QueueStack --profile promise9
 ```
 
 Email identity에는 `RemovalPolicy.RETAIN`을 적용하고 Stack에는 termination protection을

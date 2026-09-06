@@ -155,23 +155,9 @@ Standard queue는 같은 메시지를 두 번 이상 전달할 수 있다. 요�
 
 ## IAM 권한
 
-공통 운영 원칙은 [서버 런타임 권한 정책](../infrastructure/access.md#서버-런타임-권한-정책)을 따른다.
-
-큐 스택이 IAM 사용자 `Promise9AppRuntime`을 만들고, production 큐 ARN에만 아래
-권한을 준다.
-
-- `sqs:SendMessage`
-- `sqs:ReceiveMessage`
-- `sqs:DeleteMessage`
-
-**Lightsail 인스턴스는 EC2처럼 IAM role을 붙일 수 없다.** 그래서 런타임이 액세스 키로
-인증해야 하고, 앱은 AWS SDK 기본 credential provider chain을 통해 이 키를 읽는다.
-
-액세스 키는 CloudFormation 템플릿과 스택 출력에 남지 않도록 **CDK에서 만들지 않는다.**
-스택 배포 후 `Promise9AppRuntime`의 키를 발급해 GitHub Secrets에 넣는다.
-동일 사용자는 SES 도메인 identity에 대한 `ses:SendEmail`, `ses:SendBulkEmail`도 가진다.
-SQS와 SES는 같은 `AWS_*` 키를 사용하며, 전환 절차는 [SES](../infrastructure/ses.md)를 따른다.
-키는 코드나 저장소에 넣지 않는다.
+`SqsService`는 AWS SDK 기본 credential provider chain으로 서버 자격 증명을 읽는다.
+운영 큐에 허용하는 작업과 공유 키 관리 기준은
+[서버 런타임 권한 정책](../infrastructure/access.md#서버-런타임-권한-정책)을 따른다.
 
 <br>
 

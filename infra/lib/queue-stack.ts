@@ -108,10 +108,5 @@ export class QueueStack extends Stack {
                 ],
             }),
         )
-
-        new CfnOutput(this, 'RuntimeUserName', {
-            value: runtimeUser.userName,
-            description: 'SQS와 SES가 공통으로 사용하는 운영 IAM 사용자',
-        })
     }
 }

@@ -128,22 +128,14 @@ jobs:
             if [ -n "$AWS_REGION" ]; then
               printf 'AWS_REGION=%s\n' "$AWS_REGION"
             fi
-            if [ -n "$SQS_LINK_ANALYSIS_QUEUE_URL" ]; then
-              printf 'SQS_LINK_ANALYSIS_QUEUE_URL=%s\n' "$SQS_LINK_ANALYSIS_QUEUE_URL"
-              printf 'SQS_CONSUMER_ENABLED=true\n'
-            fi
+            printf 'SQS_LINK_ANALYSIS_QUEUE_URL=%s\n' "$SQS_LINK_ANALYSIS_QUEUE_URL"
+            printf 'SQS_CONSUMER_ENABLED=true\n'
 
             printf 'EMAIL_SES_REGION=ap-northeast-2\n'
 
-            if [ -n "$EMAIL_FROM_ADDRESS" ]; then
-              printf 'EMAIL_FROM_ADDRESS=%s\n' "$EMAIL_FROM_ADDRESS"
-            fi
-            if [ -n "$AWS_ACCESS_KEY_ID" ]; then
-              printf 'AWS_ACCESS_KEY_ID=%s\n' "$AWS_ACCESS_KEY_ID"
-            fi
-            if [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
-              printf 'AWS_SECRET_ACCESS_KEY=%s\n' "$AWS_SECRET_ACCESS_KEY"
-            fi
+            printf 'EMAIL_FROM_ADDRESS=%s\n' "$EMAIL_FROM_ADDRESS"
+            printf 'AWS_ACCESS_KEY_ID=%s\n' "$AWS_ACCESS_KEY_ID"
+            printf 'AWS_SECRET_ACCESS_KEY=%s\n' "$AWS_SECRET_ACCESS_KEY"
             if [ -n "$AWS_SESSION_TOKEN" ]; then
               printf 'AWS_SESSION_TOKEN=%s\n' "$AWS_SESSION_TOKEN"
             fi
