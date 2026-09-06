@@ -1,6 +1,9 @@
 import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
 
-import { LINK_CONTENT_IMAGE_URL_MAX_LENGTH } from './link-content.constants'
+import {
+    LINK_CONTENT_BROWSER_USER_AGENT,
+    LINK_CONTENT_IMAGE_URL_MAX_LENGTH,
+} from './link-content.constants'
 import { LinkContentService } from './link-content.service'
 
 describe('LinkContentService', () => {
@@ -51,6 +54,134 @@ describe('LinkContentService', () => {
             source: 'example.com',
         })
         expect(fetchSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('일반 링크는 기존 브라우저 User-Agent로 HTML을 요청한다', async () => {
+        fetchSpy.mockResolvedValueOnce(htmlResponse('<title>링크 제목</title>'))
+
+        await service.preview('https://example.com/article')
+
+        const [requestUrl, requestOptions] = fetchSpy.mock.calls[0]
+
+        expect(requestUrl).toEqual(new URL('https://example.com/article'))
+        expect(requestOptions?.headers).toMatchObject({
+            'User-Agent': LINK_CONTENT_BROWSER_USER_AGENT,
+        })
+    })
+
+    it('Brunch 링크만 링크 수집기 User-Agent로 HTML을 요청한다', async () => {
+        fetchSpy.mockResolvedValueOnce(
+            htmlResponse('<title>Brunch 제목</title>'),
+        )
+
+        await service.preview('https://brunch.co.kr/@author/1')
+
+        const [requestUrl, requestOptions] = fetchSpy.mock.calls[0]
+
+        expect(requestUrl).toEqual(new URL('https://brunch.co.kr/@author/1'))
+        expect(requestOptions?.headers).toMatchObject({
+            'User-Agent': 'Promise9Bot/1.0',
+        })
+    })
+
+    it('Brunch 저장 수집은 robots.txt와 HTML에 같은 전용 User-Agent를 사용한다', async () => {
+        fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 404 }))
+            .mockResolvedValueOnce(htmlResponse('<title>Brunch 제목</title>'))
+
+        await service.collect('https://brunch.co.kr/@author/1')
+
+        expect(fetchSpy).toHaveBeenCalledTimes(2)
+
+        for (const [, requestOptions] of fetchSpy.mock.calls) {
+            expect(requestOptions?.headers).toMatchObject({
+                'User-Agent': 'Promise9Bot/1.0',
+            })
+        }
+    })
+
+    it('YouTube 미리보기는 oEmbed 제목과 썸네일을 사용한다', async () => {
+        fetchSpy.mockResolvedValueOnce(
+            jsonResponse({
+                title: '식인섬에서 살아남기',
+                thumbnail_url:
+                    'https://i.ytimg.com/vi/8Pbt-Aum5Q4/hqdefault.jpg',
+            }),
+        )
+
+        const resourceUrl = 'https://www.youtube.com/watch?v=8Pbt-Aum5Q4&t=14s'
+        const result = await service.preview(resourceUrl)
+
+        expect(result).toEqual({
+            title: '식인섬에서 살아남기',
+            thumbnailUrl: 'https://i.ytimg.com/vi/8Pbt-Aum5Q4/hqdefault.jpg',
+            source: 'youtube.com',
+        })
+        expect(fetchSpy).toHaveBeenCalledTimes(1)
+
+        const [requestUrl, requestOptions] = fetchSpy.mock.calls[0]
+        const endpoint = requestUrl as URL
+
+        expect(endpoint.origin + endpoint.pathname).toBe(
+            'https://www.youtube.com/oembed',
+        )
+        expect(endpoint.searchParams.get('url')).toBe(resourceUrl)
+        expect(endpoint.searchParams.get('format')).toBe('json')
+        expect(requestOptions?.headers).toMatchObject({
+            Accept: 'application/json',
+        })
+    })
+
+    it('YouTube 저장 수집은 oEmbed 제목과 썸네일만 반환한다', async () => {
+        fetchSpy.mockResolvedValueOnce(
+            jsonResponse({
+                title: '영상 제목',
+                thumbnail_url: 'https://i.ytimg.com/vi/video/hqdefault.jpg',
+            }),
+        )
+
+        const result = await service.collect('https://youtu.be/video?t=14')
+
+        expect(result).toEqual({
+            title: '영상 제목',
+            description: null,
+            content: null,
+            image: {
+                url: 'https://i.ytimg.com/vi/video/hqdefault.jpg',
+                source: 'oembed',
+            },
+        })
+        expect(fetchSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('YouTube oEmbed가 실패하면 기존 OG 수집으로 폴백한다', async () => {
+        fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 503 }))
+            .mockResolvedValueOnce(
+                htmlResponse(`
+                    <meta property="og:title" content="폴백 제목" />
+                    <meta property="og:image" content="/fallback.jpg" />
+                `),
+            )
+
+        const result = await service.preview(
+            'https://www.youtube.com/watch?v=video',
+        )
+
+        expect(result).toEqual({
+            title: '폴백 제목',
+            thumbnailUrl: 'https://www.youtube.com/fallback.jpg',
+            source: 'youtube.com',
+        })
+        expect(fetchSpy).toHaveBeenCalledTimes(2)
+        const [fallbackUrl, fallbackOptions] = fetchSpy.mock.calls[1]
+
+        expect(fallbackUrl).toEqual(
+            new URL('https://www.youtube.com/watch?v=video'),
+        )
+        expect(fallbackOptions?.headers).toMatchObject({
+            'User-Agent': LINK_CONTENT_BROWSER_USER_AGENT,
+        })
     })
 
     it('robots.txt가 허용한 링크에서 제목, 설명, 본문을 수집한다', async () => {
@@ -289,6 +420,15 @@ function htmlResponse(html: string): Response {
         status: 200,
         headers: {
             'content-type': 'text/html; charset=utf-8',
+        },
+    })
+}
+
+function jsonResponse(value: unknown): Response {
+    return new Response(JSON.stringify(value), {
+        status: 200,
+        headers: {
+            'content-type': 'application/json; charset=utf-8',
         },
     })
 }

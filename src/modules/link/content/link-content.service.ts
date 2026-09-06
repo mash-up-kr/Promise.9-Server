@@ -1,16 +1,21 @@
 import { HttpException, Injectable, Logger } from '@nestjs/common'
 
 import { BaseException } from '../../../common/exception/base.exception'
+import { describeError } from '../../../common/exception/error.util'
 import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
 import { LINK_ERROR } from '../link-error.constant'
 
+import { resolveLinkContentStrategy } from './strategy/link-content-strategy.registry'
 import {
+    LinkContentOEmbedPreview,
+    LinkContentOEmbedStrategy,
+} from './strategy/link-content-strategy.type'
+import {
+    buildLinkContentRequestHeaders,
     LINK_CONTENT_FETCH,
     LINK_CONTENT_IMAGE_URL_MAX_LENGTH,
     LINK_CONTENT_REDIRECT_STATUSES,
-    LINK_CONTENT_REQUEST_HEADERS,
     LINK_CONTENT_TEXT_LIMIT,
-    LINK_CONTENT_USER_AGENT,
 } from './link-content.constants'
 import { parseLinkInformation, parseLinkPreview } from './link-content.parser'
 import {
@@ -31,7 +36,25 @@ export class LinkContentService {
 
     // 저장 전 화면에 사용할 링크 제목, 대표 이미지, 출처를 수집한다.
     async preview(url: string): Promise<LinkPreview> {
-        const { html, finalUrl } = await this.fetchHtml(url)
+        const resourceUrl = this.urlSecurity.parseHttpUrl(url)
+        const strategy = resolveLinkContentStrategy(resourceUrl)
+        const oEmbed =
+            strategy.kind === 'oembed'
+                ? await this.fetchOEmbed(resourceUrl, strategy)
+                : null
+
+        if (oEmbed) {
+            return {
+                title: oEmbed.title,
+                thumbnailUrl: await this.toSafeAbsoluteImage(
+                    oEmbed.image,
+                    resourceUrl,
+                ),
+                source: strategy.source ?? this.toSource(resourceUrl),
+            }
+        }
+
+        const { html, finalUrl } = await this.fetchHtml(resourceUrl.toString())
         const { title, image } = parseLinkPreview(html)
 
         return {
@@ -44,10 +67,38 @@ export class LinkContentService {
     // null은 정상적으로 수집할 내용이 없거나 robots.txt가 명시적으로 차단한 경우다.
     // 네트워크·타임아웃·원격 5xx는 호출부가 재시도할 수 있도록 예외를 유지한다.
     async collect(url: string): Promise<CollectedLinkContent | null> {
+        const resourceUrl = this.urlSecurity.parseHttpUrl(url)
+        const strategy = resolveLinkContentStrategy(resourceUrl)
+        const oEmbed =
+            strategy.kind === 'oembed'
+                ? await this.fetchOEmbed(resourceUrl, strategy)
+                : null
+
+        if (oEmbed) {
+            const imageUrl = await this.toSafeAbsoluteImage(
+                oEmbed.image,
+                resourceUrl,
+            )
+            const collected: CollectedLinkContent = {
+                title: this.limitText(
+                    oEmbed.title,
+                    LINK_CONTENT_TEXT_LIMIT.title,
+                ),
+                description: null,
+                content: null,
+                image: imageUrl ? { url: imageUrl, source: 'oembed' } : null,
+            }
+
+            return this.hasCollectedContent(collected) ? collected : null
+        }
+
         try {
-            const { html, finalUrl } = await this.fetchHtml(url, {
-                beforeRequest: this.validateCrawlingAllowed,
-            })
+            const { html, finalUrl } = await this.fetchHtml(
+                resourceUrl.toString(),
+                {
+                    beforeRequest: this.validateCrawlingAllowed,
+                },
+            )
             const information = parseLinkInformation(html)
             const preview = parseLinkPreview(html)
             const imageUrl = await this.toSafeAbsoluteImage(
@@ -79,6 +130,48 @@ export class LinkContentService {
             }
 
             throw error
+        }
+    }
+
+    // 사이트 전략에 oEmbed가 등록돼 있으면 우선 조회하고, 실패하면 HTML 수집을 계속한다.
+    private async fetchOEmbed(
+        resourceUrl: URL,
+        strategy: LinkContentOEmbedStrategy,
+    ): Promise<LinkContentOEmbedPreview | null> {
+        const endpoint = strategy.oEmbed.buildEndpoint(resourceUrl)
+        const controller = new AbortController()
+        const timeout = setTimeout(
+            () => controller.abort(),
+            LINK_CONTENT_FETCH.timeoutMs,
+        )
+
+        try {
+            await this.urlSecurity.resolvePublicUrl(endpoint)
+
+            const response = await fetch(endpoint, {
+                headers: {
+                    ...buildLinkContentRequestHeaders(strategy.userAgent),
+                    Accept: 'application/json',
+                },
+                redirect: 'manual',
+                signal: controller.signal,
+            })
+
+            if (!response.ok) {
+                this.cancelBody(response)
+                return null
+            }
+
+            return strategy.oEmbed.parse(
+                JSON.parse(await this.readLimitedText(response)) as unknown,
+            )
+        } catch (error) {
+            this.logger.warn(
+                `${strategy.name} oEmbed 수집에 실패해 일반 OG로 폴백합니다: ${describeError(error)}`,
+            )
+            return null
+        } finally {
+            clearTimeout(timeout)
         }
     }
 
@@ -128,6 +221,7 @@ export class LinkContentService {
     // 페이지 요청과 같은 UA로 robots.txt를 확인하며, 확인 실패 시 보수적으로 차단한다.
     private async isCrawlingAllowed(url: URL): Promise<boolean> {
         const controller = new AbortController()
+        const strategy = resolveLinkContentStrategy(url)
         const timeout = setTimeout(
             () => controller.abort(),
             LINK_CONTENT_FETCH.timeoutMs,
@@ -137,7 +231,7 @@ export class LinkContentService {
             const robotsUrl = new URL('/robots.txt', url.origin)
             const response = await fetch(robotsUrl, {
                 headers: {
-                    ...LINK_CONTENT_REQUEST_HEADERS,
+                    ...buildLinkContentRequestHeaders(strategy.userAgent),
                     Accept: 'text/plain,*/*',
                 },
                 redirect: 'manual',
@@ -164,7 +258,7 @@ export class LinkContentService {
             return isRobotsPathAllowed(
                 await this.readLimitedText(response),
                 url.pathname + url.search,
-                LINK_CONTENT_USER_AGENT,
+                strategy.userAgent,
             )
         } catch (error) {
             if (error instanceof HttpException) {
@@ -246,9 +340,10 @@ export class LinkContentService {
             // 리다이렉트 대상도 매 홉마다 같은 SSRF 기준으로 다시 검증한다.
             await this.urlSecurity.resolvePublicUrl(currentUrl)
             await options.beforeRequest?.(currentUrl)
+            const strategy = resolveLinkContentStrategy(currentUrl)
 
             const response = await fetch(currentUrl, {
-                headers: LINK_CONTENT_REQUEST_HEADERS,
+                headers: buildLinkContentRequestHeaders(strategy.userAgent),
                 redirect: 'manual',
                 signal,
             })
