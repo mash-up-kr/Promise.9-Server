@@ -8,6 +8,7 @@ import {
 } from 'aws-cdk-lib'
 
 import { AccessStack } from '../lib/access-stack'
+import { AssetsStack } from '../lib/assets-stack'
 import { AWS_ACCOUNT_ID, AWS_REGION, PROJECT_NAME } from '../lib/constants'
 import { EmailStack } from '../lib/email-stack'
 import { LightsailStack } from '../lib/lightsail-stack'
@@ -57,8 +58,18 @@ const queueStack = new QueueStack(app, 'Promise9QueueStack', {
     env,
     synthesizer: new CliCredentialsStackSynthesizer(),
     terminationProtection: true,
-    description: 'Promise9 link analysis retry queue and runtime SQS/SES access',
+    description:
+        'Promise9 link analysis retry queue and runtime SQS/SES access',
 })
 
 Tags.of(queueStack).add('Project', PROJECT_NAME)
 Tags.of(queueStack).add('ManagedBy', 'AWS-CDK')
+
+const assetsStack = new AssetsStack(app, 'Promise9AssetsStack', {
+    env,
+    synthesizer: new CliCredentialsStackSynthesizer(),
+    terminationProtection: true,
+    description: 'Promise9 shared static images served through CloudFront',
+})
+Tags.of(assetsStack).add('Project', PROJECT_NAME)
+Tags.of(assetsStack).add('ManagedBy', 'AWS-CDK')
