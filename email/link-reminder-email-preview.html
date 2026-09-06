@@ -3,101 +3,65 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Promise.9 링크 리마인드 — 세 모션 최종본</title>
+  <title>링띵동 리마인드 이메일 미리보기</title>
+  <style>
+    body { margin:0; background:#f1f1f3; font-family:system-ui,sans-serif; }
+    nav { display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding:16px; background:white; border-bottom:1px solid #ddd; }
+    label { font-size:13px; display:flex; gap:6px; align-items:center; }
+    iframe { display:block; margin:24px auto; border:0; background:white; max-width:100%; }
+    #error { color:#a00; padding:16px; }
+  </style>
 </head>
-<body style="margin:0; background:#050507;">
+<body>
+  <nav aria-label="이메일 미리보기 설정">
+    <label>테마 <select id="theme"><option value="light">라이트</option><option value="dark">다크</option></select></label>
+    <label>메모 <select id="memo"><option value="present">있음</option><option value="empty">없음</option><option value="long">긴 메모</option></select></label>
+    <label>폴더 <select id="folder"><option value="short">짧은 이름</option><option value="long">긴 이름</option><option value="none">미분류</option></select></label>
+    <label>색상 <select id="color"></select></label>
+    <label>너비 <select id="width"><option value="481">481px</option><option value="375">375px</option><option value="320">320px</option></select></label>
+  </nav>
+  <p id="error" hidden></p>
+  <iframe id="preview" title="링크 리마인드 메일 본문" sandbox="allow-same-origin allow-popups"></iframe>
   <script>
-    const motions = Object.freeze({
-      normal: {
-        label: "기본",
-        gifUrl: "./assets/link-reminder-motion.gif?v=1",
-      },
-      gentle: {
-        label: "Gentle",
-        gifUrl: "./assets/link-reminder-motion-gentle.gif?v=1",
-      },
-      playful: {
-        label: "Playful",
-        gifUrl: "./assets/link-reminder-motion-playful.gif?v=1",
-      },
-    });
-
-    const requestedMotion = new URLSearchParams(window.location.search).get("motion");
-    const selectedMotion = Object.prototype.hasOwnProperty.call(motions, requestedMotion)
-      ? requestedMotion
-      : "normal";
-
-    fetch("./link-reminder-email.html")
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`이메일 템플릿을 불러오지 못했습니다: ${response.status}`);
-        }
-        return response.text();
-      })
-      .then((template) => {
-        const preview = template
-          .replaceAll("{{linkTitle}}", "{{링크 제목}}")
-          .replaceAll("{{linkUrl}}", "#")
-          .replaceAll("{{motionGifUrl}}", motions[selectedMotion].gifUrl)
-          .replaceAll("cid:link-reminder-poster", "./assets/link-reminder-motion-poster.png");
-
-        document.open();
-        document.write(preview);
-        document.close();
-        document.title = `Promise.9 링크 리마인드 — ${motions[selectedMotion].label} 모션 최종본`;
-
-        const selector = document.createElement("nav");
-        selector.setAttribute("aria-label", "모션 미리보기 선택");
-        selector.style.cssText = [
-          "position:fixed",
-          "z-index:9999",
-          "left:50%",
-          "bottom:18px",
-          "transform:translateX(-50%)",
-          "display:flex",
-          "gap:4px",
-          "padding:5px",
-          "border:1px solid rgba(236,233,218,.24)",
-          "border-radius:999px",
-          "background:rgba(15,15,18,.88)",
-          "box-shadow:0 12px 36px rgba(0,0,0,.34)",
-          "backdrop-filter:blur(14px)",
-          "font-family:Pretendard,sans-serif",
-        ].join(";");
-
-        Object.entries(motions).forEach(([key, motion]) => {
-          const link = document.createElement("a");
-          const isSelected = key === selectedMotion;
-          link.href = `?motion=${encodeURIComponent(key)}`;
-          link.textContent = motion.label;
-          link.style.cssText = [
-            "display:block",
-            "padding:8px 13px",
-            "border-radius:999px",
-            `background:${isSelected ? "#ece9da" : "transparent"}`,
-            `color:${isSelected ? "#171714" : "#b8b5a8"}`,
-            "font-size:12px",
-            "line-height:16px",
-            "font-weight:700",
-            "text-decoration:none",
-            "white-space:nowrap",
-          ].join(";");
-          if (isSelected) {
-            link.setAttribute("aria-current", "page");
-          }
-          selector.appendChild(link);
-        });
-
-        document.body.appendChild(selector);
-      })
-      .catch((error) => {
-        const message = document.createElement("p");
-        message.style.cssText = "padding:24px;color:#f5f2e8;font-family:sans-serif;";
-        message.textContent = error instanceof Error
-          ? error.message
-          : "이메일 미리보기를 불러오지 못했습니다.";
-        document.body.replaceChildren(message);
-      });
+    const fields = ['theme', 'memo', 'folder', 'color', 'width'];
+    const params = new URLSearchParams(location.search);
+    const escapeHtml = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
+    Promise.all(['./link-reminder-email.html', './reminder-folder-colors.json'].map(async url => {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`미리보기 파일을 불러오지 못했습니다: ${response.status}`);
+      return url.endsWith('.json') ? response.json() : response.text();
+    })).then(([template, colors]) => {
+      const select = document.getElementById('color');
+      colors.forEach((color, index) => select.add(new Option(color.color, index)));
+      select.value = '9';
+      fields.forEach(name => { const el = document.getElementById(name); if ([...el.options].some(o => o.value === params.get(name))) el.value = params.get(name); el.addEventListener('change', render); });
+      function render() {
+        const options = Object.fromEntries(fields.map(name => [name, document.getElementById(name).value]));
+        const index = options.folder === 'none' ? 12 : Number(options.color);
+        const color = colors[index];
+        const empty = options.memo === 'empty';
+        const data = {
+          linkTitle:'작은 팀에서 가볍게 시작하는 사용성 테스트', linkUrl:'https://tistory.com', detailUrl:'https://link-ding-dong.com/link/1',
+          reminderDate:'2026년 8월 29일 오전 10:50', savedDate:'2026.06.19', copyrightYear:'2026', domain:'tistory.com',
+          folderName:options.folder === 'none' ? '미분류' : options.folder === 'long' ? '디자인 리서치 - 사용성 테스트 UT' : '디자인',
+          folderColorIndex:index, folderLightBg:color.lightBg, folderLightText:color.lightText, folderDarkBg:color.darkBg, folderDarkText:color.darkText,
+          domainDisplay:options.folder === 'long' ? 'block' : 'inline', domainMargin:options.folder === 'long' ? 4 : 0,
+          memo:empty ? '아직 작성된 메모가 없어요. 저장한 이유나 기억하고 싶은 점을 적어보세요.' : options.memo === 'long' ? 'UT 준비할 때 참고하기\n\n작은 팀에서 테스트를 진행할 때 확인할 사항을 정리해 두었어요.\n참여자 선정, 질문 작성, 관찰 내용을 다음 회의에서 함께 살펴보기.\n<script>사용자가 입력한 문구도 텍스트로 표시됩니다.<\/script>' : 'UT 준비할 때 참고하기',
+          memoClass:empty ? 'empty-note' : 'primary-text', memoColor:empty ? '#8a8a93' : '#1a1a1a', memoActionDisplay:empty ? 'inline-block' : 'none',
+        };
+        let html = template.replace(/\{\{(\w+)\}\}/g, (_, key) => escapeHtml(data[key] ?? ''))
+          .replace(/cid:reminder-([\w-]+)/g, (_, name) => new URL(`./assets/reminder/${name}.png`, location.href).href)
+          .replace('@media (prefers-color-scheme: dark)', options.theme === 'dark' ? '@media all' : '@media not all')
+          .replace('color-scheme:light dark;', `color-scheme:${options.theme};`);
+        const frame = document.getElementById('preview');
+        frame.width = options.width;
+        frame.onload = () => { frame.height = frame.contentDocument.documentElement.scrollHeight; };
+        frame.height = 1100;
+        frame.srcdoc = html;
+        history.replaceState(null, '', '?' + new URLSearchParams(options));
+      }
+      render();
+    }).catch(error => { const el = document.getElementById('error'); el.hidden = false; el.textContent = error.message; });
   </script>
 </body>
 </html>

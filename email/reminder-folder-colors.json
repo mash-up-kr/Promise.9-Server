@@ -1,0 +1,145 @@
+[
+  {
+    "color": "#61a8ef",
+    "lightBg": "#c0dcf9",
+    "lightText": "#2c4c6c",
+    "darkBg": "#2a313a",
+    "darkText": "#61a8ef",
+    "lightIcon": "#2C4C6C",
+    "lightIconOpacity": 1,
+    "darkIcon": "#61A8EF",
+    "darkIconOpacity": 1
+  },
+  {
+    "color": "#859fc1",
+    "lightBg": "#ced9e6",
+    "lightText": "#3c4857",
+    "darkBg": "#2e3036",
+    "darkText": "#859fc1",
+    "lightIcon": "#3C4857",
+    "lightIconOpacity": 1,
+    "darkIcon": "#859FC1",
+    "darkIconOpacity": 1
+  },
+  {
+    "color": "#b282cc",
+    "lightBg": "#e0cdeb",
+    "lightText": "#503b5c",
+    "darkBg": "#322d37",
+    "darkText": "#b282cc",
+    "lightIcon": "#503B5C",
+    "lightIconOpacity": 1,
+    "darkIcon": "#B282CC",
+    "darkIconOpacity": 1
+  },
+  {
+    "color": "#ec5a29",
+    "lightBg": "#f7bda9",
+    "lightText": "#6a2912",
+    "darkBg": "#382926",
+    "darkText": "#ec5a29",
+    "lightIcon": "#6A2912",
+    "lightIconOpacity": 1,
+    "darkIcon": "#EC5A29",
+    "darkIconOpacity": 1
+  },
+  {
+    "color": "#50b094",
+    "lightBg": "#b2e4d6",
+    "lightText": "#1d5544",
+    "darkBg": "#283231",
+    "darkText": "#50b094",
+    "lightIcon": "#1D5544",
+    "lightIconOpacity": 1,
+    "darkIcon": "#50B094",
+    "darkIconOpacity": 1
+  },
+  {
+    "color": "#81c7ba",
+    "lightBg": "#c7ece5",
+    "lightText": "#345d56",
+    "darkBg": "#2d3435",
+    "darkText": "#81c7ba",
+    "lightIcon": "#345D56",
+    "lightIconOpacity": 1,
+    "darkIcon": "#81C7BA",
+    "darkIconOpacity": 1
+  },
+  {
+    "color": "#ee97a4",
+    "lightBg": "#f8d5db",
+    "lightText": "#6b444a",
+    "darkBg": "#383033",
+    "darkText": "#ee97a4",
+    "lightIcon": "#6B444A",
+    "lightIconOpacity": 1,
+    "darkIcon": "#EE97A4",
+    "darkIconOpacity": 1
+  },
+  {
+    "color": "#e34647",
+    "lightBg": "#f4b5b5",
+    "lightText": "#662020",
+    "darkBg": "#372729",
+    "darkText": "#e34647",
+    "lightIcon": "#662020",
+    "lightIconOpacity": 1,
+    "darkIcon": "#E34647",
+    "darkIconOpacity": 1
+  },
+  {
+    "color": "#8bd35f",
+    "lightBg": "#d1edbf",
+    "lightText": "#3f5f2b",
+    "darkBg": "#2e362c",
+    "darkText": "#8bd35f",
+    "lightIcon": "#3F5F2B",
+    "lightIconOpacity": 1,
+    "darkIcon": "#8BD35F",
+    "darkIconOpacity": 1
+  },
+  {
+    "color": "#d5d76a",
+    "lightBg": "#f4f5d0",
+    "lightText": "#606130",
+    "darkBg": "#36362d",
+    "darkText": "#d5d76a",
+    "lightIcon": "#606130",
+    "lightIconOpacity": 1,
+    "darkIcon": "#D5D76A",
+    "darkIconOpacity": 1
+  },
+  {
+    "color": "#f8d457",
+    "lightBg": "#fcf3bb",
+    "lightText": "#705f27",
+    "darkBg": "#39362b",
+    "darkText": "#f8d457",
+    "lightIcon": "#705F27",
+    "lightIconOpacity": 1,
+    "darkIcon": "#F8D457",
+    "darkIconOpacity": 1
+  },
+  {
+    "color": "#f1a23f",
+    "lightBg": "#f9dab2",
+    "lightText": "#6c491c",
+    "darkBg": "#383128",
+    "darkText": "#f1a23f",
+    "lightIcon": "#6C491C",
+    "lightIconOpacity": 1,
+    "darkIcon": "#F1A23F",
+    "darkIconOpacity": 1
+  },
+  {
+    "color": "#000000",
+    "lightBg": "#e9e9eb",
+    "lightText": "#737373",
+    "darkBg": "#2f2f33",
+    "darkText": "#a3a3a3",
+    "lightIcon": "#737373",
+    "lightIconOpacity": 1,
+    "darkIcon": "white",
+    "darkIconOpacity": 0.5
+  }
+]

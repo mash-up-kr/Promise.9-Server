@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import { BulkEmailEntryResult } from '@aws-sdk/client-sesv2'
 
 import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
@@ -18,6 +19,10 @@ const createReminder = (
     originalUrl: 'https://example.com/original',
     finalUrl: 'https://example.com/final',
     reminderAt: new Date('2026-08-24T03:00:00.000Z'),
+    createdAt: new Date('2026-06-19T00:00:00.000Z'),
+    memo: 'UT 준비할 때 참고하기',
+    folderName: '디자인',
+    folderColor: '#d5d76a',
     ...values,
 })
 
@@ -51,6 +56,7 @@ describe('ReminderService', () => {
             reminderRepository as unknown as ReminderRepository,
             emailService as unknown as EmailService,
             urlSecurityService,
+            new ConfigService(),
         )
 
         const result = await service.sendReminderEmails(batchStartedAt)
@@ -81,10 +87,10 @@ describe('ReminderService', () => {
         expect(sentEmail?.html).toContain('{{linkTitle}}')
         expect(sentEmail?.html).not.toContain('{{motionGifUrl}}')
         expect(sentEmail?.attachments?.[0]).toMatchObject({
-            fileName: 'link-reminder-motion-poster.png',
+            fileName: 'banner.png',
             contentType: 'image/png',
             disposition: 'inline',
-            contentId: 'link-reminder-poster',
+            contentId: 'reminder-banner',
         })
         expect(reminderRepository.markSent).toHaveBeenCalledTimes(2)
         expect(result).toEqual({
@@ -133,6 +139,7 @@ describe('ReminderService', () => {
             reminderRepository as unknown as ReminderRepository,
             emailService as unknown as EmailService,
             urlSecurityService,
+            new ConfigService(),
         )
 
         const result = await service.sendReminderEmails()
@@ -176,6 +183,7 @@ describe('ReminderService', () => {
             reminderRepository as unknown as ReminderRepository,
             emailService as unknown as EmailService,
             urlSecurityService,
+            new ConfigService(),
         )
 
         const result = await service.sendReminderEmails()
@@ -222,6 +230,7 @@ describe('ReminderService', () => {
             reminderRepository as unknown as ReminderRepository,
             emailService as unknown as EmailService,
             urlSecurityService,
+            new ConfigService(),
         )
 
         await service.sendReminderEmails()
