@@ -37,7 +37,7 @@ const LINK_LIST_ITEMS_DESCRIPTION = `
 - 전체 링크: \`GET /links\`
 - 미분류 링크: \`GET /links?unassigned=true\`
 - 즐겨찾기 링크: \`GET /links?favorite=true\`
-- 최근 삭제된 링크: \`GET /links?deleted=true\`
+- 최근 삭제된 링크: \`GET /links?deleted=true\` (기본 삭제 시각 최신순)
 `
 
 const LIST_FOLDERS_DESCRIPTION = `
@@ -69,7 +69,7 @@ ${LINK_LIST_ITEMS_DESCRIPTION}
 `
 
 const REMOVE_FOLDER_DESCRIPTION = `
-사용자가 생성한 실제 폴더 row를 삭제하고, 해당 폴더의 활성 링크를 최근 삭제된 링크 목록으로 이동합니다. 폴더 처리와 링크 이동은 하나의 transaction으로 실행합니다.
+사용자가 생성한 실제 폴더 row를 삭제하고, 해당 폴더의 활성 링크는 삭제하지 않은 채 미분류로 이동합니다. 폴더 처리와 링크 이동은 하나의 transaction으로 실행합니다.
 
 ${LINK_LIST_ITEMS_DESCRIPTION}
 `
@@ -250,7 +250,7 @@ export const ApiUpdateFolder = () =>
 export const ApiRemoveFolder = () =>
     applyDecorators(
         ApiOperation({
-            summary: '폴더 삭제 (하위 링크는 최근 삭제된 링크 목록으로 이동)',
+            summary: '폴더 삭제 (하위 링크는 미분류로 이동)',
             description: REMOVE_FOLDER_DESCRIPTION,
         }),
         ApiParam({
