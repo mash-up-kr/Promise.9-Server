@@ -6,3 +6,9 @@ export function matchesHostname(url: URL, hostname: string): boolean {
         normalizedHostname.endsWith(`.${hostname}`)
     )
 }
+
+export function withoutSearchParams(url: URL): URL {
+    const normalizedUrl = new URL(url)
+    normalizedUrl.search = ''
+    return normalizedUrl
+}

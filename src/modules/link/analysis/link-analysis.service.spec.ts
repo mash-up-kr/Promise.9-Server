@@ -262,6 +262,61 @@ describe('LinkAnalysisService', () => {
         )
     })
 
+    it('TinyFish 본문 수집이 불가능하면 URL만으로 AI를 실행하지 않는다', async () => {
+        linkContentService.collect.mockResolvedValueOnce({
+            title: '제목만 수집됨',
+            description: null,
+            content: null,
+            image: null,
+            analysisUnavailableReason: 'TinyFish URL 수집 불가: bot_blocked',
+        })
+
+        const results = await service.run(INPUT, ['SUMMARY', 'TAGS'])
+
+        expect(results).toEqual([
+            {
+                task: 'SUMMARY',
+                status: 'SKIPPED',
+                reason: 'TinyFish URL 수집 불가: bot_blocked',
+            },
+            {
+                task: 'TAGS',
+                status: 'SKIPPED',
+                reason: 'TinyFish URL 수집 불가: bot_blocked',
+            },
+        ])
+        expect(linkRepository.updateActive).toHaveBeenCalledWith(
+            INPUT.userId,
+            INPUT.linkId,
+            expect.objectContaining({ aiSummaryStatus: 'FAILED' }),
+        )
+        expect(aiService.generateSummary).not.toHaveBeenCalled()
+        expect(aiService.generateTags).not.toHaveBeenCalled()
+    })
+
+    it('수집 불가 요약의 FAILED 상태 저장 실패는 재시도 대상으로 남긴다', async () => {
+        const error = new Error('status update failed')
+        linkContentService.collect.mockResolvedValueOnce({
+            title: null,
+            description: null,
+            content: null,
+            image: null,
+            analysisUnavailableReason: 'TinyFish URL 수집 불가: bot_blocked',
+        })
+        linkRepository.updateActive.mockRejectedValueOnce(error)
+
+        const results = await service.run(INPUT, ['SUMMARY'])
+
+        expect(results).toEqual([
+            {
+                task: 'SUMMARY',
+                status: 'FAILED',
+                kind: 'RETRYABLE',
+                error,
+            },
+        ])
+    })
+
     it('임베딩할 활성 링크 내용이 없으면 SKIPPED로 남긴다', async () => {
         embeddingService.embedLink.mockResolvedValueOnce(false)
 

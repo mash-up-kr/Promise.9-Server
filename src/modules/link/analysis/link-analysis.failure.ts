@@ -1,6 +1,7 @@
 import { HttpException } from '@nestjs/common'
 
 import { AiGenerationError } from '../../ai/ai.exception'
+import { TinyFishFetchError } from '../content/tinyfish/tinyfish-fetch.error'
 
 import {
     LinkAnalysisFailureKind,
@@ -12,6 +13,10 @@ import {
 // 그 밖의 실패는 status를 알 수 있으면 4xx만 영구 실패로 보고, 나머지는 재시도한다.
 export function classifyFailure(error: unknown): LinkAnalysisFailureKind {
     if (error instanceof AiGenerationError) {
+        return error.retryable ? 'RETRYABLE' : 'PERMANENT'
+    }
+
+    if (error instanceof TinyFishFetchError) {
         return error.retryable ? 'RETRYABLE' : 'PERMANENT'
     }
 

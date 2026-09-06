@@ -30,6 +30,17 @@ describe('validateEnvironment', () => {
         ).toBe(false)
     })
 
+    it('TinyFish API key를 선택적으로 검증한다', () => {
+        expect(
+            validateEnvironment({
+                ...developmentEnvironment,
+                TINY_FISH_API_KEY: 'tinyfish-api-key',
+            }),
+        ).toMatchObject({
+            TINY_FISH_API_KEY: 'tinyfish-api-key',
+        })
+    })
+
     it('development에서 production 링크 분석 큐 consumer 활성화를 거부한다', () => {
         expect(() =>
             validateEnvironment({
