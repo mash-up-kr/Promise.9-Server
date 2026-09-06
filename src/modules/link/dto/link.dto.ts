@@ -74,8 +74,7 @@ export const listLinksQuerySchema = z
         deleted: booleanQuerySchema.optional().default(false),
         sortBy: z
             .enum(['savedAt', 'viewedAt', 'reminderAt', 'deletedAt'])
-            .optional()
-            .default('savedAt'),
+            .optional(),
         order: z.enum(['asc', 'desc']).optional().default('desc'),
         cursor: z.string().trim().min(1).optional(),
         limit: z.coerce
@@ -100,6 +99,11 @@ export const listLinksQuerySchema = z
                 'q는 reminder=true 또는 sortBy=reminderAt과 함께 사용할 수 없습니다.',
         },
     )
+    .transform((value) => ({
+        ...value,
+        // 최근 삭제 목록은 삭제 시각순, 그 외 목록은 저장 시각순을 기본으로 한다.
+        sortBy: value.sortBy ?? (value.deleted ? 'deletedAt' : 'savedAt'),
+    }))
 export type ListLinksQueryInput = z.infer<typeof listLinksQuerySchema>
 
 // Swagger 문서용 (런타임 검증은 위의 zod 스키마가 담당)

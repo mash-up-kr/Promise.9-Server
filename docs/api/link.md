@@ -10,18 +10,18 @@ GET /links
 
 화면별 별도 목록 엔드포인트를 만들지 않는다. 최근 저장, 다시 볼 링크, 전체, 미분류, 즐겨찾기, 최근 삭제, 사용자 폴더, 최근 본 링크, 검색 결과를 모두 `GET /links`의 독립적인 Query 조합으로 조회한다.
 
-| Query        | 타입    | 기본값    | 설명                                             |
-| ------------ | ------- | --------- | ------------------------------------------------ |
-| `folderId`   | number  | -         | 특정 사용자 폴더의 링크만 조회                   |
-| `unassigned` | boolean | `false`   | `true`이면 미분류 링크만 조회                    |
-| `favorite`   | boolean | `false`   | `true`이면 즐겨찾기 링크만 조회                  |
-| `reminder`   | boolean | `false`   | `true`이면 리마인드 설정 링크만 조회             |
-| `deleted`    | boolean | `false`   | `true`이면 soft delete된 링크만 조회             |
-| `q`          | string  | -         | 적용된 필터 범위 안에서 검색                     |
-| `sortBy`     | enum    | `savedAt` | `savedAt`, `viewedAt`, `reminderAt`, `deletedAt` |
-| `order`      | enum    | `desc`    | `asc`, `desc`                                    |
-| `cursor`     | string  | -         | 직전 응답의 `nextCursor`                         |
-| `limit`      | number  | `9`       | 최대 `30`                                        |
+| Query        | 타입    | 기본값  | 설명                                                                                                                   |
+| ------------ | ------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `folderId`   | number  | -       | 특정 사용자 폴더의 링크만 조회                                                                                         |
+| `unassigned` | boolean | `false` | `true`이면 미분류 링크만 조회                                                                                          |
+| `favorite`   | boolean | `false` | `true`이면 즐겨찾기 링크만 조회                                                                                        |
+| `reminder`   | boolean | `false` | `true`이면 리마인드 설정 링크만 조회                                                                                   |
+| `deleted`    | boolean | `false` | `true`이면 soft delete된 링크만 조회                                                                                   |
+| `q`          | string  | -       | 적용된 필터 범위 안에서 검색                                                                                           |
+| `sortBy`     | enum    | 조건별  | 일반 목록은 `savedAt`, `deleted=true`면 `deletedAt`. 명시 가능한 값은 `savedAt`, `viewedAt`, `reminderAt`, `deletedAt` |
+| `order`      | enum    | `desc`  | `asc`, `desc`                                                                                                          |
+| `cursor`     | string  | -       | 직전 응답의 `nextCursor`                                                                                               |
+| `limit`      | number  | `9`     | 최대 `30`                                                                                                              |
 
 서로 다른 축의 조건은 함께 사용할 수 있다.
 
@@ -48,7 +48,7 @@ GET /links?folderId=3&favorite=true&q=피그마&limit=9
 | 전체         | `GET /links`                                                   |
 | 미분류       | `GET /links?unassigned=true`                                   |
 | 즐겨찾기     | `GET /links?favorite=true`                                     |
-| 최근 삭제    | `GET /links?deleted=true&sortBy=deletedAt&order=desc`          |
+| 최근 삭제    | `GET /links?deleted=true`                                      |
 | 특정 폴더    | `GET /links?folderId=3`                                        |
 | 검색 결과    | `GET /links?q=피그마`                                          |
 | 최근 저장    | `GET /links?sortBy=savedAt&order=desc&limit=9`                 |

@@ -31,7 +31,7 @@ describe('LinkService', () => {
         expect(linkRepository.moveToFolder).toHaveBeenCalledWith(3, [42, 43], 7)
     })
 
-    it('목록 커서에 DB microsecond 정밀도 값을 그대로 사용한다', async () => {
+    it('전체 링크 페이지 cursor에 저장 시각의 DB microsecond 값을 그대로 사용한다', async () => {
         const first = {
             id: 79,
             title: '첫 링크',
@@ -77,6 +77,57 @@ describe('LinkService', () => {
             id: first.id,
         })
         expect(result.links[0].reminderAt).toEqual(first.reminderAt)
+    })
+
+    it('최근 삭제 링크 페이지 cursor에 삭제 시각의 DB microsecond 값을 그대로 사용한다', async () => {
+        const first = {
+            id: 79,
+            title: '최근 삭제 링크',
+            domain: 'example.com',
+            metadata: null,
+            createdAt: new Date('2026-07-01T00:00:00.000Z'),
+            deletedAt: new Date('2026-08-08T08:10:14.443Z'),
+            reminderAt: null,
+            cursorValue: '2026-08-08T08:10:14.443365Z',
+        } as LinkListRow
+        const second = {
+            ...first,
+            id: 78,
+            cursorValue: '2026-08-08T08:10:14.443300Z',
+        }
+        const linkRepository = {
+            list: jest.fn().mockResolvedValue({
+                rows: [first, second],
+                totalCount: 2,
+            }),
+        }
+        const service = new LinkService(
+            linkRepository as unknown as LinkRepository,
+            {} as never,
+            {} as never,
+            {} as never,
+        )
+        const input = {
+            unassigned: false,
+            favorite: false,
+            reminder: false,
+            deleted: true,
+            sortBy: 'deletedAt' as const,
+            order: 'desc' as const,
+            limit: 1,
+        }
+
+        const result = await service.list(1, input)
+
+        expect(linkRepository.list).toHaveBeenCalledWith(1, input)
+        expect(result).toMatchObject({
+            pagination: { hasNext: true, limit: 1 },
+            totalCount: 2,
+        })
+        expect(decodeCursor(result.pagination.nextCursor!)).toEqual({
+            v: first.cursorValue,
+            id: first.id,
+        })
     })
 
     it('상세 링크의 폴더 색상과 관련 링크를 응답에 포함한다', async () => {

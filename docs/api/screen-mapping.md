@@ -34,15 +34,15 @@
 <img src="./screens/archive.png" alt="보관함 화면" width="240" />
 <img src="./screens/archive-detail.png" alt="폴더별 링크 화면" width="240" />
 
-| 화면 영역                    | API                                                   | 상태 | 남은 작업                               |
-| ---------------------------- | ----------------------------------------------------- | :--: | --------------------------------------- |
-| 링크 상태별 통계·사용자 폴더 | `GET /folders`                                        |  △   | 즐겨찾기 카운트·폴더 정렬 연결          |
-| 전체                         | `GET /links`                                          |  △   | cursor 페이지네이션 연결                |
-| 미분류                       | `GET /links?unassigned=true`                          |  △   | cursor 페이지네이션 연결                |
-| 즐겨찾기                     | `GET /links?favorite=true`                            |  △   | 즐겨찾기 필터·cursor 페이지네이션 연결  |
-| 최근 삭제                    | `GET /links?deleted=true&sortBy=deletedAt&order=desc` |  △   | 삭제 시각 정렬·cursor 페이지네이션 연결 |
-| 사용자 폴더 상세             | `GET /links?folderId={folderId}`                      |  △   | cursor 페이지네이션 연결                |
-| 선택 링크 일괄 폴더 이동     | `PATCH /links/folder`                                 |  O   | 출처 화면과 무관하게 활성 링크만 이동   |
+| 화면 영역                    | API                              | 상태 | 남은 작업                              |
+| ---------------------------- | -------------------------------- | :--: | -------------------------------------- |
+| 링크 상태별 통계·사용자 폴더 | `GET /folders`                   |  △   | 즐겨찾기 카운트·폴더 정렬 연결         |
+| 전체                         | `GET /links`                     |  O   | 저장 시각 기준 cursor 페이지네이션     |
+| 미분류                       | `GET /links?unassigned=true`     |  △   | cursor 페이지네이션 연결               |
+| 즐겨찾기                     | `GET /links?favorite=true`       |  △   | 즐겨찾기 필터·cursor 페이지네이션 연결 |
+| 최근 삭제                    | `GET /links?deleted=true`        |  O   | 삭제 시각 기준 cursor 페이지네이션     |
+| 사용자 폴더 상세             | `GET /links?folderId={folderId}` |  △   | cursor 페이지네이션 연결               |
+| 선택 링크 일괄 폴더 이동     | `PATCH /links/folder`            |  O   | 출처 화면과 무관하게 활성 링크만 이동  |
 
 전체·미분류·즐겨찾기·최근 삭제는 화면에서는 폴더처럼 표시되지만 DB의 `folders` row가 아닙니다. `folderId`가 없고 폴더 CRUD 대상도 아닙니다. `GET /folders`는 각 링크 상태의 개수만 제공하며, 항목을 눌렀을 때는 위 표처럼 `GET /links` Query를 조합합니다. 최근 삭제는 삭제된 폴더가 아니라 soft delete된 링크 목록입니다.
 
