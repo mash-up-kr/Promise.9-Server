@@ -155,6 +155,8 @@ Standard queue는 같은 메시지를 두 번 이상 전달할 수 있다. 요�
 
 ## IAM 권한
 
+공통 운영 원칙은 [서버 런타임 권한 정책](../infrastructure/access.md#서버-런타임-권한-정책)을 따른다.
+
 큐 스택이 IAM 사용자 `Promise9AppRuntime`을 만들고, production 큐 ARN에만 아래
 권한을 준다.
 

@@ -58,6 +58,9 @@ SES는 template 치환값을 HTML escape하지 않는다. 사용자 입력을 HT
 
 ## 런타임 자격 증명
 
+서버 사용자와 개인 배포 계정의 책임 구분, 새 서비스의 권한 추가·제거 기준은
+[서버 런타임 권한 정책](./access.md#서버-런타임-권한-정책)을 따른다.
+
 `Promise9AppRuntime`의 access key 한 쌍을 다음 GitHub Actions repository Secrets에 저장한다.
 SQS와 SES가 같은 `AWS_*` 자격 증명을 사용하므로 이메일 전용 사용자의 키로 덮어쓰지 않는다.
 
