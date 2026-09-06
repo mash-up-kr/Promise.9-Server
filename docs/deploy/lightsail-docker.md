@@ -82,6 +82,10 @@ workflow는 다음 파일을 `/opt/promise9`에 배치한다.
 | `KAKAO_CLIENT_ID`         | Kakao 로그인                      |
 | `APPLE_CLIENT_ID`         | Apple ID token audience 검증      |
 | `OPENAI_API_KEY`          | 링크 분석, 임베딩, 의미 기반 검색 |
+| `AWS_ACCESS_KEY_ID`      | `Promise9AppRuntime` access key |
+| `AWS_SECRET_ACCESS_KEY`  | 같은 키의 secret access key |
+| `SQS_LINK_ANALYSIS_QUEUE_URL` | 운영 분석 재시도 큐 URL |
+| `EMAIL_FROM_ADDRESS`     | 검증된 SES 도메인의 발신 주소 |
 
 `KAKAO_CLIENT_SECRET`, `MASTER_ACCESS_TOKEN`, `MASTER_USER_ID`는 값이 있는 경우에만 기록한다. `DB_POOL_SIZE`, JWT 만료 시간, `LLM_DEFAULT_MODEL`, `LLM_REQUEST_TIMEOUT_MS`, `PORT`는 애플리케이션 기본값을 사용한다. `GEMINI_API_KEY`는 Gemini 모델을 활성화할 때 별도로 전달해야 한다.
 
@@ -114,3 +118,8 @@ PostgreSQL은 public port를 열지 않는다. 개발자 PC에서 운영 DB를 �
 migration, 복구할 때는 [Database Operations](../database/operations.md)의
 `bun run db:tunnel`을 사용한다. migration 절차는 [Database Setup](../database/setup.md),
 복구 절차는 [Database Restore](../database/restore.md)를 따른다.
+
+### 서버 AWS 인증
+
+서버 인증과 키 관리는 [서버 런타임 권한 정책](../infrastructure/access.md#서버-런타임-권한-정책)을 따른다.
+기존 이메일 전용 키를 교체할 때는 [SES 전환 절차](../infrastructure/ses.md#기존-이메일-전용-사용자에서-전환)를 따른다.

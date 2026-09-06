@@ -40,7 +40,7 @@ const emailStack = new EmailStack(app, 'Promise9EmailStack', {
     env,
     synthesizer: new CliCredentialsStackSynthesizer(),
     terminationProtection: true,
-    description: 'Promise9 SES identity and application sending access',
+    description: 'Promise9 SES sending identity',
 })
 
 Tags.of(emailStack).add('Project', PROJECT_NAME)
@@ -57,7 +57,7 @@ const queueStack = new QueueStack(app, 'Promise9QueueStack', {
     env,
     synthesizer: new CliCredentialsStackSynthesizer(),
     terminationProtection: true,
-    description: 'Promise9 link analysis retry queue and runtime IAM user',
+    description: 'Promise9 link analysis retry queue and runtime SQS/SES access',
 })
 
 Tags.of(queueStack).add('Project', PROJECT_NAME)
