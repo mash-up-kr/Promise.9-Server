@@ -135,7 +135,11 @@ robots.txt도 다시 확인한다. User-Agent 역시 이동한 도메인에 맞�
 
 TinyFish client는 특정 사이트의 URL 범위나 대표 이미지 규칙을 알지 않는다. 응답을
 검증하고 공통 형태로 변환하는 일까지만 담당한다. TinyFish에 전달할 URL 정리와 대표
-이미지 선택은 X·Instagram 사이트 규칙에서 담당한다.
+이미지 선택, 제목 후처리는 X·Instagram 사이트 규칙에서 담당한다.
+
+Instagram 게시물·Reel·TV는 별도의 제목 필드가 없으므로 TinyFish가 반환한 문서
+제목에서 작성자 표기를 제거하고 캡션 첫 줄을 최대 100자로 사용한다. 프로필은 작성자
+정보가 제목의 핵심이므로 원래 제목을 유지한다.
 
 API key가 없으면 HTML로 다시 시도한다. API key가 있는데 TinyFish 요청이 실패하면
 불완전한 HTML/OG 결과와 합쳐 성공처럼 반환하지 않는다.

@@ -216,7 +216,7 @@ describe('LinkContentService', () => {
         tinyFishFetchClient.fetch.mockResolvedValueOnce({
             status: 'SUCCESS',
             content: {
-                title: 'Instagram 게시물',
+                title: '작성자 on Instagram: "Instagram 게시물\n\n나머지 캡션"',
                 description: '게시물 설명',
                 content: '게시물 본문',
                 imageLinks: [

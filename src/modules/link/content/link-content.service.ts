@@ -224,15 +224,15 @@ export class LinkContentService {
                 resourceUrl,
                 outcome.content.imageLinks,
             )
+            const title = strategy.normalizeTitle
+                ? strategy.normalizeTitle(resourceUrl, outcome.content.title)
+                : outcome.content.title
 
             return {
                 title:
                     purpose === 'preview'
-                        ? this.limitText(
-                              outcome.content.title,
-                              LINK_CONTENT_TEXT_LIMIT.title,
-                          )
-                        : outcome.content.title,
+                        ? this.limitText(title, LINK_CONTENT_TEXT_LIMIT.title)
+                        : title,
                 description: outcome.content.description,
                 content,
                 image,

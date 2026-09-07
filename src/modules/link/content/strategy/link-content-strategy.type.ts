@@ -24,6 +24,7 @@ export type LinkContentOEmbedStrategy = LinkContentStrategyBase & {
 export type LinkContentTinyFishStrategy = LinkContentStrategyBase & {
     kind: 'tinyfish'
     prepareUrl: (resourceUrl: URL) => URL
+    normalizeTitle?: (resourceUrl: URL, title: string | null) => string | null
     selectImage: (
         resourceUrl: URL,
         imageLinks: readonly string[],
