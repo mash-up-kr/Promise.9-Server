@@ -1,8 +1,9 @@
+import { isNull } from 'drizzle-orm'
 import {
     bigint,
     pgTable,
     timestamp,
-    unique,
+    uniqueIndex,
     varchar,
 } from 'drizzle-orm/pg-core'
 
@@ -17,7 +18,11 @@ export const users = pgTable(
         updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
         deletedAt: timestamp({ withTimezone: true }),
     },
-    (table) => [unique('users_email_unique').on(table.email)],
+    (table) => [
+        uniqueIndex('users_active_email_unique')
+            .on(table.email)
+            .where(isNull(table.deletedAt)),
+    ],
 )
 
 export type UserRow = typeof users.$inferSelect
