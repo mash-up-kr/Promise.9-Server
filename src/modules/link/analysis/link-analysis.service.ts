@@ -64,6 +64,12 @@ export class LinkAnalysisService {
         const collection = await this.collectIfNeeded(input, requested)
 
         if (collection.status === 'FAILED') {
+            // 요약 실행 전 수집 오류·타임아웃도 대기 상태를 끝낸다.
+            // TAGS만 재시도하는 경우에는 이미 성공한 요약 상태를 바꾸지 않는다.
+            if (requested.has('SUMMARY')) {
+                await this.markSummaryFailedSafe(input)
+            }
+
             // 수집 결과가 필요한 작업은 URL만으로 실행하지 않고 같은 수집 오류를 남긴다.
             // dispatcher가 요청된 작업만 재발행하므로 단독 SUMMARY/TAGS 재시도도 보존된다.
             const failedResults = LINK_ANALYSIS_COLLECTION_TASKS.filter(

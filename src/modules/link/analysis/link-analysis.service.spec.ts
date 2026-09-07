@@ -1,11 +1,13 @@
 import { Logger, NotFoundException } from '@nestjs/common'
 
+import { BaseException } from '../../../common/exception/base.exception'
 import { AiService } from '../../ai/ai.service'
 import { ImageColorService } from '../../image-color/image-color.service'
 import { LinkContentService } from '../content/link-content.service'
 import { EmbeddingService } from '../embedding/embedding.service'
 import { LinkRepository, LinkUpdatePatch } from '../link.repository'
 import { LinkMetadata } from '../link.schema'
+import { LINK_ERROR } from '../link-error.constant'
 
 import { LINK_ANALYSIS_TASKS } from './link-analysis.constant'
 import { LinkAnalysisService } from './link-analysis.service'
@@ -219,26 +221,102 @@ describe('LinkAnalysisService', () => {
         expect(embeddingService.embedLink).not.toHaveBeenCalled()
     })
 
-    it('일시적인 수집 실패는 CONTENT·SUMMARY·TAGS를 재시도 대상으로 남긴다', async () => {
-        const error = new Error('collection failed')
-        linkContentService.collect.mockRejectedValueOnce(error)
+    it.each([
+        ['네트워크 오류', new Error('collection failed')],
+        ['크롤링 타임아웃', new BaseException(LINK_ERROR.PREVIEW_TIMEOUT)],
+        ['원문 403', new BaseException(LINK_ERROR.PREVIEW_BAD_STATUS)],
+    ])(
+        '%s 발생 시 FAILED를 저장하고 실패한 작업을 재시도 대상으로 남긴다',
+        async (_name, error) => {
+            linkContentService.collect.mockRejectedValueOnce(error)
 
-        const results = await service.run(INPUT, LINK_ANALYSIS_TASKS)
+            const results = await service.run(INPUT, LINK_ANALYSIS_TASKS)
 
-        expect(results).toEqual([
-            { task: 'CONTENT', status: 'FAILED', kind: 'RETRYABLE', error },
-            { task: 'SUMMARY', status: 'FAILED', kind: 'RETRYABLE', error },
-            { task: 'TAGS', status: 'FAILED', kind: 'RETRYABLE', error },
+            expect(results).toEqual([
+                { task: 'CONTENT', status: 'FAILED', kind: 'RETRYABLE', error },
+                { task: 'SUMMARY', status: 'FAILED', kind: 'RETRYABLE', error },
+                { task: 'TAGS', status: 'FAILED', kind: 'RETRYABLE', error },
+                expect.objectContaining({
+                    task: 'EMBEDDING',
+                    status: 'FAILED',
+                    kind: 'RETRYABLE',
+                }),
+            ])
+            expect(aiService.generateSummary).not.toHaveBeenCalled()
+            expect(aiService.generateTags).not.toHaveBeenCalled()
+            expect(linkRepository.updateActive).toHaveBeenCalledWith(
+                INPUT.userId,
+                INPUT.linkId,
+                expect.objectContaining({ aiSummaryStatus: 'FAILED' }),
+            )
+            expect(embeddingService.embedLink).not.toHaveBeenCalled()
+        },
+    )
+
+    it('영구적인 수집 실패도 PENDING을 FAILED로 변경한다', async () => {
+        linkContentService.collect.mockRejectedValueOnce(
+            new NotFoundException(),
+        )
+
+        const results = await service.run(INPUT, ['SUMMARY'])
+
+        expect(findResult(results, 'SUMMARY')).toEqual(
+            expect.objectContaining({ status: 'FAILED', kind: 'PERMANENT' }),
+        )
+        expect(updatePatches).toEqual([
+            expect.objectContaining({ aiSummaryStatus: 'FAILED' }),
+        ])
+    })
+
+    it('수집 실패 후 재시도가 성공하면 FAILED에서 SUCCESS로 복구한다', async () => {
+        linkContentService.collect.mockRejectedValueOnce(
+            new BaseException(LINK_ERROR.PREVIEW_TIMEOUT),
+        )
+
+        await service.run(INPUT, ['SUMMARY'])
+        await service.run(INPUT, ['SUMMARY'])
+
+        expect(updatePatches).toEqual([
+            expect.objectContaining({ aiSummaryStatus: 'FAILED' }),
             expect.objectContaining({
-                task: 'EMBEDDING',
-                status: 'FAILED',
-                kind: 'RETRYABLE',
+                aiSummaryStatus: 'SUCCESS',
+                aiSummary: '요약',
             }),
         ])
-        expect(aiService.generateSummary).not.toHaveBeenCalled()
-        expect(aiService.generateTags).not.toHaveBeenCalled()
+    })
+
+    it('태그만 재시도하다 수집에 실패해도 기존 요약 상태를 변경하지 않는다', async () => {
+        linkContentService.collect.mockRejectedValueOnce(
+            new Error('collection failed'),
+        )
+
+        const results = await service.run(INPUT, ['TAGS', 'EMBEDDING'])
+
+        expect(findResult(results, 'TAGS')).toEqual(
+            expect.objectContaining({ status: 'FAILED', kind: 'RETRYABLE' }),
+        )
         expect(linkRepository.updateActive).not.toHaveBeenCalled()
-        expect(embeddingService.embedLink).not.toHaveBeenCalled()
+    })
+
+    it('실패 상태 저장 중 DB 오류가 나도 원래 수집 오류의 재시도를 유지한다', async () => {
+        const error = new BaseException(LINK_ERROR.PREVIEW_TIMEOUT)
+        linkContentService.collect.mockRejectedValueOnce(error)
+        linkRepository.updateActive.mockRejectedValueOnce(
+            new Error('DB unavailable'),
+        )
+
+        const results = await service.run(INPUT, ['SUMMARY'])
+
+        expect(findResult(results, 'SUMMARY')).toEqual({
+            task: 'SUMMARY',
+            status: 'FAILED',
+            kind: 'RETRYABLE',
+            error,
+        })
+        expect(loggerErrorSpy).toHaveBeenCalledWith(
+            expect.stringContaining('AI 요약 실패 상태 저장에 실패했습니다'),
+            expect.any(String),
+        )
     })
 
     it('4xx 태그 실패를 PERMANENT로 분류한다', async () => {

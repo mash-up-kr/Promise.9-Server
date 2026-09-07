@@ -228,7 +228,7 @@ GET /links/{linkId}
 
 ### 비동기 처리 중 응답
 
-`processingStatus`는 AI 요약·태그·임베딩 전체 처리 상태이며 `PENDING`, `SUCCESS`, `NEEDS_REVIEW`, `FAILED` 중 하나다. 세 단계가 모두 성공해야 `SUCCESS`가 된다. 대표 이미지 색상 추출은 상태 확정 전에 완료하지만, 이미지가 없거나 다운로드·색상 추출이 실패해도 `FAILED` 사유로 보지 않는다.
+`processingStatus`는 `aiSummaryStatus`를 반환하며 `PENDING`, `SUCCESS`, `NEEDS_REVIEW`, `FAILED` 중 하나다. 요약에 필요한 크롤링 또는 AI 요약이 오류·타임아웃으로 실패하면 `FAILED`가 된다. 재시도 중에도 `FAILED`를 유지하며 요약 저장에 성공하면 `SUCCESS`로 바뀐다. 태그·임베딩만 실패하거나 이미지 다운로드·색상 추출이 실패한 경우에는 성공한 요약 상태를 변경하지 않는다.
 
 ```json
 {
