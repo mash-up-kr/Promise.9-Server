@@ -345,6 +345,23 @@ export class LinkRepository {
             )
     }
 
+    // 성공 처리와 경합해도 PENDING인 행만 갱신한다. 메모 수정 등으로 updatedAt이
+    // 바뀌어도 분석 대기 시간이 연장되지 않도록 저장 시각을 기준으로 삼는다.
+    async failStalePendingAnalysis(cutoff: Date): Promise<number> {
+        const result = await this.db
+            .update(links)
+            .set({ aiSummaryStatus: 'FAILED', updatedAt: new Date() })
+            .where(
+                and(
+                    eq(links.aiSummaryStatus, 'PENDING'),
+                    lt(links.createdAt, cutoff),
+                    isNull(links.deletedAt),
+                ),
+            )
+
+        return result.count
+    }
+
     // 수집한 description을 기존 metadata와 병합하기 위해 현재 metadata만 조회한다.
     async findAnalysisMetadata(
         userId: number,

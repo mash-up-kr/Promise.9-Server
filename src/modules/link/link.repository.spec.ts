@@ -1,9 +1,12 @@
+import { SQL } from 'drizzle-orm'
+import { PgDialect } from 'drizzle-orm/pg-core'
+
 import { BaseException } from '../../common/exception/base.exception'
 import { encodeCursor } from '../../common/pagination/cursor'
 import { DatabaseService } from '../../config/database/database.service'
 
 import { ListLinksQueryInput } from './dto/link.dto'
-import { LinkRepository } from './link.repository'
+import { LinkRepository, LinkUpdatePatch } from './link.repository'
 
 const listInput = (cursor: string): ListLinksQueryInput => ({
     unassigned: false,
@@ -18,6 +21,33 @@ const listInput = (cursor: string): ListLinksQueryInput => ({
 
 describe('LinkRepository', () => {
     const repository = new LinkRepository({ db: {} } as DatabaseService)
+
+    it('타임아웃 정리는 오래된 활성 PENDING만 조건부 갱신해 성공 상태를 보존한다', async () => {
+        const where = jest
+            .fn<Promise<{ count: number }>, [SQL]>()
+            .mockResolvedValue({ count: 2 })
+        const set = jest
+            .fn<{ where: typeof where }, [LinkUpdatePatch]>()
+            .mockReturnValue({ where })
+        const repository = new LinkRepository({
+            db: { update: jest.fn().mockReturnValue({ set }) },
+        } as unknown as DatabaseService)
+        const cutoff = new Date('2026-09-07T11:55:00Z')
+
+        await expect(repository.failStalePendingAnalysis(cutoff)).resolves.toBe(
+            2,
+        )
+
+        const condition = new PgDialect({ casing: 'snake_case' }).sqlToQuery(
+            where.mock.calls[0][0],
+        )
+        expect(condition.sql).toBe(
+            '("links"."ai_summary_status" = $1 and "links"."created_at" < $2 and "links"."deleted_at" is null)',
+        )
+        expect(condition.params).toEqual(['PENDING', cutoff.toISOString()])
+        expect(set.mock.calls[0][0].aiSummaryStatus).toBe('FAILED')
+        expect(set.mock.calls[0][0].updatedAt).toBeInstanceOf(Date)
+    })
 
     it('형식만 맞고 실제로 존재하지 않는 날짜 cursor를 거부한다', async () => {
         const cursor = encodeCursor({

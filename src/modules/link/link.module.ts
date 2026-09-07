@@ -10,6 +10,7 @@ import { ImageColorModule } from '../image-color/image-color.module'
 import { LinkAnalysisQueueConsumer } from './analysis/link-analysis.consumer'
 import { LinkAnalysisDispatcher } from './analysis/link-analysis.dispatcher'
 import { LinkAnalysisQueuePublisher } from './analysis/link-analysis.publisher'
+import { LinkAnalysisScheduler } from './analysis/link-analysis.scheduler'
 import { LinkAnalysisService } from './analysis/link-analysis.service'
 import { LinkContentHtmlFetcher } from './content/html/link-content-html.fetcher'
 import { LinkContentService } from './content/link-content.service'
@@ -46,6 +47,7 @@ import { LinkService } from './link.service'
         LinkAnalysisDispatcher,
         LinkAnalysisQueuePublisher,
         LinkAnalysisQueueConsumer,
+        LinkAnalysisScheduler,
         LinkContentService,
         LinkContentHtmlFetcher,
         TinyFishFetchClient,
