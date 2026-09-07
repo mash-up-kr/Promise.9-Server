@@ -60,12 +60,12 @@ GET /folders?lastSavedAt=true&limit=3
 
 전체·미분류·즐겨찾기·최근 삭제 항목을 선택하면 별도의 폴더 상세 API가 아니라 다음 링크 목록 요청으로 이동한다.
 
-| 화면의 링크 목록 항목 | 링크 목록 요청                                        |
-| --------------------- | ----------------------------------------------------- |
-| 전체                  | `GET /links`                                          |
-| 미분류                | `GET /links?unassigned=true`                          |
-| 즐겨찾기              | `GET /links?favorite=true`                            |
-| 최근 삭제된 링크      | `GET /links?deleted=true&sortBy=deletedAt&order=desc` |
+| 화면의 링크 목록 항목 | 링크 목록 요청               |
+| --------------------- | ---------------------------- |
+| 전체                  | `GET /links`                 |
+| 미분류                | `GET /links?unassigned=true` |
+| 즐겨찾기              | `GET /links?favorite=true`   |
+| 최근 삭제된 링크      | `GET /links?deleted=true`    |
 
 ## 폴더 생성
 
@@ -153,7 +153,7 @@ DELETE /folders/{folderId}
 
 **Response `204`** No Content
 
-폴더에 포함된 활성 링크는 최근 삭제된 링크 목록으로 이동한다.
+폴더에 포함된 활성 링크는 삭제되지 않고 미분류로 이동한다.
 
 ## 후속 정책 결정
 

@@ -134,9 +134,9 @@ export class FolderRepository {
         return row
     }
 
-    // 링크 이동과 폴더 삭제를 하나의 트랜잭션으로 묶고, 폴더 row를 FOR UPDATE로 잠가
-    // 삭제 도중 같은 폴더로 링크가 새로 유입되어 활성 미분류로 남는 경합을 막는다.
-    async removeWithLinks(userId: number, folderId: number) {
+    // 링크의 미분류 이동과 폴더 삭제를 하나의 트랜잭션으로 묶고, 폴더 row를
+    // FOR UPDATE로 잠가 삭제 도중 같은 폴더로 링크가 새로 유입되는 경합을 막는다.
+    async removeAndUnassignLinks(userId: number, folderId: number) {
         await this.db.transaction(async (tx) => {
             const [folder] = await tx
                 .select({ id: folders.id })
@@ -151,11 +151,10 @@ export class FolderRepository {
                 throw new BaseException(FOLDER_ERROR.NOT_FOUND)
             }
 
-            // 폴더에 속한 링크는 "최근 삭제된 항목"으로 이동 (soft delete + 미분류 처리)
+            // 링크 자체는 삭제하지 않고 소속만 해제해 활성 미분류 링크로 유지한다.
             await tx
                 .update(links)
                 .set({
-                    deletedAt: new Date(),
                     folderId: null,
                     updatedAt: new Date(),
                 })

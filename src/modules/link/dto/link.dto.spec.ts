@@ -3,6 +3,24 @@ import { MAX_BULK_MOVE_LINKS } from '../link.constants'
 import { listLinksQuerySchema, moveLinksToFolderSchema } from './link.dto'
 
 describe('listLinksQuerySchema', () => {
+    it('전체 링크는 저장 시각 최신순 cursor 페이지네이션 기본값을 적용한다', () => {
+        expect(listLinksQuerySchema.parse({})).toMatchObject({
+            deleted: false,
+            sortBy: 'savedAt',
+            order: 'desc',
+            limit: 9,
+        })
+    })
+
+    it('최근 삭제 링크는 삭제 시각 최신순 cursor 페이지네이션 기본값을 적용한다', () => {
+        expect(listLinksQuerySchema.parse({ deleted: 'true' })).toMatchObject({
+            deleted: true,
+            sortBy: 'deletedAt',
+            order: 'desc',
+            limit: 9,
+        })
+    })
+
     it('리마인드 링크를 가까운 시각순으로 조회하는 query를 파싱한다', () => {
         expect(
             listLinksQuerySchema.parse({

@@ -127,7 +127,7 @@ export class FolderService {
     }
 
     async remove(userId: number, folderId: number) {
-        await this.folderRepository.removeWithLinks(userId, folderId)
+        await this.folderRepository.removeAndUnassignLinks(userId, folderId)
     }
 
     // 활성 폴더(deleted_at IS NULL) 기준 폴더명 중복을 사전 검증한다. (rename 시 자기 자신 제외)

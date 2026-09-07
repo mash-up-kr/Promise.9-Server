@@ -73,7 +73,7 @@ const LIST_LINKS_DESCRIPTION = `
 
 ### 정렬과 페이지네이션
 
-기본값은 \`sortBy=savedAt\`, \`order=desc\`, \`limit=9\`입니다. 첫 요청은 \`cursor\`를 생략하고, 다음 요청부터 직전 응답의 \`nextCursor\`를 그대로 전달합니다. 필터나 정렬을 바꾸면 기존 cursor를 폐기하고 첫 페이지부터 다시 요청해야 합니다.
+기본 정렬은 일반 목록에서 \`sortBy=savedAt\`, \`deleted=true\`인 최근 삭제 목록에서 \`sortBy=deletedAt\`이며, \`order=desc\`, \`limit=9\`가 적용됩니다. 첫 요청은 \`cursor\`를 생략하고, 다음 요청부터 직전 응답의 \`nextCursor\`를 그대로 전달합니다. 필터나 정렬을 바꾸면 기존 cursor를 폐기하고 첫 페이지부터 다시 요청해야 합니다.
 
 ### 검색(\`q\`) 응답의 차이
 
@@ -381,10 +381,9 @@ export const ApiListLinks = () =>
             schema: {
                 type: 'string',
                 enum: ['savedAt', 'viewedAt', 'reminderAt', 'deletedAt'],
-                default: 'savedAt',
             },
             description:
-                '[선택, 기본값: savedAt] 정렬 기준. `viewedAt`과 `reminderAt`은 해당 시각이 설정된 링크만 대상으로 하며 null 링크는 결과에서 제외한다. `sortBy=reminderAt`은 q와 함께 사용할 수 없다.',
+                '[선택] 정렬 기준. 일반 목록은 savedAt, deleted=true이면 deletedAt이 기본값이다. `viewedAt`과 `reminderAt`은 해당 시각이 설정된 링크만 대상으로 하며 null 링크는 결과에서 제외한다. `sortBy=reminderAt`은 q와 함께 사용할 수 없다.',
         }),
         ApiQuery({
             name: 'order',
