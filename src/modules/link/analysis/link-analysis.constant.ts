@@ -16,9 +16,5 @@ export const LINK_ANALYSIS_CONTENT_DEPENDENT_TASKS = [
 // 인라인 1회를 포함한 총 시도 횟수 상한. 초과하면 재발행을 멈추고 실패로 확정한다.
 export const LINK_ANALYSIS_MAX_ATTEMPTS = 4
 
-// 최초 분석이 끝나지 않거나 프로세스 종료로 유실된 PENDING의 대기 상한.
-// 재시도 중에는 FAILED를 유지하고, 요약 저장에 성공하면 SUCCESS로 복구한다.
-export const LINK_ANALYSIS_PENDING_TIMEOUT_MS = 5 * 60 * 1000
-
 // 재시도 메시지 포맷. 인라인 실행이 실패한 작업만 tasks에 담아 발행한다.
 export const LINK_ANALYSIS_MESSAGE_VERSION = 2 as const

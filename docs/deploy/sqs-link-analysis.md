@@ -101,23 +101,18 @@ provider 예외 타입을 알지 않고 이 값만 본다.
 | 메시지 수신 실패(큐 URL 오류, IAM 권한 누락) | 연속 실패에 1초 → 30초 백오프를 적용해 폴링을 유지한다. 로그 폭주를 막는 장치이므로 큐 설정 오류는 로그를 보고 고쳐야 한다 |
 | 배포·재시작 | `enableShutdownHooks`로 진행 중인 인라인 작업을 최대 15초 기다린다 |
 
-`LinkAnalysisScheduler`는 매분 저장 후 5분이 지난 활성 `PENDING`을 `FAILED`로 변경한다.
-정상적으로 배치가 실행되면 저장 후 5~6분 이내에 반영된다. 강제 종료(SIGKILL, OOM)로
-인라인 작업이 유실되거나 실패 상태 저장 시 DB 오류가 발생한 경우도 다음 배치에서 정리한다.
-서버·DB가 중단된 동안에는 갱신할 수 없으므로 복구 후 배치가 실행되어야 한다.
-
-대기 시간은 `createdAt` 기준이며 메모 수정 등으로 연장되지 않는다. `PENDING` 조건을
-UPDATE에 함께 넣어 이미 성공한 링크를 실패로 덮어쓰지 않고, 삭제된 링크는 제외한다.
-기존에 남아 있던 오래된 `PENDING`도 배포 후 첫 배치에서 정리된다.
-
-이 배치는 상태만 갱신하며 실행 중인 요청을 취소하거나 유실된 작업을 재발행하지 않는다.
-기존 재시도는 계속 실행되고, 요약 저장에 성공하면 `FAILED`에서 `SUCCESS`로 복구된다.
+크롤링·요약 오류 및 개별 요청 타임아웃은 실패 처리 시점에 `FAILED`를 기록한다.
+재시도 중에도 `FAILED`를 유지하며 요약 저장에 성공하면 `SUCCESS`로 복구된다.
 태그·임베딩만 실패한 경우에는 이미 성공한 요약 상태를 변경하지 않는다.
+
+주기적으로 오래된 `PENDING`을 정리하는 배치는 두지 않는다. 강제 종료(SIGKILL, OOM)로
+인라인 작업이 유실되거나 DB 장애로 실패 상태 저장까지 실패하면 `PENDING`이 남을 수 있다.
+기존에 남은 `PENDING`도 자동으로 변경하지 않는다. 관측이 필요하면 오래된 건수를 확인한다.
 
 ```sql
 select count(*) from links
 where ai_summary_status = 'PENDING'
-  and created_at < now() - interval '6 minutes'
+  and created_at < now() - interval '1 hour'
   and deleted_at is null;
 ```
 
