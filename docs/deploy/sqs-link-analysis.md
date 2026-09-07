@@ -121,4 +121,23 @@ bun run infra:typecheck
 LINK_JOB_TEST_DATABASE_URL=postgresql://user@127.0.0.1:5432/promise9_job_test bun run test:jobs:integration
 ```
 
-통합 스크립트는 loopback의 `promise9_job_test`만 허용한다. 마이그레이션, Outbox 실패 롤백, 동시 발행·선점, 토큰 소유권 상실, 재시도·횟수 소진, 후속 Job 순서, 링크 삭제·복구를 실제 PostgreSQL에서 검증한다. 실제 AWS/LocalStack 큐를 통한 전체 처리 검증은 배포 전 별도 테스트 큐에서 수행한다.
+통합 스크립트는 loopback의 `promise9_job_test`만 허용한다. 마이그레이션, Outbox 실패 롤백, 동시 발행·선점, 토큰 소유권 상실, 재시도·횟수 소진, 후속 Job 순서, 링크 삭제·복구를 실제 PostgreSQL에서 검증한다. LocalStack을 통한 SQS 통합 검증도 제공한다. 로컬 재현에는 [공식 배포된 Community 4.14.0 이미지](https://blog.localstack.cloud/localstack-for-aws-release-v-4-14-0/)를 사용했다.
+
+```bash
+docker run -d --rm --name promise9-job-sqs-test \
+  -p 127.0.0.1:45689:4566 \
+  -e SERVICES=sqs -e SQS_ENDPOINT_STRATEGY=dynamic \
+  localstack/localstack:4.14.0
+
+LINK_JOB_TEST_DATABASE_URL=postgresql://user@127.0.0.1:5432/promise9_job_test \
+LINK_JOB_TEST_SQS_ENDPOINT=http://127.0.0.1:45689 \
+bun run test:jobs:sqs
+
+docker stop promise9-job-sqs-test
+```
+
+SQS 검증도 전용 테스트 DB의 링크 데이터를 초기화한다. 실행마다 별도 큐·DLQ를 생성하고 종료 시 삭제한다. Publisher·Consumer·Repository·SQS SDK는 실제 코드를 사용하고, 수집·AI 실행만 고정된 테스트 결과로 대체한다. 검증 프로세스의 AWS 자격 증명은 로컬 테스트 값으로 고정한다.
+
+검증 범위는 정상 저장·ACK, 완료 메시지 중복 정리, 재시도 Outbox, 결과 저장 실패의 원자적 롤백·ACK 보류, 실행 중단 후 재전달, 파싱 실패 메시지의 DLQ 이동이다. 예약 시간과 lease는 테스트 DB에서 앞당기고 visibility는 테스트 큐 API로 해제하므로 실제 60/240/300초를 기다리는 검증은 아니다. DLQ 테스트의 maxReceiveCount는 3으로 단축하며 운영 설정 10은 변경하지 않는다.
+
+2026-09-08 실제 PostgreSQL과 LocalStack에서 위 경로를 검증했다. 운영 AWS IAM·네트워크 및 실제 수집·AI를 포함한 검증은 배포 전 별도 테스트 큐에서 수행한다.

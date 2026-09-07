@@ -20,6 +20,7 @@
         "start:worker": "node dist/worker",
         "start:worker:dev": "ts-node src/worker.ts",
         "test:jobs:integration": "ts-node script/test-link-jobs.ts",
+        "test:jobs:sqs": "ts-node script/test-link-sqs.ts",
         "image-color:preview": "ts-node test/manual/image-color-preview.ts",
         "db:generate": "drizzle-kit generate",
         "db:migrate": "drizzle-kit migrate",

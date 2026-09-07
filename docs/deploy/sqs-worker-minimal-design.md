@@ -106,3 +106,8 @@ API Consumer를 끄고 독립 워커를 켜는 데 기존 `SQS_CONSUMER_ENABLED`
 나중에 `LINK_CONTENT_COLLECTOR` provider를 브라우저 구현으로 바꾸면 공통 AI·Job·SQS 흐름은 유지할 수 있다. 전체 실행기를 바꿀 때는 `LINK_ANALYSIS_EXECUTOR` 계약을 사용한다. 비공개 패키지 분리는 실제 브라우저 구현 시 결정한다.
 
 실행·배포 전환·복구 절차는 [운영 문서](./sqs-link-analysis.md)를 따른다.
+
+
+## 검증 보완 (2026-09-08)
+
+실제 PostgreSQL과 LocalStack에서 Outbox → SQS → Consumer → 결과 저장·ACK를 검증했다. 완료된 Job의 중복 정리, 재시도, 저장 실패 롤백과 ACK 보류, 중단 후 재전달, DLQ 이동도 통과했다. 수집·AI는 테스트 실행기로 대체했으며 운영 자격 증명은 사용하지 않았다. 실행 명령은 운영 문서의 `test:jobs:sqs`를 참고한다.
