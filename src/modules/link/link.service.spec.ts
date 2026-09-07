@@ -22,7 +22,6 @@ describe('LinkService', () => {
             linkRepository as unknown as LinkRepository,
             {} as never,
             {} as never,
-            {} as never,
         )
 
         await expect(
@@ -55,7 +54,6 @@ describe('LinkService', () => {
         }
         const service = new LinkService(
             linkRepository as unknown as LinkRepository,
-            {} as never,
             {} as never,
             {} as never,
         )
@@ -103,7 +101,6 @@ describe('LinkService', () => {
         }
         const service = new LinkService(
             linkRepository as unknown as LinkRepository,
-            {} as never,
             {} as never,
             {} as never,
         )
@@ -177,7 +174,6 @@ describe('LinkService', () => {
         const service = new LinkService(
             linkRepository as unknown as LinkRepository,
             {} as never,
-            {} as never,
             relatedLinkService as unknown as RelatedLinkService,
         )
 
@@ -230,7 +226,6 @@ describe('LinkService', () => {
         const service = new LinkService(
             linkRepository as unknown as LinkRepository,
             {} as never,
-            {} as never,
             relatedLinkService as unknown as RelatedLinkService,
         )
 
@@ -250,7 +245,6 @@ describe('LinkService', () => {
         }
         const service = new LinkService(
             linkRepository as unknown as LinkRepository,
-            {} as never,
             {} as never,
             {} as never,
         )

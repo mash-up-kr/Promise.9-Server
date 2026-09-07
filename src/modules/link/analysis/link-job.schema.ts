@@ -41,7 +41,6 @@ export const linkProcessingJobs = pgTable(
         nextAttemptAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
         executionToken: uuid(),
         leaseExpiresAt: timestamp({ withTimezone: true }),
-        workerId: varchar({ length: 128 }),
         lastErrorCode: varchar({ length: 100 }),
         lastErrorMessage: text(),
         createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

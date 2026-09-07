@@ -1,93 +1,72 @@
 import { ConfigService } from '@nestjs/config'
-import { SendMessageCommand } from '@aws-sdk/client-sqs'
 
 import { ValidatedEnvironment } from '../../../config/environment'
 import { SqsService } from '../../../infrastructure/sqs/sqs.service'
 
 import { LinkAnalysisQueuePublisher } from './link-analysis.publisher'
-import { LinkAnalysisRetryMessage } from './link-analysis.type'
-
-const QUEUE_URL =
-    'https://sqs.ap-northeast-2.amazonaws.com/123456789012/link-analysis'
-
-const RETRY_MESSAGE: LinkAnalysisRetryMessage = {
-    version: 2,
-    linkId: 1,
-    userId: 2,
-    url: 'https://example.com/article',
-    tasks: ['SUMMARY'],
-    attempt: 2,
-}
-
-function createConfig(
-    overrides: Partial<ValidatedEnvironment> = {},
-): ConfigService<ValidatedEnvironment, true> {
-    const values = {
-        SQS_LINK_ANALYSIS_QUEUE_URL: QUEUE_URL,
-        SQS_CONSUMER_ENABLED: false,
-        SQS_WAIT_TIME_SECONDS: 20,
-        SQS_VISIBILITY_TIMEOUT_SECONDS: 300,
-        ...overrides,
-    }
-
-    return {
-        get: jest.fn((key: keyof typeof values) => values[key]),
-    } as unknown as ConfigService<ValidatedEnvironment, true>
-}
+import { LinkOutboxRepository } from './link-outbox.repository'
 
 describe('LinkAnalysisQueuePublisher', () => {
-    it('실패한 작업만 담은 재시도 메시지를 지연 발행한다', async () => {
-        let sentCommand: SendMessageCommand | undefined
-        const sqsService = {
-            send: jest.fn((command: SendMessageCommand) => {
-                sentCommand = command
-                return Promise.resolve({ MessageId: 'message-1' })
+    it('발행 성공 후에만 repository callback이 완료되며 URL 대신 jobId를 전송한다', async () => {
+        let sent = false
+        const sqs = {
+            send: jest.fn(() => {
+                sent = true
+                return Promise.resolve()
             }),
         }
-        const publisher = new LinkAnalysisQueuePublisher(
-            createConfig(),
-            sqsService as unknown as SqsService,
-        )
-
-        await publisher.publishRetry(RETRY_MESSAGE)
-
-        expect(sentCommand?.input).toEqual({
-            QueueUrl: QUEUE_URL,
-            MessageBody: JSON.stringify(RETRY_MESSAGE),
-            DelaySeconds: 60,
+        let processed!: () => void
+        const done = new Promise<void>((resolve) => {
+            processed = resolve
         })
-    })
-
-    it('시도 횟수가 늘면 지연을 두 배로 늘리고 상한을 넘지 않는다', async () => {
-        const delays: Array<number | undefined> = []
-        const sqsService = {
-            send: jest.fn((command: SendMessageCommand) => {
-                delays.push(command.input.DelaySeconds)
-                return Promise.resolve({})
+        const repository = {
+            publishOne: jest.fn(async (send: (id: number) => Promise<void>) => {
+                await send(42)
+                expect(sent).toBe(true)
+                processed()
+                return false
             }),
         }
-        const publisher = new LinkAnalysisQueuePublisher(
-            createConfig(),
-            sqsService as unknown as SqsService,
-        )
-
-        for (const attempt of [2, 3, 4, 20]) {
-            await publisher.publishRetry({ ...RETRY_MESSAGE, attempt })
+        const config = {
+            get: (key: string) =>
+                ({
+                    APP_ENV: 'development',
+                    SQS_ENDPOINT: 'http://localhost:4566',
+                    SQS_LINK_ANALYSIS_QUEUE_URL: 'http://localhost:4566/queue',
+                })[key],
         }
-
-        expect(delays).toEqual([60, 120, 240, 900])
-    })
-
-    it('queue URL이 없으면 발행을 거부한다', async () => {
-        const sqsService = { send: jest.fn() }
         const publisher = new LinkAnalysisQueuePublisher(
-            createConfig({ SQS_LINK_ANALYSIS_QUEUE_URL: undefined }),
-            sqsService as unknown as SqsService,
+            config as unknown as ConfigService<ValidatedEnvironment, true>,
+            sqs as unknown as SqsService,
+            repository as unknown as LinkOutboxRepository,
         )
-
-        await expect(publisher.publishRetry(RETRY_MESSAGE)).rejects.toThrow(
-            'SQS_LINK_ANALYSIS_QUEUE_URL 환경변수가 필요합니다.',
+        publisher.onModuleInit()
+        await done
+        await publisher.onModuleDestroy()
+        expect(
+            JSON.parse(
+                (
+                    sqs.send.mock.calls[0] as unknown as [
+                        { input: { MessageBody: string } },
+                    ]
+                )[0].input.MessageBody,
+            ),
+        ).toEqual({ version: 3, jobId: 42 })
+    })
+    it('개발 프로세스에서 운영 큐 발행을 차단한다', () => {
+        const config = {
+            get: (key: string) =>
+                ({
+                    APP_ENV: 'development',
+                    SQS_LINK_ANALYSIS_QUEUE_URL:
+                        'https://sqs.ap-northeast-2.amazonaws.com/123/promise9-link-analysis',
+                })[key],
+        }
+        const publisher = new LinkAnalysisQueuePublisher(
+            config as unknown as ConfigService<ValidatedEnvironment, true>,
+            {} as SqsService,
+            {} as LinkOutboxRepository,
         )
-        expect(sqsService.send).not.toHaveBeenCalled()
+        expect(() => publisher.onModuleInit()).toThrow('production')
     })
 })

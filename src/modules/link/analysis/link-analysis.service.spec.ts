@@ -1,427 +1,146 @@
-import { Logger, NotFoundException } from '@nestjs/common'
+import { ServiceUnavailableException } from '@nestjs/common'
 
-import { BaseException } from '../../../common/exception/base.exception'
 import { AiService } from '../../ai/ai.service'
 import { ImageColorService } from '../../image-color/image-color.service'
-import { LinkContentService } from '../content/link-content.service'
-import { EmbeddingService } from '../embedding/embedding.service'
-import { LinkRepository, LinkUpdatePatch } from '../link.repository'
-import { LinkMetadata } from '../link.schema'
-import { LINK_ERROR } from '../link-error.constant'
 
-import { LINK_ANALYSIS_TASKS } from './link-analysis.constant'
 import { LinkAnalysisService } from './link-analysis.service'
-import { LinkAnalysisTask, LinkAnalysisTaskResult } from './link-analysis.type'
+import { AnalysisInput } from './link-analysis.type'
 
-const INPUT = {
-    linkId: 1,
-    userId: 2,
-    url: 'https://example.com/article',
+const input: AnalysisInput = {
+    jobType: 'ANALYZE',
+    link: {
+        id: 1,
+        originalUrl: 'https://example.com',
+        title: null,
+        metadata: null,
+        aiSummary: null,
+    },
+    tags: [],
 }
-
-const findResult = (
-    results: LinkAnalysisTaskResult[],
-    task: LinkAnalysisTask,
-) => results.find((result) => result.task === task)
-
+const signal = () => new AbortController().signal
+function setup() {
+    const collector = {
+        collect: jest.fn().mockResolvedValue({
+            title: '제목',
+            description: '설명',
+            content: '본문',
+            image: null,
+        }),
+    }
+    const ai = {
+        generateSummary: jest.fn().mockResolvedValue({ summary: '요약' }),
+        generateTags: jest.fn().mockResolvedValue({ tags: ['AI'] }),
+        embedText: jest.fn().mockResolvedValue([1, 0]),
+    }
+    const image = {
+        extractFromUrl: jest.fn().mockRejectedValue(new Error('image failure')),
+    }
+    return {
+        collector,
+        ai,
+        image,
+        service: new LinkAnalysisService(
+            collector,
+            ai as unknown as AiService,
+            image as unknown as ImageColorService,
+        ),
+    }
+}
 describe('LinkAnalysisService', () => {
-    let service: LinkAnalysisService
-    let linkRepository: jest.Mocked<
-        Pick<
-            LinkRepository,
-            'findAnalysisMetadata' | 'updateActive' | 'replaceAiTags'
-        >
-    >
-    let linkContentService: jest.Mocked<Pick<LinkContentService, 'collect'>>
-    let aiService: jest.Mocked<
-        Pick<AiService, 'generateSummary' | 'generateTags'>
-    >
-    let embeddingService: jest.Mocked<Pick<EmbeddingService, 'embedLink'>>
-    let imageColorService: jest.Mocked<
-        Pick<ImageColorService, 'extractFromUrl'>
-    >
-    let analysisMetadata: LinkMetadata | null
-    let updatePatches: Array<Record<string, unknown>>
-    let loggerErrorSpy: jest.SpyInstance
-    let loggerWarnSpy: jest.SpyInstance
-
-    beforeEach(() => {
-        analysisMetadata = null
-        updatePatches = []
-        linkRepository = {
-            findAnalysisMetadata: jest.fn().mockImplementation(() =>
-                Promise.resolve({
-                    id: INPUT.linkId,
-                    metadata: analysisMetadata,
-                }),
-            ),
-            updateActive: jest
-                .fn()
-                .mockImplementation((_userId, _linkId, patch) => {
-                    const typedPatch = patch as LinkUpdatePatch
-
-                    updatePatches.push(typedPatch)
-                    if (typedPatch.metadata !== undefined) {
-                        analysisMetadata = typedPatch.metadata
-                    }
-                    return Promise.resolve(undefined)
-                }),
-            replaceAiTags: jest.fn().mockResolvedValue(undefined),
-        }
-        linkContentService = {
-            collect: jest.fn().mockResolvedValue(null),
-        }
-        aiService = {
-            generateSummary: jest.fn().mockResolvedValue({ summary: '요약' }),
-            generateTags: jest.fn().mockResolvedValue({ tags: [] }),
-        }
-        embeddingService = {
-            embedLink: jest.fn().mockResolvedValue(true),
-        }
-        imageColorService = {
-            extractFromUrl: jest.fn().mockResolvedValue({
-                hex: '#a0d4fc',
-                rgb: [160, 212, 252],
-                textColor: '#000',
-                luminance: 0.62,
-                isDark: false,
-                source: 'node-vibrant.lightVibrant',
-            }),
-        }
-        loggerErrorSpy = jest
-            .spyOn(Logger.prototype, 'error')
-            .mockImplementation()
-        loggerWarnSpy = jest
-            .spyOn(Logger.prototype, 'warn')
-            .mockImplementation()
-
-        service = new LinkAnalysisService(
-            linkRepository as unknown as LinkRepository,
-            linkContentService as unknown as LinkContentService,
-            aiService as unknown as AiService,
-            embeddingService as unknown as EmbeddingService,
-            imageColorService as unknown as ImageColorService,
-        )
-    })
-
-    afterEach(() => {
-        loggerErrorSpy.mockRestore()
-        loggerWarnSpy.mockRestore()
-    })
-
-    it('전체 작업에서 수집 정보와 이미지 색상을 저장한 뒤 AI와 임베딩을 실행한다', async () => {
-        linkContentService.collect.mockResolvedValueOnce({
-            title: '링크 제목',
-            description: '링크 설명',
-            content: '링크 본문',
-            image: {
-                url: 'https://example.com/thumbnail.png',
-                source: 'og:image',
-            },
+    it('저장 없이 수집 결과·요약·태그·임베딩을 반환한다', async () => {
+        const { service, ai } = setup()
+        const result = await service.execute(input, signal())
+        expect(result.failure).toBeUndefined()
+        expect(result.patch).toMatchObject({
+            title: '제목',
+            aiSummary: '요약',
+            aiSummaryStatus: 'SUCCESS',
+            embedding: [1, 0],
         })
-        aiService.generateTags.mockResolvedValueOnce({ tags: ['AI'] })
-
-        const results = await service.run(INPUT, LINK_ANALYSIS_TASKS)
-
-        expect(results.every((result) => result.status === 'SUCCESS')).toBe(
-            true,
-        )
-        expect(linkRepository.replaceAiTags).toHaveBeenCalledWith(2, 1, [
-            { name: 'AI', normalizedName: 'ai', sortOrder: 1 },
-        ])
-        expect(embeddingService.embedLink).toHaveBeenCalledWith(2, 1)
-        expect(imageColorService.extractFromUrl).toHaveBeenCalledWith(
-            'https://example.com/thumbnail.png',
-        )
-        expect(analysisMetadata).toEqual({
-            version: 1,
-            description: '링크 설명',
-            images: [
-                {
-                    url: 'https://example.com/thumbnail.png',
-                    source: 'og:image',
-                    dominantColor: '#a0d4fc',
-                },
-            ],
-        })
+        expect(ai.embedText).toHaveBeenCalledWith('제목\nAI\n요약')
     })
-
-    it('EMBEDDING만 재시도하면 링크 수집과 AI 호출을 건너뛴다', async () => {
-        const results = await service.run(INPUT, ['EMBEDDING'])
-
-        expect(linkContentService.collect).not.toHaveBeenCalled()
-        expect(aiService.generateSummary).not.toHaveBeenCalled()
-        expect(aiService.generateTags).not.toHaveBeenCalled()
-        expect(results).toEqual([{ task: 'EMBEDDING', status: 'SUCCESS' }])
-    })
-
-    it('요약 실패를 던지지 않고 RETRYABLE 결과와 FAILED 상태로 남긴다', async () => {
-        const error = new Error('summary failed')
-        aiService.generateSummary.mockRejectedValueOnce(error)
-
-        const results = await service.run(INPUT, ['SUMMARY'])
-
-        expect(findResult(results, 'SUMMARY')).toEqual({
-            task: 'SUMMARY',
-            status: 'FAILED',
-            kind: 'RETRYABLE',
-            error,
-        })
-        expect(updatePatches).toEqual([
-            expect.objectContaining({ aiSummaryStatus: 'FAILED' }),
-        ])
-    })
-
-    it('선행 작업이 일시 실패하면 오래된 데이터로 임베딩하지 않고 함께 재시도한다', async () => {
-        const error = new Error('summary failed')
-        aiService.generateSummary.mockRejectedValueOnce(error)
-
-        const results = await service.run(INPUT, LINK_ANALYSIS_TASKS)
-
-        expect(findResult(results, 'SUMMARY')).toEqual(
-            expect.objectContaining({ status: 'FAILED', kind: 'RETRYABLE' }),
-        )
-        expect(findResult(results, 'EMBEDDING')).toEqual(
-            expect.objectContaining({ status: 'FAILED', kind: 'RETRYABLE' }),
-        )
-        expect(embeddingService.embedLink).not.toHaveBeenCalled()
-    })
-
-    it('선행 작업 재시도가 성공하면 저장을 마친 뒤 임베딩한다', async () => {
-        embeddingService.embedLink.mockImplementationOnce(() => {
-            expect(updatePatches).toContainEqual(
-                expect.objectContaining({
-                    aiSummary: '요약',
-                    aiSummaryStatus: 'SUCCESS',
-                }),
-            )
-            return Promise.resolve(true)
-        })
-
-        const results = await service.run(INPUT, ['SUMMARY', 'EMBEDDING'])
-
-        expect(results).toEqual([
-            { task: 'SUMMARY', status: 'SUCCESS' },
-            { task: 'EMBEDDING', status: 'SUCCESS' },
-        ])
-        expect(embeddingService.embedLink).toHaveBeenCalledWith(2, 1)
-    })
-
-    it('선행 작업이 영구 실패하면 임베딩도 영구 실패로 남긴다', async () => {
-        aiService.generateTags.mockRejectedValueOnce(new NotFoundException())
-
-        const results = await service.run(INPUT, ['TAGS', 'EMBEDDING'])
-
-        expect(findResult(results, 'TAGS')).toEqual(
-            expect.objectContaining({ status: 'FAILED', kind: 'PERMANENT' }),
-        )
-        expect(findResult(results, 'EMBEDDING')).toEqual(
-            expect.objectContaining({ status: 'FAILED', kind: 'PERMANENT' }),
-        )
-        expect(embeddingService.embedLink).not.toHaveBeenCalled()
-    })
-
-    it.each([
-        ['네트워크 오류', new Error('collection failed')],
-        ['크롤링 타임아웃', new BaseException(LINK_ERROR.PREVIEW_TIMEOUT)],
-        ['원문 403', new BaseException(LINK_ERROR.PREVIEW_BAD_STATUS)],
-    ])(
-        '%s 발생 시 FAILED를 저장하고 실패한 작업을 재시도 대상으로 남긴다',
-        async (_name, error) => {
-            linkContentService.collect.mockRejectedValueOnce(error)
-
-            const results = await service.run(INPUT, LINK_ANALYSIS_TASKS)
-
-            expect(results).toEqual([
-                { task: 'CONTENT', status: 'FAILED', kind: 'RETRYABLE', error },
-                { task: 'SUMMARY', status: 'FAILED', kind: 'RETRYABLE', error },
-                { task: 'TAGS', status: 'FAILED', kind: 'RETRYABLE', error },
-                expect.objectContaining({
-                    task: 'EMBEDDING',
-                    status: 'FAILED',
-                    kind: 'RETRYABLE',
-                }),
-            ])
-            expect(aiService.generateSummary).not.toHaveBeenCalled()
-            expect(aiService.generateTags).not.toHaveBeenCalled()
-            expect(linkRepository.updateActive).toHaveBeenCalledWith(
-                INPUT.userId,
-                INPUT.linkId,
-                expect.objectContaining({ aiSummaryStatus: 'FAILED' }),
-            )
-            expect(embeddingService.embedLink).not.toHaveBeenCalled()
-        },
-    )
-
-    it('영구적인 수집 실패도 PENDING을 FAILED로 변경한다', async () => {
-        linkContentService.collect.mockRejectedValueOnce(
-            new NotFoundException(),
-        )
-
-        const results = await service.run(INPUT, ['SUMMARY'])
-
-        expect(findResult(results, 'SUMMARY')).toEqual(
-            expect.objectContaining({ status: 'FAILED', kind: 'PERMANENT' }),
-        )
-        expect(updatePatches).toEqual([
-            expect.objectContaining({ aiSummaryStatus: 'FAILED' }),
-        ])
-    })
-
-    it('수집 실패 후 재시도가 성공하면 FAILED에서 SUCCESS로 복구한다', async () => {
-        linkContentService.collect.mockRejectedValueOnce(
-            new BaseException(LINK_ERROR.PREVIEW_TIMEOUT),
-        )
-
-        await service.run(INPUT, ['SUMMARY'])
-        await service.run(INPUT, ['SUMMARY'])
-
-        expect(updatePatches).toEqual([
-            expect.objectContaining({ aiSummaryStatus: 'FAILED' }),
-            expect.objectContaining({
-                aiSummaryStatus: 'SUCCESS',
-                aiSummary: '요약',
-            }),
-        ])
-    })
-
-    it('태그만 재시도하다 수집에 실패해도 기존 요약 상태를 변경하지 않는다', async () => {
-        linkContentService.collect.mockRejectedValueOnce(
-            new Error('collection failed'),
-        )
-
-        const results = await service.run(INPUT, ['TAGS', 'EMBEDDING'])
-
-        expect(findResult(results, 'TAGS')).toEqual(
-            expect.objectContaining({ status: 'FAILED', kind: 'RETRYABLE' }),
-        )
-        expect(linkRepository.updateActive).not.toHaveBeenCalled()
-    })
-
-    it('실패 상태 저장 중 DB 오류가 나도 원래 수집 오류의 재시도를 유지한다', async () => {
-        const error = new BaseException(LINK_ERROR.PREVIEW_TIMEOUT)
-        linkContentService.collect.mockRejectedValueOnce(error)
-        linkRepository.updateActive.mockRejectedValueOnce(
-            new Error('DB unavailable'),
-        )
-
-        const results = await service.run(INPUT, ['SUMMARY'])
-
-        expect(findResult(results, 'SUMMARY')).toEqual({
-            task: 'SUMMARY',
-            status: 'FAILED',
-            kind: 'RETRYABLE',
-            error,
-        })
-        expect(loggerErrorSpy).toHaveBeenCalledWith(
-            expect.stringContaining('AI 요약 실패 상태 저장에 실패했습니다'),
-            expect.any(String),
-        )
-    })
-
-    it('4xx 태그 실패를 PERMANENT로 분류한다', async () => {
-        aiService.generateTags.mockRejectedValueOnce(new NotFoundException())
-
-        const results = await service.run(INPUT, ['TAGS'])
-
-        expect(findResult(results, 'TAGS')).toEqual(
-            expect.objectContaining({ status: 'FAILED', kind: 'PERMANENT' }),
-        )
-    })
-
-    it('수집 결과와 생성된 태그가 없으면 SKIPPED로 남긴다', async () => {
-        const results = await service.run(INPUT, ['CONTENT', 'TAGS'])
-
-        expect(findResult(results, 'CONTENT')).toEqual(
-            expect.objectContaining({ status: 'SKIPPED' }),
-        )
-        expect(findResult(results, 'TAGS')).toEqual(
-            expect.objectContaining({ status: 'SKIPPED' }),
-        )
-    })
-
-    it('TinyFish 본문 수집이 불가능하면 URL만으로 AI를 실행하지 않는다', async () => {
-        linkContentService.collect.mockResolvedValueOnce({
-            title: '제목만 수집됨',
-            description: null,
-            content: null,
-            image: null,
-            analysisUnavailableReason: 'TinyFish URL 수집 불가: bot_blocked',
-        })
-
-        const results = await service.run(INPUT, ['SUMMARY', 'TAGS'])
-
-        expect(results).toEqual([
+    it('임베딩 단독 요청은 수집과 요약을 호출하지 않는다', async () => {
+        const { service, collector, ai } = setup()
+        await service.execute(
             {
-                task: 'SUMMARY',
-                status: 'SKIPPED',
-                reason: 'TinyFish URL 수집 불가: bot_blocked',
+                ...input,
+                jobType: 'EMBEDDING',
+                link: { ...input.link, title: '기존 제목' },
             },
-            {
-                task: 'TAGS',
-                status: 'SKIPPED',
-                reason: 'TinyFish URL 수집 불가: bot_blocked',
-            },
-        ])
-        expect(linkRepository.updateActive).toHaveBeenCalledWith(
-            INPUT.userId,
-            INPUT.linkId,
-            expect.objectContaining({ aiSummaryStatus: 'FAILED' }),
+            signal(),
         )
-        expect(aiService.generateSummary).not.toHaveBeenCalled()
-        expect(aiService.generateTags).not.toHaveBeenCalled()
+        expect(collector.collect).not.toHaveBeenCalled()
+        expect(ai.generateSummary).not.toHaveBeenCalled()
+        expect(ai.embedText).toHaveBeenCalledWith('기존 제목')
     })
-
-    it('수집 불가 요약의 FAILED 상태 저장 실패는 재시도 대상으로 남긴다', async () => {
-        const error = new Error('status update failed')
-        linkContentService.collect.mockResolvedValueOnce({
-            title: null,
-            description: null,
-            content: null,
-            image: null,
-            analysisUnavailableReason: 'TinyFish URL 수집 불가: bot_blocked',
+    it('수집 불가 결과에서는 AI를 호출하지 않는다', async () => {
+        const { service, collector, ai } = setup()
+        collector.collect.mockResolvedValue({
+            analysisUnavailableReason: 'blocked',
         })
-        linkRepository.updateActive.mockRejectedValueOnce(error)
-
-        const results = await service.run(INPUT, ['SUMMARY'])
-
-        expect(results).toEqual([
-            {
-                task: 'SUMMARY',
-                status: 'FAILED',
-                kind: 'RETRYABLE',
-                error,
-            },
-        ])
-    })
-
-    it('임베딩할 활성 링크 내용이 없으면 SKIPPED로 남긴다', async () => {
-        embeddingService.embedLink.mockResolvedValueOnce(false)
-
-        const results = await service.run(INPUT, ['EMBEDDING'])
-
-        expect(findResult(results, 'EMBEDDING')).toEqual(
-            expect.objectContaining({ status: 'SKIPPED' }),
-        )
-    })
-
-    it('이미지 색상 추출 실패는 CONTENT 작업 실패로 전파하지 않는다', async () => {
-        imageColorService.extractFromUrl.mockRejectedValueOnce(
-            new Error('color failed'),
-        )
-        linkContentService.collect.mockResolvedValueOnce({
-            title: null,
-            description: null,
-            content: null,
-            image: {
-                url: 'https://example.com/thumbnail.png',
-                source: 'og:image',
-            },
+        const result = await service.execute(input, signal())
+        expect(result.failure).toMatchObject({
+            retryable: false,
+            code: 'CONTENT_UNAVAILABLE',
         })
-
-        const results = await service.run(INPUT, ['CONTENT'])
-
-        expect(results).toEqual([{ task: 'CONTENT', status: 'SUCCESS' }])
-        expect(loggerWarnSpy).toHaveBeenCalled()
+        expect(ai.generateSummary).not.toHaveBeenCalled()
+    })
+    it('요약 실패 시 태그 결과는 보존하되 임베딩을 호출하지 않는다', async () => {
+        const { service, ai } = setup()
+        ai.generateSummary.mockRejectedValue(new ServiceUnavailableException())
+        const result = await service.execute(input, signal())
+        expect(result.failure?.retryable).toBe(true)
+        expect(result.patch.aiSummaryStatus).toBe('FAILED')
+        expect(result.aiTags).toHaveLength(1)
+        expect(ai.embedText).not.toHaveBeenCalled()
+    })
+    it('임베딩 실패가 요약 성공 상태를 덮어쓰지 않는다', async () => {
+        const { service, ai } = setup()
+        ai.embedText.mockRejectedValue(new Error('provider failed'))
+        const result = await service.execute(input, signal())
+        expect(result.patch.aiSummaryStatus).toBe('SUCCESS')
+        expect(result.failure?.code).toBe('EMBEDDING_FAILED')
+    })
+    it('사용자 태그와 충돌한 AI 태그를 임베딩에서도 제외한다', async () => {
+        const { service, ai } = setup()
+        ai.generateTags.mockResolvedValue({ tags: ['ai', 'AI', '다음'] })
+        await service.execute(
+            {
+                ...input,
+                tags: [
+                    {
+                        name: '사용자 AI',
+                        normalizedName: 'ai',
+                        sourceType: 'user',
+                        sortOrder: 0,
+                    },
+                ],
+            },
+            signal(),
+        )
+        expect(ai.embedText).toHaveBeenCalledWith('제목\n사용자 AI\n다음\n요약')
+    })
+    it('색상 실패에도 이미지와 나머지 결과를 반환한다', async () => {
+        const { service, collector } = setup()
+        collector.collect.mockResolvedValue({
+            title: '제목',
+            content: '본문',
+            image: { url: 'https://example.com/a.jpg', source: 'og:image' },
+        })
+        const result = await service.execute(input, signal())
+        expect(result.failure).toBeUndefined()
+        expect(result.patch.metadata?.images?.[0].url).toBe(
+            'https://example.com/a.jpg',
+        )
+    })
+    it('timeout으로 중단한 실행은 후속 AI 호출을 시작하지 않는다', async () => {
+        const { service, collector, ai } = setup()
+        const controller = new AbortController()
+        collector.collect.mockImplementation(() => {
+            controller.abort()
+            return Promise.resolve(null)
+        })
+        await service.execute(input, controller.signal)
+        expect(ai.generateSummary).not.toHaveBeenCalled()
     })
 })

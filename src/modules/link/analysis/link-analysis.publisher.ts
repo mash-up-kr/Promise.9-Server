@@ -1,51 +1,81 @@
-import { Injectable } from '@nestjs/common'
+import { setTimeout as sleep } from 'node:timers/promises'
+
+import {
+    Injectable,
+    Logger,
+    OnModuleDestroy,
+    OnModuleInit,
+} from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { SendMessageCommand } from '@aws-sdk/client-sqs'
 
 import { ValidatedEnvironment } from '../../../config/environment'
 import { SqsService } from '../../../infrastructure/sqs/sqs.service'
 
-import { LinkAnalysisRetryMessage } from './link-analysis.type'
+import { LinkOutboxRepository } from './link-outbox.repository'
 
-// SQS DelaySeconds 상한. 시도 횟수가 늘수록 지연을 두 배로 늘려 백오프를 만든다.
-const MAX_DELAY_SECONDS = 900
-const BASE_DELAY_SECONDS = 60
-
-// consumer는 dispatcher를 의존하고 dispatcher는 이 publisher를 의존한다.
-// 순환 참조를 만들지 않기 위해 consumer는 link-analysis.consumer.ts에 둔다.
 @Injectable()
-export class LinkAnalysisQueuePublisher {
-    private readonly queueUrl?: string
-
+export class LinkAnalysisQueuePublisher
+    implements OnModuleInit, OnModuleDestroy
+{
+    private readonly logger = new Logger(LinkAnalysisQueuePublisher.name)
+    private readonly abort = new AbortController()
+    private task?: Promise<void>
     constructor(
-        config: ConfigService<ValidatedEnvironment, true>,
-        private readonly sqsService: SqsService,
-    ) {
-        this.queueUrl = config.get('SQS_LINK_ANALYSIS_QUEUE_URL', {
+        private readonly config: ConfigService<ValidatedEnvironment, true>,
+        private readonly sqs: SqsService,
+        private readonly outbox: LinkOutboxRepository,
+    ) {}
+    onModuleInit() {
+        const queue = this.config.get('SQS_LINK_ANALYSIS_QUEUE_URL', {
             infer: true,
         })
-    }
-
-    // 시도 횟수에 따라 지연을 두고 발행해, 일시적인 provider 장애가 회복될 시간을 준다.
-    async publishRetry(message: LinkAnalysisRetryMessage): Promise<void> {
-        if (!this.queueUrl) {
+        if (!queue) {
+            this.logger.warn('SQS 큐 미설정: Outbox는 DB에서 대기합니다.')
+            return
+        }
+        if (
+            this.config.get('APP_ENV', { infer: true }) === 'development' &&
+            !this.config.get('SQS_ENDPOINT', { infer: true }) &&
+            new URL(queue).pathname.endsWith('/promise9-link-analysis')
+        )
             throw new Error(
-                'SQS_LINK_ANALYSIS_QUEUE_URL 환경변수가 필요합니다.',
+                'development 환경에서 production 큐에 발행할 수 없습니다.',
+            )
+        this.task = this.poll(queue)
+    }
+    async onModuleDestroy() {
+        this.abort.abort()
+        await this.task
+    }
+    private async poll(queue: string) {
+        while (!this.abort.signal.aborted) {
+            try {
+                const published = await this.outbox.publishOne(
+                    async (jobId) => {
+                        await this.sqs.send(
+                            new SendMessageCommand({
+                                QueueUrl: queue,
+                                MessageBody: JSON.stringify({
+                                    version: 3,
+                                    jobId,
+                                }),
+                            }),
+                            AbortSignal.any([
+                                this.abort.signal,
+                                AbortSignal.timeout(10_000),
+                            ]),
+                        )
+                    },
+                )
+                if (published) continue
+            } catch {
+                if (this.abort.signal.aborted) return
+                this.logger.error('Outbox 발행 실패. 미발행 상태로 유지합니다.')
+            }
+            await sleep(1000, undefined, { signal: this.abort.signal }).catch(
+                () => undefined,
             )
         }
-
-        await this.sqsService.send(
-            new SendMessageCommand({
-                QueueUrl: this.queueUrl,
-                MessageBody: JSON.stringify(message),
-                DelaySeconds: this.resolveDelaySeconds(message.attempt),
-            }),
-        )
-    }
-
-    private resolveDelaySeconds(attempt: number): number {
-        const delay = BASE_DELAY_SECONDS * 2 ** Math.max(0, attempt - 2)
-
-        return Math.min(delay, MAX_DELAY_SECONDS)
     }
 }

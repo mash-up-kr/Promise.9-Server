@@ -39,3 +39,8 @@ export type ParsedLinkPreview = {
     image: string | null
     imageSource: LinkImageSource | null
 }
+
+export const LINK_CONTENT_COLLECTOR = Symbol('LINK_CONTENT_COLLECTOR')
+export interface ContentCollector {
+    collect(url: string): Promise<CollectedLinkContent | null>
+}

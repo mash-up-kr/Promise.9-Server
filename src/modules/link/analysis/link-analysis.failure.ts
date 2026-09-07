@@ -3,10 +3,7 @@ import { HttpException } from '@nestjs/common'
 import { AiGenerationError } from '../../ai/ai.exception'
 import { TinyFishFetchError } from '../content/tinyfish/tinyfish-fetch.error'
 
-import {
-    LinkAnalysisFailureKind,
-    LinkAnalysisTaskResult,
-} from './link-analysis.type'
+import { LinkAnalysisFailureKind } from './link-analysis.type'
 
 // AI 실패는 AiService가 판단한 retryable을 그대로 신뢰한다. provider 예외 타입은
 // AI module 안에만 두고, 여기서는 도메인 정책만 다룬다.
@@ -28,10 +25,4 @@ export function classifyFailure(error: unknown): LinkAnalysisFailureKind {
     }
 
     return 'RETRYABLE'
-}
-
-export function isRetryableFailure(
-    result: LinkAnalysisTaskResult,
-): result is Extract<LinkAnalysisTaskResult, { status: 'FAILED' }> {
-    return result.status === 'FAILED' && result.kind === 'RETRYABLE'
 }

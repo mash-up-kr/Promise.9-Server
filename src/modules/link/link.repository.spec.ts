@@ -51,6 +51,13 @@ describe('LinkRepository', () => {
             selectQuery.where.mockReturnValue(selectQuery)
 
             const db = {
+                transaction: jest.fn(
+                    (
+                        callback: (tx: {
+                            insert: typeof db.insert
+                        }) => Promise<unknown>,
+                    ) => callback(db),
+                ),
                 insert: jest.fn().mockReturnValue(insertQuery),
                 select: jest.fn().mockReturnValue(selectQuery),
             }

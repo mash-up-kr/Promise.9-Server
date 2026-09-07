@@ -1,6 +1,7 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 
 import {
+    Inject,
     Injectable,
     Logger,
     OnModuleDestroy,
@@ -8,192 +9,175 @@ import {
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import {
+    ChangeMessageVisibilityCommand,
     DeleteMessageCommand,
     Message,
     ReceiveMessageCommand,
 } from '@aws-sdk/client-sqs'
 import { z } from 'zod'
 
-import {
-    describeError,
-    describeErrorStack,
-} from '../../../common/exception/error.util'
 import { ValidatedEnvironment } from '../../../config/environment'
 import { SqsService } from '../../../infrastructure/sqs/sqs.service'
 
+import { classifyFailure } from './link-analysis.failure'
 import {
-    LINK_ANALYSIS_MESSAGE_VERSION,
-    LINK_ANALYSIS_TASKS,
-} from './link-analysis.constant'
-import { LinkAnalysisDispatcher } from './link-analysis.dispatcher'
-import { LinkAnalysisRetryMessage } from './link-analysis.type'
+    type AnalysisExecutor,
+    AnalysisResult,
+    LINK_ANALYSIS_EXECUTOR,
+} from './link-analysis.type'
+import { JOB_LEASE_SECONDS, JOB_TIMEOUT_MS } from './link-job.constant'
+import { LinkJobRepository } from './link-job.repository'
 
-// 큐 URL 오류나 IAM 권한 누락처럼 계속 실패하는 상황에서 초당 한 번씩 로그를 쌓지 않도록
-// 연속 실패에 백오프를 준다. 수신이 한 번 성공하면 다시 최소 간격으로 돌아간다.
-const RECEIVE_RETRY_MIN_DELAY_MS = 1_000
-const RECEIVE_RETRY_MAX_DELAY_MS = 30_000
-
-const linkAnalysisMessageSchema = z.object({
-    version: z.literal(LINK_ANALYSIS_MESSAGE_VERSION),
-    linkId: z.number().int().positive(),
-    userId: z.number().int().positive(),
-    url: z.url(),
-    tasks: z.array(z.enum(LINK_ANALYSIS_TASKS)).min(1),
-    attempt: z.number().int().positive(),
-})
+export const linkJobMessageSchema = z
+    .object({
+        version: z.literal(3),
+        jobId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    })
+    .strict()
 
 @Injectable()
 export class LinkAnalysisQueueConsumer
     implements OnModuleInit, OnModuleDestroy
 {
     private readonly logger = new Logger(LinkAnalysisQueueConsumer.name)
-    private readonly queueUrl?: string
-    private readonly enabled: boolean
-    private readonly waitTimeSeconds: number
-    private readonly visibilityTimeoutSeconds: number
-    private readonly abortController = new AbortController()
-    private consumerTask?: Promise<void>
-
+    private readonly abort = new AbortController()
+    private task?: Promise<void>
     constructor(
-        config: ConfigService<ValidatedEnvironment, true>,
-        private readonly sqsService: SqsService,
-        private readonly dispatcher: LinkAnalysisDispatcher,
-    ) {
-        this.queueUrl = config.get('SQS_LINK_ANALYSIS_QUEUE_URL', {
-            infer: true,
-        })
-        this.enabled = config.get('SQS_CONSUMER_ENABLED', { infer: true })
-        this.waitTimeSeconds = config.get('SQS_WAIT_TIME_SECONDS', {
-            infer: true,
-        })
-        this.visibilityTimeoutSeconds = config.get(
-            'SQS_VISIBILITY_TIMEOUT_SECONDS',
-            { infer: true },
+        private readonly config: ConfigService<ValidatedEnvironment, true>,
+        private readonly sqs: SqsService,
+        private readonly jobs: LinkJobRepository,
+        @Inject(LINK_ANALYSIS_EXECUTOR)
+        private readonly executor: AnalysisExecutor,
+    ) {}
+    onModuleInit() {
+        if (!this.config.get('SQS_CONSUMER_ENABLED', { infer: true })) return
+        if (!this.queueUrl)
+            throw new Error(
+                'SQS_LINK_ANALYSIS_QUEUE_URL is required for worker',
+            )
+        if (
+            this.config.get('SQS_VISIBILITY_TIMEOUT_SECONDS', {
+                infer: true,
+            }) <= JOB_LEASE_SECONDS
         )
-    }
-
-    onModuleInit(): void {
-        if (!this.enabled) {
-            this.logger.log('SQS 링크 분석 consumer가 비활성화되었습니다.')
-            return
-        }
-
-        if (!this.queueUrl) {
-            this.logger.warn(
-                'SQS_LINK_ANALYSIS_QUEUE_URL이 없어 링크 분석 consumer를 시작하지 않습니다.',
+            throw new Error(
+                'SQS visibility timeout must exceed Job lease (240 seconds)',
             )
-            return
-        }
-
-        this.consumerTask = this.poll()
-        this.consumerTask.catch((error: unknown) => {
-            this.logger.error(
-                `SQS consumer가 중단되었습니다: ${describeError(error)}`,
-                describeErrorStack(error),
-            )
-        })
+        this.task = this.poll()
     }
-
-    async onModuleDestroy(): Promise<void> {
-        this.abortController.abort()
-        await this.consumerTask
+    async onModuleDestroy() {
+        this.abort.abort()
+        // 새 수신은 중단하되 이미 시작한 작업은 전체 timeout 안에서 정리한다.
+        await this.task
     }
-
-    private async poll(): Promise<void> {
-        let consecutiveFailures = 0
-
-        while (!this.abortController.signal.aborted) {
+    private get queueUrl() {
+        return this.config.get('SQS_LINK_ANALYSIS_QUEUE_URL', { infer: true })
+    }
+    private async poll() {
+        let failures = 0
+        while (!this.abort.signal.aborted) {
             try {
-                const result = await this.sqsService.receive(
+                const response = await this.sqs.receive(
                     new ReceiveMessageCommand({
                         QueueUrl: this.queueUrl,
                         MaxNumberOfMessages: 1,
-                        WaitTimeSeconds: this.waitTimeSeconds,
-                        VisibilityTimeout: this.visibilityTimeoutSeconds,
-                        MessageSystemAttributeNames: [
-                            'ApproximateReceiveCount',
-                        ],
+                        WaitTimeSeconds: this.config.get(
+                            'SQS_WAIT_TIME_SECONDS',
+                            { infer: true },
+                        ),
+                        VisibilityTimeout: this.config.get(
+                            'SQS_VISIBILITY_TIMEOUT_SECONDS',
+                            { infer: true },
+                        ),
                     }),
-                    this.abortController.signal,
+                    this.abort.signal,
                 )
-
-                consecutiveFailures = 0
-
-                for (const message of result.Messages ?? []) {
+                failures = 0
+                for (const message of response.Messages ?? []) {
+                    if (this.abort.signal.aborted) return
                     await this.process(message)
                 }
-            } catch (error) {
-                if (this.abortController.signal.aborted) return
-
-                consecutiveFailures += 1
-
-                this.logger.error(
-                    `SQS 메시지 수신에 실패했습니다. 연속 실패=${consecutiveFailures}: ${describeError(error)}`,
-                    describeErrorStack(error),
-                )
-                await this.delay(this.resolveRetryDelay(consecutiveFailures))
+            } catch {
+                if (this.abort.signal.aborted) return
+                failures++
+                this.logger.error('SQS 수신 실패. 설정과 연결을 확인하세요.')
+                await sleep(
+                    Math.min(30_000, 1000 * 2 ** Math.min(failures - 1, 5)),
+                    undefined,
+                    { signal: this.abort.signal },
+                ).catch(() => undefined)
             }
         }
     }
-
-    private resolveRetryDelay(consecutiveFailures: number): number {
-        const delay =
-            RECEIVE_RETRY_MIN_DELAY_MS * 2 ** (consecutiveFailures - 1)
-
-        return Math.min(delay, RECEIVE_RETRY_MAX_DELAY_MS)
-    }
-
-    // 처리에 성공한 메시지만 삭제한다. 실패한 메시지는 visibility timeout 이후 다시
-    // 전달되고, maxReceiveCount를 넘기면 DLQ로 이동한다.
-    private async process(message: Message): Promise<void> {
+    async process(message: Message): Promise<void> {
         try {
-            const retryMessage = this.parseMessage(message.Body)
-
-            await this.dispatcher.handleRetry(retryMessage)
-            await this.deleteMessage(message.ReceiptHandle)
-
-            this.logger.log(
-                `링크 분석 재시도를 처리했습니다. messageId=${message.MessageId ?? 'unknown'}, linkId=${retryMessage.linkId}, tasks=${retryMessage.tasks.join(',')}`,
+            if (!message.ReceiptHandle)
+                throw new Error('Missing receipt handle')
+            const parsed = linkJobMessageSchema.parse(
+                JSON.parse(message.Body ?? ''),
             )
-        } catch (error) {
-            this.logger.error(
-                `링크 분석 재시도 처리에 실패했습니다. messageId=${message.MessageId ?? 'unknown'}, receiveCount=${message.Attributes?.ApproximateReceiveCount ?? 'unknown'}: ${describeError(error)}`,
-                describeErrorStack(error),
+            const claim = await this.jobs.claim(parsed.jobId)
+            if (claim.status === 'WAIT') {
+                await this.sqs.changeVisibility(
+                    new ChangeMessageVisibilityCommand({
+                        QueueUrl: this.queueUrl,
+                        ReceiptHandle: message.ReceiptHandle,
+                        VisibilityTimeout: JOB_LEASE_SECONDS,
+                    }),
+                )
+                return
+            }
+            if (claim.status === 'CLAIMED') {
+                const controller = new AbortController()
+                let timer: NodeJS.Timeout | undefined
+                let result: AnalysisResult
+                try {
+                    result = await Promise.race([
+                        this.executor.execute(
+                            {
+                                jobType: claim.input.job.jobType,
+                                link: claim.input.link,
+                                tags: claim.input.tags,
+                            },
+                            controller.signal,
+                        ),
+                        new Promise<never>((_, reject) => {
+                            timer = setTimeout(() => {
+                                controller.abort()
+                                reject(new Error('Execution timed out'))
+                            }, JOB_TIMEOUT_MS)
+                        }),
+                    ])
+                } catch (error) {
+                    result = {
+                        patch:
+                            claim.input.job.jobType === 'ANALYZE'
+                                ? { aiSummaryStatus: 'FAILED' }
+                                : {},
+                        failure: {
+                            retryable: classifyFailure(error) === 'RETRYABLE',
+                            code: controller.signal.aborted
+                                ? 'EXECUTION_TIMEOUT'
+                                : 'EXECUTION_FAILED',
+                            message: '분석 실행을 완료하지 못했습니다.',
+                        },
+                    }
+                } finally {
+                    clearTimeout(timer)
+                }
+                if (!(await this.jobs.finish(claim.input, result))) return
+            }
+            await this.sqs.delete(
+                new DeleteMessageCommand({
+                    QueueUrl: this.queueUrl,
+                    ReceiptHandle: message.ReceiptHandle,
+                }),
             )
-        }
-    }
-
-    private parseMessage(body: string | undefined): LinkAnalysisRetryMessage {
-        if (!body) {
-            throw new Error('SQS 메시지 본문이 비어 있습니다.')
-        }
-
-        const parsed: unknown = JSON.parse(body)
-
-        return linkAnalysisMessageSchema.parse(parsed)
-    }
-
-    private async deleteMessage(receiptHandle: string | undefined) {
-        if (!receiptHandle) {
-            throw new Error('SQS 메시지 ReceiptHandle이 없습니다.')
-        }
-
-        await this.sqsService.delete(
-            new DeleteMessageCommand({
-                QueueUrl: this.queueUrl,
-                ReceiptHandle: receiptHandle,
-            }),
-        )
-    }
-
-    // 종료 신호가 오면 대기 중이라도 즉시 깨어나야 프로세스 종료가 밀리지 않는다.
-    private async delay(milliseconds: number): Promise<void> {
-        try {
-            await sleep(milliseconds, undefined, {
-                signal: this.abortController.signal,
-            })
         } catch {
-            // abort로 끊긴 대기는 정상 종료 경로다.
+            // 메시지 본문·원문 URL·provider 오류에는 개인정보가 있을 수 있으므로 식별자만 기록한다.
+            this.logger.error(
+                `SQS 작업 처리 실패. messageId=${message.MessageId ?? 'unknown'}`,
+            )
         }
     }
 }

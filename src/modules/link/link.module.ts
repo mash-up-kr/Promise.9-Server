@@ -1,19 +1,14 @@
 import { Module } from '@nestjs/common'
 
-import { UrlSecurityModule } from '../../common/security/url-security/url-security.module'
 import { DatabaseModule } from '../../config/database/database.module'
 import { EmailModule } from '../../infrastructure/email/email.module'
 import { AiModule } from '../ai/ai.module'
 import { AuthModule } from '../auth/auth.module'
-import { ImageColorModule } from '../image-color/image-color.module'
 
-import { LinkAnalysisQueueConsumer } from './analysis/link-analysis.consumer'
-import { LinkAnalysisDispatcher } from './analysis/link-analysis.dispatcher'
+import { LinkAnalysisModule } from './analysis/link-analysis.module'
 import { LinkAnalysisQueuePublisher } from './analysis/link-analysis.publisher'
-import { LinkAnalysisService } from './analysis/link-analysis.service'
-import { LinkContentHtmlFetcher } from './content/html/link-content-html.fetcher'
-import { LinkContentService } from './content/link-content.service'
-import { TinyFishFetchClient } from './content/tinyfish/tinyfish-fetch.client'
+import { LinkOutboxRepository } from './analysis/link-outbox.repository'
+import { LinkContentModule } from './content/link-content.module'
 import { EmbeddingService } from './embedding/embedding.service'
 import { RelatedLinkRepository } from './related/related-link.repository'
 import { RelatedLinkService } from './related/related-link.service'
@@ -29,10 +24,10 @@ import { LinkService } from './link.service'
 @Module({
     imports: [
         DatabaseModule,
+        LinkAnalysisModule,
+        LinkContentModule,
         AiModule,
         AuthModule,
-        UrlSecurityModule,
-        ImageColorModule,
         EmailModule,
     ],
     controllers: [LinkController],
@@ -42,13 +37,8 @@ import { LinkService } from './link.service'
         EmbeddingService,
         SearchRepository,
         SearchService,
-        LinkAnalysisService,
-        LinkAnalysisDispatcher,
         LinkAnalysisQueuePublisher,
-        LinkAnalysisQueueConsumer,
-        LinkContentService,
-        LinkContentHtmlFetcher,
-        TinyFishFetchClient,
+        LinkOutboxRepository,
         RelatedLinkRepository,
         RelatedLinkService,
         ReminderRepository,

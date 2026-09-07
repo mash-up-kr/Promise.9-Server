@@ -1,6 +1,7 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common'
+import { Injectable, OnApplicationShutdown } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import {
+    ChangeMessageVisibilityCommand,
     DeleteMessageCommand,
     ReceiveMessageCommand,
     SendMessageCommand,
@@ -10,7 +11,7 @@ import {
 import { ValidatedEnvironment } from '../../config/environment'
 
 @Injectable()
-export class SqsService implements OnModuleDestroy {
+export class SqsService implements OnApplicationShutdown {
     private readonly client: SQSClient
 
     constructor(config: ConfigService<ValidatedEnvironment, true>) {
@@ -22,8 +23,8 @@ export class SqsService implements OnModuleDestroy {
         })
     }
 
-    send(command: SendMessageCommand) {
-        return this.client.send(command)
+    send(command: SendMessageCommand, abortSignal?: AbortSignal) {
+        return this.client.send(command, { abortSignal })
     }
 
     receive(command: ReceiveMessageCommand, abortSignal: AbortSignal) {
@@ -31,10 +32,19 @@ export class SqsService implements OnModuleDestroy {
     }
 
     delete(command: DeleteMessageCommand) {
-        return this.client.send(command)
+        return this.client.send(command, {
+            abortSignal: AbortSignal.timeout(10_000),
+        })
     }
 
-    onModuleDestroy(): void {
+    changeVisibility(command: ChangeMessageVisibilityCommand) {
+        return this.client.send(command, {
+            abortSignal: AbortSignal.timeout(10_000),
+        })
+    }
+
+    // 워커가 결과 저장과 메시지 삭제를 마친 뒤 클라이언트를 닫는다.
+    onApplicationShutdown(): void {
         this.client.destroy()
     }
 }

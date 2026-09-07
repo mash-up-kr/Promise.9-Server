@@ -4,7 +4,6 @@ import { BaseException } from '../../common/exception/base.exception'
 import { buildCursorPage } from '../../common/pagination/cursor'
 import { FOLDER_ERROR } from '../folder/folder-error.constant'
 
-import { LinkAnalysisDispatcher } from './analysis/link-analysis.dispatcher'
 import {
     CreateLinkInput,
     ListLinksQueryInput,
@@ -27,7 +26,6 @@ export class LinkService {
     constructor(
         private readonly linkRepository: LinkRepository,
         private readonly searchService: SearchService,
-        private readonly linkAnalysisDispatcher: LinkAnalysisDispatcher,
         private readonly relatedLinkService: RelatedLinkService,
     ) {}
 
@@ -49,14 +47,6 @@ export class LinkService {
             aiSummaryStatus: 'PENDING',
             memo: input.memo ?? null,
             reminderAt: input.reminderAt ? new Date(input.reminderAt) : null,
-        })
-
-        // 정보 수집·AI 요약·태그·임베딩은 저장 응답을 막지 않도록 dispatcher에 넘긴다.
-        // 임베딩은 제목·요약이 저장된 뒤 실행되므로 여기서 따로 호출하지 않는다.
-        this.linkAnalysisDispatcher.dispatch({
-            linkId: row.id,
-            userId,
-            url: row.originalUrl,
         })
 
         return {
@@ -131,14 +121,6 @@ export class LinkService {
 
         const row = await this.linkRepository.update(userId, linkId, patch)
 
-        // 메모가 바뀌면 임베딩 대상 텍스트가 달라지므로 임베딩만 다시 실행한다.
-        // create와 같은 dispatcher를 거치므로 실패 시 재시도도 동일하게 적용된다.
-        if (input.memo !== undefined) {
-            this.linkAnalysisDispatcher.dispatch(
-                { linkId: row.id, userId, url: row.originalUrl },
-                ['EMBEDDING'],
-            )
-        }
         return {
             linkId: row.id,
             folderId: row.folderId,

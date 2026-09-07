@@ -1,0 +1,1 @@
+ALTER TABLE "link_processing_jobs" DROP COLUMN "worker_id";

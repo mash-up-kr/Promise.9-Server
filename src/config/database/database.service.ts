@@ -1,7 +1,7 @@
 import {
     Injectable,
     Logger,
-    OnModuleDestroy,
+    OnApplicationShutdown,
     OnModuleInit,
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
@@ -25,7 +25,7 @@ export type Transaction = Parameters<
 export type DbExecutor = PostgresJsDatabase<typeof schema> | Transaction
 
 @Injectable()
-export class DatabaseService implements OnModuleInit, OnModuleDestroy {
+export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     private readonly logger = new Logger(DatabaseService.name)
     private readonly client: ReturnType<typeof postgres>
 
@@ -59,7 +59,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
-    async onModuleDestroy() {
+    // 워커의 onModuleDestroy가 진행 중인 작업을 마친 뒤 연결을 닫는다.
+    async onApplicationShutdown() {
         await this.client.end()
     }
 }
