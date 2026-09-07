@@ -1,8 +1,9 @@
+import { sql } from 'drizzle-orm'
 import {
     bigint,
     pgTable,
     timestamp,
-    unique,
+    uniqueIndex,
     varchar,
 } from 'drizzle-orm/pg-core'
 
@@ -17,7 +18,13 @@ export const users = pgTable(
         updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
         deletedAt: timestamp({ withTimezone: true }),
     },
-    (table) => [unique('users_email_unique').on(table.email)],
+    (table) => [
+        // 활성 회원만 이메일 유니크 — 탈퇴(soft delete)한 행은 이메일을 그대로 남겨두므로
+        // 전역 유니크로 두면 같은 이메일로 재가입하는 INSERT가 항상 제약 위반으로 깨진다.
+        uniqueIndex('users_email_active_unique')
+            .on(table.email)
+            .where(sql`${table.deletedAt} is null`),
+    ],
 )
 
 export type UserRow = typeof users.$inferSelect

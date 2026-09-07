@@ -76,10 +76,7 @@ export class UserRepository {
                 })
             }
 
-            const [user] = await tx
-                .insert(users)
-                .values({ email: input.email })
-                .returning({ id: users.id })
+            const user = await this.insertOrThrowConflict(input.email, tx)
 
             await this.socialAccountRepository.insertIgnoreConflict(
                 {
@@ -93,6 +90,33 @@ export class UserRepository {
 
             return { userId: user.id, isNewUser: true }
         })
+    }
+
+    // 이메일 존재 확인과 INSERT 사이의 경합으로 users_email_active_unique를
+    // 위반할 때 나는 23505를 EMAIL_ALREADY_REGISTERED로 변환한다
+    // (link.repository.ts의 throwOnDuplicateUrl과 동일한 패턴).
+    private async insertOrThrowConflict(
+        email: string,
+        tx: DbExecutor,
+    ): Promise<{ id: number }> {
+        try {
+            const [user] = await tx
+                .insert(users)
+                .values({ email })
+                .returning({ id: users.id })
+
+            return user
+        } catch (error) {
+            if (
+                error instanceof Error &&
+                'code' in error &&
+                error.code === '23505'
+            ) {
+                throw new BaseException(USER_ERROR.EMAIL_ALREADY_REGISTERED)
+            }
+
+            throw error
+        }
     }
 
     // 회원 탈퇴 시 user 도메인 정리: 소셜 연동을 지우고 유저는 hard delete 대신 soft delete한다.

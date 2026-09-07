@@ -1,5 +1,6 @@
 import { and, eq, isNull } from 'drizzle-orm'
 
+import { BaseException } from '../../../common/exception/base.exception'
 import { DatabaseService } from '../../../config/database/database.service'
 import { users } from '../schema/user.schema'
 
@@ -48,5 +49,46 @@ describe('UserRepository.upsertWithSocialAccount', () => {
                 isNull(users.deletedAt),
             ),
         })
+    })
+
+    // users_email_active_unique는 활성 회원만 유니크하다. 조회 시점엔 없던
+    // 이메일이 INSERT 시점엔 동시 요청으로 생겨 있을 수 있는 경합을, 처리되지
+    // 않은 DB 오류(23505) 대신 도메인 예외로 변환하는지 확인한다.
+    it('INSERT가 unique 제약(23505)에 걸리면 EMAIL_ALREADY_REGISTERED로 변환한다', async () => {
+        const conflictError = Object.assign(new Error('duplicate key'), {
+            code: '23505',
+        })
+        const tx = {
+            query: {
+                users: { findFirst: jest.fn().mockResolvedValue(undefined) },
+            },
+            insert: jest.fn().mockReturnValue({
+                values: jest.fn().mockReturnValue({
+                    returning: jest.fn().mockRejectedValue(conflictError),
+                }),
+            }),
+        }
+        const databaseService = {
+            db: {
+                transaction: jest.fn((callback: (tx: unknown) => unknown) =>
+                    callback(tx),
+                ),
+            },
+        } as unknown as DatabaseService
+        const socialAccountRepository = {
+            findByProviderUser: jest.fn().mockResolvedValue(undefined),
+        } as unknown as SocialAccountRepository
+        const repository = new UserRepository(
+            databaseService,
+            socialAccountRepository,
+        )
+
+        await expect(
+            repository.upsertWithSocialAccount({
+                email: 'user@example.com',
+                provider: 'google',
+                providerUserId: 'provider-id',
+            }),
+        ).rejects.toThrow(BaseException)
     })
 })
