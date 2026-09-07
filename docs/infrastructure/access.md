@@ -68,7 +68,7 @@ PR 리뷰와 `main` 반영은 IAM이 강제하지 않는다. 기술적으로는 
 
 | 서비스 | 대상 리소스 | 허용 작업 |
 | --- | --- | --- |
-| SQS | 운영 `promise9-link-analysis` 큐 | `sqs:SendMessage`, `sqs:ReceiveMessage`, `sqs:DeleteMessage` |
+| SQS | 운영 `promise9-link-analysis` 큐 | `sqs:SendMessage`, `sqs:ReceiveMessage`, `sqs:DeleteMessage`, `sqs:ChangeMessageVisibility` |
 | SES | 서울 리전 `link-ding-dong.com` identity | `ses:SendEmail`, `ses:SendBulkEmail` |
 
 사용자와 정책은 `infra/lib/queue-stack.ts`의 `grantRuntimeAccess()`에서 관리한다.

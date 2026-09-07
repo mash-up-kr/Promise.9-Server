@@ -1,228 +1,124 @@
-# 링크 분석 SQS 설정
+# 링크 분석 SQS 워커 운영
 
-링크 저장 API는 정보 수집·AI 요약·AI 태그·임베딩을 응답 이후 인라인으로 실행하고, 실패한
-작업만 `promise9-link-analysis` 큐에 넘겨 나중에 재시도한다. 즉 큐는 정상 경로가 아니라
-**재시도 경로**이며, 모든 작업이 성공하면 SQS를 호출하지 않는다.
+구조와 테이블 책임은 [최소 설계](./sqs-worker-minimal-design.md)를 참고한다. 링크 저장은 Link·Job·Outbox를 함께 커밋하며, 최초 분석부터 SQS Consumer가 수행한다.
 
-<br>
-
-## 적용 엔드포인트
-
-| 엔드포인트 | 실행하는 작업 | 비고 |
-| --- | --- | --- |
-| `POST /api/v1/links` | 전체(4개) | 링크 신규 저장 |
-| `PATCH /api/v1/links/:linkId` | `EMBEDDING`만 | 메모가 바뀔 때만. 임베딩 텍스트가 달라지므로 재생성한다 |
-| `POST /api/v1/links/:linkId/restore` | 없음 | 복원 시 기존 분석 결과를 그대로 쓴다 |
-
-두 경로 모두 `LinkAnalysisDispatcher.dispatch()`를 호출한다. 실패 시 재시도 정책도 동일하게
-적용되므로 임베딩 생성 트리거는 이 한 곳으로 통일되어 있다. 같은 `normalizedUrl`은
-`assertNotDuplicated`가 먼저 막으므로 중복 실행되지 않는다.
-
-<br>
-
-## 작업 단위
-
-분석은 아래 4개 작업으로 나뉘고, **재시도는 작업 단위로 이루어진다.** 요약이 성공하고 태그만
-실패하면 태그만 다시 실행하므로 성공한 AI 호출이 중복 결제되지 않는다.
-
-| 작업 | 내용 |
-| --- | --- |
-| `CONTENT` | 링크 크롤링 후 제목·설명 저장. 본문은 DB에 보관하지 않는다 |
-| `SUMMARY` | AI 요약 생성 및 `aiSummary`·`aiSummaryStatus` 저장 |
-| `TAGS` | AI 태그 생성 후 기존 AI 태그를 transaction에서 교체 |
-| `EMBEDDING` | 검색용 벡터 생성 및 저장 |
-
-`SUMMARY`·`TAGS`는 `CONTENT`의 수집 결과를 입력으로 쓴다. 본문을 저장하지 않으므로 이 두
-작업만 재시도할 때는 크롤링을 다시 실행한다. `EMBEDDING`은 제목·요약이 저장된 뒤 최신 행을
-다시 읽어 실행하므로 요약까지 반영된 벡터가 만들어진다.
-
-<br>
-
-## 동작 방식
-
-```
-POST /api/v1/links
-  ├─ 링크 DB 저장
-  ├─ 201 응답 — aiSummaryStatus=PENDING
-  └─ dispatch()  ← fire-and-forget, 응답을 막지 않는다
-       │
-       └─ 인라인 실행: CONTENT → (SUMMARY, TAGS) → EMBEDDING
-            ├─ 전부 성공 → 종료. SQS를 호출하지 않는다
-            ├─ RETRYABLE 실패 → 실패한 작업만 담아 큐에 발행
-            └─ PERMANENT 실패 → 큐에 넣지 않고 종료
-
-        promise9-link-analysis 큐
-                  │  long polling 20초, 한 번에 1건
-                  ▼
-        LinkAnalysisQueueConsumer → handleRetry()
-          └─ 메시지의 tasks만 실행
-               ├─ 전부 성공 → 메시지 삭제
-               ├─ 일부 실패 → 남은 작업만 새 메시지로 재발행하고 원본 삭제
-               └─ 시도 상한 초과 → 재발행 중단하고 로그만 남긴다
-```
-
-인라인 실행과 재시도 실행은 모두 `LinkAnalysisService.run(input, tasks)` 하나를 호출한다.
-실행 로직은 한 곳에만 있고 트리거만 두 개다.
-
-<br>
-
-## 재시도 정책
-
-`run()`은 예외를 던지지 않고 작업별 결과를 반환하며, 실패는 두 종류로 분류된다.
-
-| 분류 | 조건 | 처리 |
-| --- | --- | --- |
-| `RETRYABLE` | 네트워크 오류, 타임아웃, 5xx, 429, provider 내부 오류 | 큐에 발행해 재시도 |
-| `PERMANENT` | 429를 제외한 4xx, LLM 설정 오류 | 재시도하지 않고 종료 |
-
-AI 실패의 판단은 `AiService`가 `AiGenerationError.retryable`로 노출한다. 링크 분석 쪽은
-provider 예외 타입을 알지 않고 이 값만 본다.
-
-재시도는 원본 메시지의 재전달이 아니라 **남은 작업만 담은 새 메시지 발행**으로 이루어진다.
-따라서 시도 횟수는 SQS `maxReceiveCount`가 아니라 코드의 `LINK_ANALYSIS_MAX_ATTEMPTS`가
-제한하며, 인라인 1회를 포함해 최대 4회 시도한다. 시도 간격은 `SendMessage`의 `DelaySeconds`로
-60초 → 120초 → 240초(상한 900초)로 늘어난다.
-
-상한을 넘기면 재발행을 멈추고 로그만 남긴다. 각 작업의 실패 상태는 실행 시점에
-`LinkAnalysisService`가 이미 기록하므로(요약 실패 시 `aiSummaryStatus=FAILED`) 여기서 다시
-쓰지 않는다. 상태 전이의 주인을 한 곳으로 유지하기 위한 선택이다.
-
-<br>
-
-## 실패 처리
-
-| 실패 지점 | 동작 |
-| --- | --- |
-| 인라인 실행 중 예외 | 로그만 남기고 저장 응답에 영향을 주지 않는다 |
-| 크롤링 오류·타임아웃 | 요약이 요청된 실행이면 `aiSummaryStatus=FAILED`를 저장한다. 재시도 가능한 오류는 기존 정책대로 큐에 발행한다 |
-| 재시도 메시지 발행 실패(인라인 경로) | 로그만 남긴다. 해당 링크는 재시도되지 않는다 |
-| 재시도 메시지 발행 실패(consumer 경로) | 예외를 던져 원본 메시지를 삭제하지 않는다. SQS가 재전달하고 초과 시 DLQ로 이동 |
-| 메시지 파싱 실패 | 삭제하지 않아 재전달되고 결국 DLQ로 이동한다 |
-| 메시지 수신 실패(큐 URL 오류, IAM 권한 누락) | 연속 실패에 1초 → 30초 백오프를 적용해 폴링을 유지한다. 로그 폭주를 막는 장치이므로 큐 설정 오류는 로그를 보고 고쳐야 한다 |
-| 배포·재시작 | `enableShutdownHooks`로 진행 중인 인라인 작업을 최대 15초 기다린다 |
-
-크롤링·요약 오류 및 개별 요청 타임아웃은 실패 처리 시점에 `FAILED`를 기록한다.
-재시도 중에도 `FAILED`를 유지하며 요약 저장에 성공하면 `SUCCESS`로 복구된다.
-태그·임베딩만 실패한 경우에는 이미 성공한 요약 상태를 변경하지 않는다.
-
-주기적으로 오래된 `PENDING`을 정리하는 배치는 두지 않는다. 강제 종료(SIGKILL, OOM)로
-인라인 작업이 유실되거나 DB 장애로 실패 상태 저장까지 실패하면 `PENDING`이 남을 수 있다.
-기존에 남은 `PENDING`도 자동으로 변경하지 않는다. 관측이 필요하면 오래된 건수를 확인한다.
-
-```sql
-select count(*) from links
-where ai_summary_status = 'PENDING'
-  and created_at < now() - interval '1 hour'
-  and deleted_at is null;
-```
-
-<br>
-
-## 큐 리소스
-
-큐는 `infra/lib/queue-stack.ts`(CDK)가 정의한다. 콘솔에서 직접 만들지 않는다.
-
-| 환경 | 큐 | DLQ |
-| --- | --- | --- |
-| production | `promise9-link-analysis` | `promise9-link-analysis-dlq` |
-
-현재 배포 대상은 production 하나이므로 stage 큐를 별도로 생성하지 않는다. 기존
-stage 큐와 DLQ는 `RemovalPolicy.RETAIN`이 적용돼 스택에서 제거해도 AWS에는 보존된다.
-더 이상 필요하지 않은지 확인한 뒤 수동으로 삭제한다.
-
-적용되는 설정은 아래와 같다.
-
-- Queue type: Standard
-- Receive message wait time: 20초 — long polling
-- Visibility timeout: 300초 — 앱의 `SQS_VISIBILITY_TIMEOUT_SECONDS` 기본값과 동일
-- Retention period: 4일(DLQ는 14일)
-- Redrive `maxReceiveCount`: 3
-- 저장 암호화: SQS 관리형 키(`SqsManagedSseEnabled`) — 메시지에 사용자 링크 URL이 담긴다
-- 전송: HTTPS 강제(`aws:SecureTransport`)
-
-재시도 횟수는 코드가 제어하므로 `maxReceiveCount`는 파싱 실패와 발행 실패를 걸러내는
-안전망 역할만 한다.
-
-배포는 `infra`에서 실행한다.
+## 실행
 
 ```bash
-bun run diff Promise9QueueStack    # 변경 사항 확인
-bun run deploy Promise9QueueStack  # 큐·DLQ·IAM 사용자 생성
+bun run build
+# API와 Outbox Publisher. SQS_CONSUMER_ENABLED=true이면 분석도 수행
+bun run start:prod
+# HTTP 서버 없는 독립 워커. SQS_CONSUMER_ENABLED=true 필수
+bun run start:worker
+# 개발 시 빌드 없이 독립 워커 실행
+bun run start:worker:dev
 ```
 
-스택 출력값 `ProductionQueueUrl`이 production의
-`SQS_LINK_ANALYSIS_QUEUE_URL`에 넣을 값이다.
+독립 워커에는 DB, SQS, AI 접근 설정만 필요하다. JWT·OAuth·이메일 설정은 요구하지 않는다. `.env` 또는 프로세스 환경변수로 주입한다.
 
-Standard queue는 같은 메시지를 두 번 이상 전달할 수 있다. 요약·수집 결과는 동일 `linkId`를
-갱신하고 AI 태그는 transaction에서 교체하므로 중복 처리해도 최종 데이터가 중복되지 않는다.
-
-<br>
-
-## IAM 권한
-
-`SqsService`는 AWS SDK 기본 credential provider chain으로 서버 자격 증명을 읽는다.
-운영 큐에 허용하는 작업과 공유 키 관리 기준은
-[서버 런타임 권한 정책](../infrastructure/access.md#서버-런타임-권한-정책)을 따른다.
-
-<br>
-
-## GitHub Secrets
-
-배포 워크플로가 아래 secret을 `.env`로 내려보낸다. 운영 배포는 AWS 키 한 쌍과 큐 URL,
-SES 발신 주소를 필수로 검사한다.
-
-| Secret | 사용하는 워크플로 | 값 |
-| --- | --- | --- |
-| `AWS_REGION` | production | `ap-northeast-2` |
-| `SQS_LINK_ANALYSIS_QUEUE_URL` | production | 스택 출력 `ProductionQueueUrl` |
-| `AWS_ACCESS_KEY_ID` | production | `Promise9AppRuntime` 액세스 키 |
-| `AWS_SECRET_ACCESS_KEY` | production | 같은 키의 시크릿 |
-
-<br>
-
-## 환경변수
-
-필수 설정은 `AWS_REGION`, `SQS_LINK_ANALYSIS_QUEUE_URL`이다. consumer는 기본으로
-비활성화되며, 실행할 인스턴스에서만 `SQS_CONSUMER_ENABLED=true`로 명시적으로
-켠다. production 배포 워크플로는 큐 URL이 설정된 경우 이 값을 함께 주입한다.
-전체 항목과 기본값은 `.env.example`을 참고한다.
-
-development 환경에서 production 큐 URL과 `SQS_CONSUMER_ENABLED=true`를 함께 설정하면
-앱이 부팅을 거부한다. 로컬 consumer를 테스트할 때는 `SQS_ENDPOINT`에 LocalStack 같은
-AWS 호환 엔드포인트를 설정한다.
-
-`SQS_LINK_ANALYSIS_QUEUE_URL`이 없으면 인라인 실행은 정상 동작하지만 재시도 발행이 실패한다.
-즉 큐 없이도 링크 저장과 분석은 되고, 일시적 실패에 대한 재시도만 사라진다.
-
-visibility timeout과 DLQ 연결은 큐 스택이 코드의 기본값과 맞춰 정의하므로 따로 확인할
-필요는 없다. 큐 설정을 바꿀 때는 콘솔이 아니라 `infra/lib/queue-stack.ts`를 고친다.
-
-<br>
-
-## Consumer 워커 분리 기준
-
-현재 production은 API와 SQS consumer를 한 프로세스에서 실행한다. 다음 중 하나라도
-해당하면 consumer를 별도 워커로 분리한다.
-
-- 큐 depth가 일시적 장애 후에도 0으로 복구되지 않는다.
-- 재시도 처리 중 API p95 latency가 의미 있게 증가한다.
-- API 인스턴스를 두 대 이상으로 확장해야 한다.
-- 리마인드 배치 등 다른 백그라운드 작업이 같은 프로세스에 추가된다.
-
-<br>
-
-## 관련 코드
-
-| 파일 | 역할 |
+| 설정 | 동작 |
 | --- | --- |
-| `src/modules/link/analysis/link-analysis.type.ts` | 작업 단위·실패 분류·메시지 포맷 정의 |
-| `src/modules/link/analysis/link-analysis.service.ts` | 작업 실행. 인라인과 재시도가 공유 |
-| `src/modules/link/analysis/link-analysis.dispatcher.ts` | 인라인 실행과 재시도 예약 조율 |
-| `src/modules/link/analysis/link-analysis.failure.ts` | RETRYABLE·PERMANENT 분류 |
-| `src/modules/ai/ai.exception.ts` | `AiGenerationError.retryable` — AI 실패의 재시도 가능 여부 |
-| `src/modules/link/analysis/link-analysis.publisher.ts` | 재시도 메시지 발행 |
-| `src/modules/link/analysis/link-analysis.consumer.ts` | 큐 polling과 재시도 처리 |
-| `src/infrastructure/sqs/sqs.service.ts` | `SQSClient` 래퍼 |
-| `src/config/environment.ts` | `SQS_*` 환경변수 검증 |
-| `infra/lib/queue-stack.ts` | 큐·DLQ·런타임 IAM 사용자 정의(CDK) |
-| `.github/workflows/deploy-lightsail.yml` | production 배포에 큐 환경변수 주입 |
+| `APP_ENV` / 해당 `DATABASE_URL_*` | production은 `DATABASE_URL_PRODUCTION`, development는 `DATABASE_URL_DEVELOPMENT` |
+| `SQS_LINK_ANALYSIS_QUEUE_URL` | API Publisher와 Consumer가 공유할 큐 |
+| `SQS_CONSUMER_ENABLED` | API 기본 false, 독립 워커는 true 필수 |
+| `AWS_REGION`, AWS 자격 증명 | AWS SDK 기본 credential provider chain 사용 |
+| `OPENAI_API_KEY` | production 필수. 실제 임베딩 호출에도 필요 |
+| `GEMINI_API_KEY`, `TINY_FISH_API_KEY` | 해당 제공자·수집기를 사용할 때 설정 |
+| `SQS_WAIT_TIME_SECONDS` | 기본 20초, 1~20 |
+| `SQS_VISIBILITY_TIMEOUT_SECONDS` | 기본 300초. Job lease 240초보다 커야 함 |
+| `SQS_ENDPOINT` | 개발용 LocalStack 등 호환 엔드포인트 |
+
+큐 URL이 없으면 API는 저장한 Outbox를 DB에 남겨두고 발행하지 않는다. Consumer는 큐 URL 없이 켤 수 없다. 큐 없이 인라인 분석하던 경로는 제거됐다. 독립 워커에는 Publisher가 없으므로 API 프로세스가 Outbox를 계속 발행해야 한다.
+
+development에서 production 큐 `promise9-link-analysis`에 직접 발행·소비하는 것을 차단한다. 로컬 테스트는 별도 DB와 LocalStack을 사용한다. PC에서 운영 작업을 처리하려면 명시적인 production 설정과 운영 접근 권한으로 실행해야 한다.
+
+## 서버 ↔ 별도 워커 전환
+
+1. 기존 Consumer를 끄고 정상 종료를 기다린다. API에서는 `SQS_CONSUMER_ENABLED=false`로 재시작하면 Publisher와 API만 유지된다.
+2. 대상 워커를 같은 DB·큐 설정과 `SQS_CONSUMER_ENABLED=true`로 실행한다.
+3. 진행 중이던 작업이 강제로 중단됐다면 visibility와 lease 만료 후 재실행된다.
+
+두 Consumer를 동시에 켜면 경쟁 소비한다. PC 우선순위나 자동 서버 대체는 없다. PC가 꺼지면 운영자가 서버 Consumer를 켜야 한다. 큐 보관 기간 내에 재개해야 한다.
+
+GitHub Actions `deploy-lightsail.yml`은 Repository Variable **`SQS_CONSUMER_ENABLED`**를 읽는다. 미설정 시 기존 운영 방식인 true를 유지한다. 별도 워커 사용 시 false로 설정해야 이후 배포가 서버 Consumer를 다시 켜지 않는다. 독립 워커 자동 배포는 이번 범위에 포함하지 않는다.
+
+종료 시 Consumer는 새 수신을 중단하고 최대 180초인 현재 실행을 정리한다. DB·SQS는 그 후 닫는다. `docker-compose.prod.yml`의 API 종료 유예는 4분이다. 독립 워커의 프로세스 관리자에도 동등한 종료 유예를 설정한다. DB 장애 등으로 종료가 지연돼 강제 종료되면 재전달로 복구한다.
+
+## 최초 배포 전환
+
+v2의 `linkId/tasks/attempt`와 v3의 `jobId` 메시지는 호환되지 않는다. 새 Consumer는 v2를 삭제하지 않으며, 재전달 후 DLQ로 이동한다. v2 메시지를 새 코드에 그대로 redrive하지 않는다.
+
+배포 전 다음 순서를 지킨다.
+
+1. 기존 링크 저장·메모 수정 유입을 잠시 중단하고 기존 인라인 실행 및 v2 재시도 큐를 정리한다. DLQ의 v2도 별도로 확인한다. 큐를 무조건 purge하지 않는다.
+2. 마이그레이션 `0013`, `0014`를 적용한다. 기존 링크 결과는 변경하지 않는다.
+3. CDK diff를 확인하고 `Promise9QueueStack`의 maxReceiveCount=10과 `sqs:ChangeMessageVisibility` 권한을 적용한다.
+4. v3 API·Publisher와 선택한 Consumer를 배포하고 저장 → Outbox → SQS → Job 종료를 확인한 뒤 유입을 재개한다.
+
+유입 중단이 불가능하면 별도 v3 큐로 분리하는 배포 계획이 필요하다. 이 문서만으로 그 운영 변경을 실행하지 않는다. 기존 `PENDING` 링크의 일괄 재분석·상태 변경도 자동 수행하지 않는다. 새 코드 롤백 시에는 v3 메시지를 기존 v2 Consumer에 노출하지 않도록 생산·소비 경로를 함께 정리해야 한다.
+
+## 실패와 복구
+
+| 상황 | 처리 |
+| --- | --- |
+| Job·Outbox 삽입 실패 | 링크 변경까지 롤백 |
+| SQS 발행 실패 | Outbox 미발행 유지, Publisher 재시도 |
+| SQS 발행 후 DB 커밋 실패 | 중복 발행 가능, Job 토큰으로 결과 중복 반영 차단 |
+| 일시적 분석 실패 | Job PENDING과 재시도 Outbox를 함께 저장 후 현재 메시지 삭제 |
+| 결과·재시도 저장 실패 | 메시지 미삭제, 재전달 |
+| 저장 성공 후 메시지 삭제 실패 | 다음 수신에서 종료 Job 확인 후 외부 호출 없이 삭제 |
+| 실행 도중 종료 | lease·visibility 만료 후 재선점 |
+| 최종 실패 | Job FAILED. 확정 가능한 결과와 기존 의미의 요약 상태 저장 |
+| 메시지 파싱 실패·장기 DB 장애 | 미삭제로 재전달, 수신 횟수 초과 시 DLQ |
+
+실행은 총 4회이며 일시 실패 간격은 60/120/240초다. 재시도는 해당 Job 전체 실행이다. SQS `ApproximateReceiveCount`는 실제 실행 횟수와 다르다. 요약 성공 후 임베딩 실패라면 Job은 FAILED여도 API의 요약 상태는 SUCCESS일 수 있다.
+
+미발행 Outbox와 지연된 Job을 확인한다.
+
+```sql
+select count(*), min(available_at) as oldest_available_at
+from link_analysis_outbox
+where published_at is null and available_at <= now();
+
+select id, link_id, job_type, status, attempt_count,
+       next_attempt_at, lease_expires_at, last_error_code
+from link_processing_jobs
+where (status = 'RUNNING' and lease_expires_at < now())
+   or (status = 'PENDING' and next_attempt_at < now() - interval '1 hour')
+   or status = 'FAILED'
+order by id;
+```
+
+DLQ가 증가하면 먼저 파싱·권한·DB 장애의 원인을 수정한다. v3 메시지이고 Job이 아직 활성 상태라면 운영자 권한으로 원래 큐에 redrive한다. 종료된 Job은 재실행되지 않는다. 앞선 Job이 DLQ에 머물면 같은 링크의 후속 Outbox도 기다린다.
+
+SQS 보관 기간 만료 등으로 메시지가 사라진 활성 Job은 아래 조건을 확인한 뒤 **해당 Job 하나만** 다시 발행 예약할 수 있다. 이때 중복 메시지가 남아 있어도 선점·토큰 검증을 거친다. 이 SQL은 자동 배치가 아니며 운영자가 대상을 검토해 실행한다.
+
+```sql
+-- :job_id는 확인한 대상 ID로 바꾼다. 실행 중이거나 재시도 시각 전인 Job은 대상에서 제외한다.
+insert into link_analysis_outbox (job_id)
+select id from link_processing_jobs
+where id = :job_id
+  and next_attempt_at <= now()
+  and (status = 'PENDING'
+       or (status = 'RUNNING' and lease_expires_at < now()));
+```
+
+FAILED 재분석은 별도 명시적 요청의 영역이며 이 복구 SQL로 되살리지 않는다. DLQ 알림·자동 복구기는 이번에 추가하지 않았다. 운영에서는 큐의 적체·DLQ·DB 지연을 함께 관측해야 한다.
+
+## 큐와 권한
+
+`infra/lib/queue-stack.ts`가 Standard 큐 `promise9-link-analysis`와 `promise9-link-analysis-dlq`를 정의한다. 큐 보관 4일, DLQ 14일, visibility 300초, long polling 20초, maxReceiveCount 10이다. 저장은 SQS 관리형 키로 암호화하고 HTTPS를 강제한다. 메시지에는 Job ID만 담는다.
+
+런타임은 해당 큐에 SendMessage·ReceiveMessage·DeleteMessage·ChangeMessageVisibility 권한을 사용한다. 키 관리 기준은 [런타임 권한 문서](../infrastructure/access.md)를 따른다. DLQ redrive 같은 운영 권한을 런타임에 추가하지 않는다.
+
+## 검증
+
+```bash
+bun run build
+bun run test -- --runInBand
+bun run infra:typecheck
+# 삭제 가능한 로컬 전용 DB promise9_job_test 필요. 링크 테스트 데이터를 초기화한다.
+LINK_JOB_TEST_DATABASE_URL=postgresql://user@127.0.0.1:5432/promise9_job_test bun run test:jobs:integration
+```
+
+통합 스크립트는 loopback의 `promise9_job_test`만 허용한다. 마이그레이션, Outbox 실패 롤백, 동시 발행·선점, 토큰 소유권 상실, 재시도·횟수 소진, 후속 Job 순서, 링크 삭제·복구를 실제 PostgreSQL에서 검증한다. 실제 AWS/LocalStack 큐를 통한 전체 처리 검증은 배포 전 별도 테스트 큐에서 수행한다.

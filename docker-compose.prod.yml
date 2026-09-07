@@ -24,6 +24,8 @@ services:
   api:
     image: ${APP_IMAGE:?APP_IMAGE is required}
     container_name: promise9-api
+    # 진행 중인 분석(최대 180초)과 결과 저장·메시지 삭제를 기다린다.
+    stop_grace_period: 4m
     restart: unless-stopped
     depends_on:
       db:

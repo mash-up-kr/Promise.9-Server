@@ -1,4 +1,8 @@
-import { validateDbEnvironment, validateEnvironment } from './environment'
+import {
+    validateDbEnvironment,
+    validateEnvironment,
+    validateWorkerEnvironment,
+} from './environment'
 
 const developmentEnvironment = {
     APP_ENV: 'development',
@@ -170,5 +174,38 @@ describe('validateEnvironment', () => {
             APP_ENV: 'production',
             DATABASE_URL: productionEnvironment.DATABASE_URL_PRODUCTION,
         })
+    })
+})
+
+describe('validateWorkerEnvironment', () => {
+    const workerEnvironment = {
+        APP_ENV: 'development',
+        DATABASE_URL_DEVELOPMENT: 'postgres://localhost:5432/promise9',
+        SQS_CONSUMER_ENABLED: 'true',
+        SQS_LINK_ANALYSIS_QUEUE_URL:
+            'http://localhost:4566/000000000000/promise9-link-analysis',
+        SQS_ENDPOINT: 'http://localhost:4566',
+    }
+    it('HTTP 인증과 이메일 환경변수 없이 워커를 설정한다', () => {
+        expect(validateWorkerEnvironment(workerEnvironment)).toMatchObject({
+            DATABASE_URL: workerEnvironment.DATABASE_URL_DEVELOPMENT,
+            SQS_CONSUMER_ENABLED: true,
+        })
+    })
+    it('소비가 꺼진 독립 워커의 실행을 거부한다', () => {
+        expect(() =>
+            validateWorkerEnvironment({
+                ...workerEnvironment,
+                SQS_CONSUMER_ENABLED: 'false',
+            }),
+        ).toThrow('독립 워커는')
+    })
+    it('production 워커도 AI 키와 DB 설정을 검증한다', () => {
+        expect(() =>
+            validateWorkerEnvironment({
+                ...workerEnvironment,
+                APP_ENV: 'production',
+            }),
+        ).toThrow('DATABASE_URL_PRODUCTION')
     })
 })

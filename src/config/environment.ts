@@ -35,128 +35,169 @@ const dbEnvSchema = z
     }))
 
 // NestJS 앱에서 사용 — 전체 환경변수 검증
-const appEnvSchema = z
-    .object({
-        APP_ENV: z.enum(['development', 'production']).default('development'),
-        DATABASE_URL_DEVELOPMENT: z.url().optional(),
-        DATABASE_URL_PRODUCTION: z.url().optional(),
-        DB_POOL_SIZE: z.coerce.number().int().positive().default(5),
-        JWT_ACCESS_SECRET: z.string().min(1),
-        JWT_REFRESH_SECRET: z.string().min(1),
-        JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
-        JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
-        GOOGLE_CLIENT_ID: z.string().min(1),
-        KAKAO_CLIENT_ID: z.string().min(1),
-        // 카카오 로그인 콘솔에서 Client Secret 사용을 켠 경우에만 필요 (기본값 OFF)
-        KAKAO_CLIENT_SECRET: z.string().min(1).optional(),
-        // 네이티브(iOS/Android) SDK가 발급하는 id_token의 aud는 REST API 키가 아니라
-        // 네이티브 앱 키라, 두 값을 모두 audience로 허용해야 앱 로그인이 검증된다.
-        KAKAO_NATIVE_APP_KEY: z.string().min(1),
-        APPLE_CLIENT_ID: z.string().min(1),
-        MASTER_ACCESS_TOKEN: z.string().optional(),
-        MASTER_USER_ID: z.coerce.number().int().positive().optional(),
-        LLM_DEFAULT_MODEL: z.enum(LLM_MODEL).default(LLM_MODEL.GPT_5_4_MINI),
-        // 임베딩 모델은 EMBEDDING_MODEL 상수로 고정한다(벡터 호환이 없어 env 교체 여지를 두지 않음).
-        LLM_REQUEST_TIMEOUT_MS: z.coerce
-            .number()
-            .int()
-            .positive()
-            .default(DEFAULT_LLM_REQUEST_TIMEOUT_MS),
-        OPENAI_API_KEY: z.string().min(1).optional(),
-        GEMINI_API_KEY: z.string().min(1).optional(),
-        TINY_FISH_API_KEY: z.string().min(1).optional(),
-        AWS_REGION: z.string().min(1).default('ap-northeast-2'),
-        SQS_LINK_ANALYSIS_QUEUE_URL: z.url().optional(),
-        SQS_ENDPOINT: z.url().optional(),
-        SQS_CONSUMER_ENABLED: z
-            .enum(['true', 'false'])
-            .default('false')
-            .transform((value) => value === 'true'),
-        SQS_WAIT_TIME_SECONDS: z.coerce
-            .number()
-            .int()
-            .min(1)
-            .max(20)
-            .default(DEFAULT_SQS_WAIT_TIME_SECONDS),
-        SQS_VISIBILITY_TIMEOUT_SECONDS: z.coerce
-            .number()
-            .int()
-            .min(1)
-            .max(43_200)
-            .default(DEFAULT_SQS_VISIBILITY_TIMEOUT_SECONDS),
-        EMAIL_SES_REGION: z.string().min(1).default(DEFAULT_EMAIL_SES_REGION),
-        EMAIL_ASSET_BASE_URL: z
-            .url()
-            .refine((value) => {
-                const url = new URL(value)
-                return (
-                    url.protocol === 'https:' &&
-                    !url.username &&
-                    !url.password &&
-                    !url.search &&
-                    !url.hash
-                )
-            }, 'EMAIL_ASSET_BASE_URL은 인증정보·쿼리·fragment가 없는 HTTPS URL이어야 합니다.')
-            .optional(),
-        EMAIL_FROM_ADDRESS: z.email().optional(),
-        EMAIL_CONFIGURATION_SET: z.string().min(1).optional(),
-        AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
-        AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
-        AWS_SESSION_TOKEN: z.string().min(1).optional(),
-    })
-    .superRefine((env, ctx) => {
-        const key = getDatabaseUrlKey(env.APP_ENV)
-
-        if (!env[key]) {
-            ctx.addIssue({
-                code: 'custom',
-                path: [key],
-                message: `${key} 환경변수가 필요합니다.`,
-            })
-        }
-
-        if (
-            Boolean(env.AWS_ACCESS_KEY_ID) !==
-            Boolean(env.AWS_SECRET_ACCESS_KEY)
-        ) {
-            ctx.addIssue({
-                code: 'custom',
-                path: ['AWS_ACCESS_KEY_ID'],
-                message:
-                    'AWS_ACCESS_KEY_ID와 AWS_SECRET_ACCESS_KEY는 함께 설정해야 합니다.',
-            })
-        }
-
-        if (env.AWS_SESSION_TOKEN && !env.AWS_ACCESS_KEY_ID) {
-            ctx.addIssue({
-                code: 'custom',
-                path: ['AWS_SESSION_TOKEN'],
-                message:
-                    'AWS_SESSION_TOKEN을 사용하려면 AWS access key도 설정해야 합니다.',
-            })
-        }
-
-        if (env.APP_ENV === 'production' && !env.OPENAI_API_KEY) {
-            ctx.addIssue({
-                code: 'custom',
-                path: ['OPENAI_API_KEY'],
-                message: 'production 환경에서는 OPENAI_API_KEY가 필요합니다.',
-            })
-        }
-
-        if (
-            env.APP_ENV === 'development' &&
-            env.SQS_CONSUMER_ENABLED &&
-            isProductionLinkAnalysisQueue(
-                env.SQS_LINK_ANALYSIS_QUEUE_URL,
-                env.SQS_ENDPOINT,
+const appEnvFields = z.object({
+    APP_ENV: z.enum(['development', 'production']).default('development'),
+    DATABASE_URL_DEVELOPMENT: z.url().optional(),
+    DATABASE_URL_PRODUCTION: z.url().optional(),
+    DB_POOL_SIZE: z.coerce.number().int().positive().default(5),
+    JWT_ACCESS_SECRET: z.string().min(1),
+    JWT_REFRESH_SECRET: z.string().min(1),
+    JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
+    JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
+    GOOGLE_CLIENT_ID: z.string().min(1),
+    KAKAO_CLIENT_ID: z.string().min(1),
+    // 카카오 로그인 콘솔에서 Client Secret 사용을 켠 경우에만 필요 (기본값 OFF)
+    KAKAO_CLIENT_SECRET: z.string().min(1).optional(),
+    // 네이티브(iOS/Android) SDK가 발급하는 id_token의 aud는 REST API 키가 아니라
+    // 네이티브 앱 키라, 두 값을 모두 audience로 허용해야 앱 로그인이 검증된다.
+    KAKAO_NATIVE_APP_KEY: z.string().min(1),
+    APPLE_CLIENT_ID: z.string().min(1),
+    MASTER_ACCESS_TOKEN: z.string().optional(),
+    MASTER_USER_ID: z.coerce.number().int().positive().optional(),
+    LLM_DEFAULT_MODEL: z.enum(LLM_MODEL).default(LLM_MODEL.GPT_5_4_MINI),
+    // 임베딩 모델은 EMBEDDING_MODEL 상수로 고정한다(벡터 호환이 없어 env 교체 여지를 두지 않음).
+    LLM_REQUEST_TIMEOUT_MS: z.coerce
+        .number()
+        .int()
+        .positive()
+        .default(DEFAULT_LLM_REQUEST_TIMEOUT_MS),
+    OPENAI_API_KEY: z.string().min(1).optional(),
+    GEMINI_API_KEY: z.string().min(1).optional(),
+    TINY_FISH_API_KEY: z.string().min(1).optional(),
+    AWS_REGION: z.string().min(1).default('ap-northeast-2'),
+    SQS_LINK_ANALYSIS_QUEUE_URL: z.url().optional(),
+    SQS_ENDPOINT: z.url().optional(),
+    SQS_CONSUMER_ENABLED: z
+        .enum(['true', 'false'])
+        .default('false')
+        .transform((value) => value === 'true'),
+    SQS_WAIT_TIME_SECONDS: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(20)
+        .default(DEFAULT_SQS_WAIT_TIME_SECONDS),
+    SQS_VISIBILITY_TIMEOUT_SECONDS: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(43_200)
+        .default(DEFAULT_SQS_VISIBILITY_TIMEOUT_SECONDS),
+    EMAIL_SES_REGION: z.string().min(1).default(DEFAULT_EMAIL_SES_REGION),
+    EMAIL_ASSET_BASE_URL: z
+        .url()
+        .refine((value) => {
+            const url = new URL(value)
+            return (
+                url.protocol === 'https:' &&
+                !url.username &&
+                !url.password &&
+                !url.search &&
+                !url.hash
             )
-        ) {
+        }, 'EMAIL_ASSET_BASE_URL은 인증정보·쿼리·fragment가 없는 HTTPS URL이어야 합니다.')
+        .optional(),
+    EMAIL_FROM_ADDRESS: z.email().optional(),
+    EMAIL_CONFIGURATION_SET: z.string().min(1).optional(),
+    AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
+    AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+    AWS_SESSION_TOKEN: z.string().min(1).optional(),
+})
+
+// 워커는 HTTP 인증·이메일 설정 없이 분석에 필요한 설정만 검증한다.
+const workerEnvFields = appEnvFields.pick({
+    APP_ENV: true,
+    DATABASE_URL_DEVELOPMENT: true,
+    DATABASE_URL_PRODUCTION: true,
+    DB_POOL_SIZE: true,
+    LLM_DEFAULT_MODEL: true,
+    LLM_REQUEST_TIMEOUT_MS: true,
+    OPENAI_API_KEY: true,
+    GEMINI_API_KEY: true,
+    TINY_FISH_API_KEY: true,
+    AWS_REGION: true,
+    AWS_ACCESS_KEY_ID: true,
+    AWS_SECRET_ACCESS_KEY: true,
+    AWS_SESSION_TOKEN: true,
+    SQS_LINK_ANALYSIS_QUEUE_URL: true,
+    SQS_ENDPOINT: true,
+    SQS_CONSUMER_ENABLED: true,
+    SQS_WAIT_TIME_SECONDS: true,
+    SQS_VISIBILITY_TIMEOUT_SECONDS: true,
+})
+
+function validateRuntime(
+    env: z.output<typeof workerEnvFields>,
+    ctx: z.RefinementCtx,
+) {
+    const key = getDatabaseUrlKey(env.APP_ENV)
+
+    if (!env[key]) {
+        ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message: `${key} 환경변수가 필요합니다.`,
+        })
+    }
+
+    if (Boolean(env.AWS_ACCESS_KEY_ID) !== Boolean(env.AWS_SECRET_ACCESS_KEY)) {
+        ctx.addIssue({
+            code: 'custom',
+            path: ['AWS_ACCESS_KEY_ID'],
+            message:
+                'AWS_ACCESS_KEY_ID와 AWS_SECRET_ACCESS_KEY는 함께 설정해야 합니다.',
+        })
+    }
+
+    if (env.AWS_SESSION_TOKEN && !env.AWS_ACCESS_KEY_ID) {
+        ctx.addIssue({
+            code: 'custom',
+            path: ['AWS_SESSION_TOKEN'],
+            message:
+                'AWS_SESSION_TOKEN을 사용하려면 AWS access key도 설정해야 합니다.',
+        })
+    }
+
+    if (env.APP_ENV === 'production' && !env.OPENAI_API_KEY) {
+        ctx.addIssue({
+            code: 'custom',
+            path: ['OPENAI_API_KEY'],
+            message: 'production 환경에서는 OPENAI_API_KEY가 필요합니다.',
+        })
+    }
+
+    if (
+        env.APP_ENV === 'development' &&
+        env.SQS_CONSUMER_ENABLED &&
+        isProductionLinkAnalysisQueue(
+            env.SQS_LINK_ANALYSIS_QUEUE_URL,
+            env.SQS_ENDPOINT,
+        )
+    ) {
+        ctx.addIssue({
+            code: 'custom',
+            path: ['SQS_LINK_ANALYSIS_QUEUE_URL'],
+            message:
+                'development 환경에서 production 링크 분석 큐를 소비할 수 없습니다. LocalStack(SQS_ENDPOINT)을 사용하거나 SQS_CONSUMER_ENABLED=false로 설정하세요.',
+        })
+    }
+}
+
+const appEnvSchema = appEnvFields
+    .superRefine(validateRuntime)
+    .transform((env) => ({
+        ...env,
+        DATABASE_URL: env[getDatabaseUrlKey(env.APP_ENV)] as string,
+    }))
+
+const workerEnvSchema = workerEnvFields
+    .superRefine(validateRuntime)
+    .superRefine((env, ctx) => {
+        if (!env.SQS_CONSUMER_ENABLED) {
             ctx.addIssue({
                 code: 'custom',
-                path: ['SQS_LINK_ANALYSIS_QUEUE_URL'],
-                message:
-                    'development 환경에서 production 링크 분석 큐를 소비할 수 없습니다. LocalStack(SQS_ENDPOINT)을 사용하거나 SQS_CONSUMER_ENABLED=false로 설정하세요.',
+                path: ['SQS_CONSUMER_ENABLED'],
+                message: '독립 워커는 SQS_CONSUMER_ENABLED=true가 필요합니다.',
             })
         }
     })
@@ -164,6 +205,10 @@ const appEnvSchema = z
         ...env,
         DATABASE_URL: env[getDatabaseUrlKey(env.APP_ENV)] as string,
     }))
+
+export function validateWorkerEnvironment(config: Record<string, unknown>) {
+    return parse(workerEnvSchema, config)
+}
 
 export type ValidatedEnvironment = z.output<typeof appEnvSchema>
 export type ValidatedDbEnvironment = z.output<typeof dbEnvSchema>
