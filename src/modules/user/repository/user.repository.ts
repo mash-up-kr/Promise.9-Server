@@ -55,7 +55,10 @@ export class UserRepository {
             }
 
             const existingUser = await tx.query.users.findFirst({
-                where: eq(users.email, input.email),
+                where: and(
+                    eq(users.email, input.email),
+                    isNull(users.deletedAt),
+                ),
             })
 
             if (existingUser) {
