@@ -451,7 +451,7 @@ export const ApiLinkPreview = () =>
         ApiOperation({
             summary: '링크 미리보기 조회',
             description:
-                '입력한 URL에서 `title`·`thumbnailUrl`·`source`를 추출합니다. 저장 전 미리보기이며 DB에는 저장하지 않습니다.\n\n- YouTube: Data API → oEmbed → HTML 순으로 수집합니다.\n- 일반 HTML: 제목은 `og:title` → `<title>`, 이미지는 `og:image` → `twitter:image` 순입니다. \n- 제목·이미지가 없으면 `null`입니다. 이미지는 공개 HTTP(S) 절대 URL로 반환합니다.\n- `source`: 표시용 도메인. YouTube는 `youtube.com`, HTML은 리다이렉트 최종 호스트에서 선행 `www.`를 제거합니다.',
+                '입력한 URL에서 `title`·`thumbnailUrl`·`source`를 추출합니다. 저장 전 미리보기이며 DB에는 저장하지 않습니다.\n\n- YouTube 미리보기: oEmbed → HTML 순으로 수집하며 Data API는 호출하지 않습니다.\n- 일반 HTML: 제목은 `og:title` → `<title>`, 이미지는 `og:image` → `twitter:image` 순입니다.\n- 제목·이미지가 없으면 `null`입니다. 이미지는 공개 HTTP(S) 절대 URL로 반환합니다.\n- `source`: 표시용 도메인. YouTube는 `youtube.com`, HTML은 리다이렉트 최종 호스트에서 선행 `www.`를 제거합니다.',
         }),
         ApiQuery({
             name: 'url',

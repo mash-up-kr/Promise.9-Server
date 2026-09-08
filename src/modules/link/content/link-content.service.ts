@@ -163,7 +163,8 @@ export class LinkContentService {
         strategy: LinkContentYoutubeStrategy,
     ): Promise<ResolvedLinkContent | null> {
         const videoId = strategy.getVideoId(resourceUrl)
-        if (videoId) {
+        // 설명이 필요한 저장 후 분석에서만 Data API 할당량을 사용한다.
+        if (purpose === 'analysis' && videoId) {
             try {
                 const video = await this.youtubeDataClient.fetchVideo(videoId)
                 if (video) {

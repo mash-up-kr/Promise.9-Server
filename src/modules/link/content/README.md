@@ -23,7 +23,8 @@ URL에 맞는 수집 방식 선택
    │
    ├─ html ────── HTML 요청 ── OG·본문 파싱
    │
-   ├─ youtube ─── Data API ── 실패·미설정·영상 미조회 시 oEmbed ── 실패 시 HTML
+   ├─ youtube ─── 미리보기: oEmbed → HTML
+   │              저장 수집: Data API → oEmbed → HTML
    │
    ├─ oembed ──── 구조화된 oEmbed 응답
    │                 └─ 실패하면 HTML로 다시 시도
@@ -37,17 +38,20 @@ URL에 맞는 수집 방식 선택
 | 코드의 `kind` | 동작 | 적용 사례 |
 | --- | --- | --- |
 | `html` | 페이지 HTML에서 OG와 본문을 파싱한다. | 일반 링크, Brunch |
-| `youtube` | Data API로 제목·썸네일·설명을 함께 읽고 oEmbed·HTML 순으로 폴백한다. | YouTube |
+| `youtube` | 미리보기는 oEmbed, 저장 수집은 Data API로 시작하며 기존 경로로 폴백한다. | YouTube |
 | `oembed` | 사이트가 제공하는 구조화된 응답을 사용한다. | oEmbed를 우선하는 사이트용 공통 경로 |
 | `tinyfish` | 일반 HTML 접근이 제한된 공개 페이지를 TinyFish로 수집한다. | X, Instagram |
 
-`preview`와 `collect`는 같은 방식 선택 흐름을 공유한다.
+`preview`와 `collect`는 사이트별 방식 선택을 공유하고, 기존 `purpose` 값으로 목적을 구분한다.
 
 - `preview`: 저장 전에 제목, 썸네일, 출처를 반환한다.
 - `collect`: 저장 후 제목, 설명, 본문, 대표 이미지를 수집한다. AI 입력으로 사용할 수
   있으므로 HTML 요청 전에 robots.txt 허용 여부를 확인한다.
 
-YouTube는 미리보기와 저장 후 수집 모두 공식 Data API로 제목·썸네일·설명란을 먼저 조회한다.
+YouTube 미리보기는 기존 oEmbed → HTML 경로를 사용하고 Data API를 호출하지 않는다.
+제목·썸네일만 필요한 미리보기에서는 Data API 할당량을 소비하지 않는다.
+저장 후 수집은 공식 Data API로 제목·썸네일·설명란을 먼저 조회한다.
+이 변경의 목적은 응답 속도 개선보다 AI 분석과 검색에 사용할 영상 설명을 확보하는 것이다.
 일반 영상, `youtu.be` 공유 링크, Shorts, embed, live 경로에서 영상 ID를 추출한다.
 API 결과가 있으면 oEmbed와 HTML은 요청하지 않는다. 썸네일은 제공된 해상도 중
 `maxres → standard → high → medium → default` 순으로 선택하고 공개 URL인지 검증한다.
@@ -60,7 +64,7 @@ API 결과가 있으면 oEmbed와 HTML은 요청하지 않는다. 썸네일은 �
 2. 로컬 `.env`에 `YOUTUBE_API_KEY`를 설정한다. 로그인용 `GOOGLE_CLIENT_ID`와는 별도다.
 3. 배포 시 GitHub Actions secret `YOUTUBE_API_KEY`를 설정한다. 배포 workflow가 서버 환경변수에 전달한다.
 
-키가 없거나 영상이 조회되지 않거나 API 요청이 실패하면 oEmbed로 제목·썸네일을 수집한다.
+저장 후 수집에서 키가 없거나 영상이 조회되지 않거나 API 요청이 실패하면 oEmbed로 제목·썸네일을 수집한다.
 인증 오류·할당량 초과·타임아웃·잘못된 응답도 같은 폴백 경로를 사용한다.
 oEmbed도 실패하면 기존 HTML 수집으로 넘어간다. 저장 후 수집은 robots.txt 검사를 수행한다. 미리보기 robots.txt 적용은 별도 PR #121에서 다룬다.
 HTML까지 요청 오류로 실패하면 최종 오류를 호출부에 전달한다. 저장 후 분석은 기존 재시도 정책을 적용한다.
@@ -69,8 +73,9 @@ HTML까지 요청 오류로 실패하면 최종 오류를 호출부에 전달한
 키와 원격 오류 응답은 애플리케이션 로그에 출력하지 않는다.
 
 공식 요청: `GET /youtube/v3/videos?part=snippet&id={videoId}&fields=items(id,snippet(title,description,thumbnails))`.
-정상 경로는 미리보기 1회, 저장 수집 1회마다 각각 Data API를 한 번 호출한다.
-두 요청 사이의 캐시 재사용은 없으므로 미리보기 후 저장 시 보통 2회 호출한다.
+정상 경로에서 미리보기는 oEmbed 1회, 저장 수집은 Data API 1회를 호출한다.
+따라서 미리보기 후 저장 시 외부 HTTP 요청은 총 2회, Data API 호출은 1회다.
+미리보기와 저장 사이의 캐시 재사용은 없으며, 저장 후 썸네일은 더 높은 해상도의 후보로 달라질 수 있다.
 [영상 메타데이터 문서](https://developers.google.com/youtube/v3/docs/videos#snippet.description)를 참고한다.
 
 ## 도메인별 현재 동작
@@ -79,7 +84,7 @@ HTML까지 요청 오류로 실패하면 최종 오류를 호출부에 전달한
 | --- | --- | --- | --- |
 | 그 밖의 공개 HTTP(S) URL | HTML | OG와 본문을 직접 읽을 수 있다. | 없음 |
 | `brunch.co.kr` 및 하위 도메인 | HTML | 전용 `Promise9Bot/1.0` User-Agent에서 정상 응답한다. | 없음 |
-| `youtube.com` 및 하위 도메인, `youtu.be` | Data API | 제목·썸네일·설명을 한 번에 수집한다. | oEmbed → HTML |
+| `youtube.com` 및 하위 도메인, `youtu.be` | 미리보기: oEmbed / 저장: Data API | 미리보기는 제목·썸네일, 저장은 설명까지 수집한다. | 미리보기: HTML / 저장: oEmbed → HTML |
 | `x.com`, `www.x.com`, `twitter.com`, `www.twitter.com` | TinyFish | 서버 IP의 HTML/OG 수집이 불안정하다. | API key가 없을 때 HTML |
 | `instagram.com`, `www.instagram.com` | TinyFish | 서버 IP의 HTML/OG 수집이 불안정하고 콘텐츠 렌더링이 필요하다. | API key가 없을 때 HTML |
 

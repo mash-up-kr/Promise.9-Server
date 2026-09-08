@@ -1,8 +1,9 @@
 # YouTube Data API 우선 수집 전후 비교
 
-기존 `main`의 oEmbed 수집과 비교하면 제목·썸네일뿐 아니라 영상 설명도 한 요청으로
-확보한다. 이번 로컬 실측에서는 기존 방식보다 중앙값이 약 12~16ms 증가했다.
-응답 속도가 개선됐다고 볼 근거는 없으며, 이 변경의 이점은 설명 수집과 썸네일 선택이다.
+이 변경은 속도보다 AI 분석·검색에 사용할 영상 설명 확보를 위한 것이다.
+제목·썸네일만 필요한 미리보기는 기존 oEmbed → HTML을 유지하고, 저장 후 수집만
+Data API → oEmbed → HTML로 바꾼다. 기존 `purpose` 구분으로 호출 순서를 결정한다.
+최종 코드 재측정에서 미리보기 중앙값은 거의 같았고, 저장 수집은 약 15ms 증가했다.
 
 ## 비교 대상과 동작
 
@@ -12,21 +13,22 @@ Instagram 변경과 미리보기 robots.txt PR #121은 포함하지 않는다.
 
 | 항목 | 변경 전: main | 변경 후 |
 | --- | --- | --- |
-| 우선 수집 | oEmbed | YouTube Data API `videos.list(part=snippet)` |
-| 제목 | oEmbed 제목 | API의 `snippet.title` |
-| 썸네일 | oEmbed 제공 URL | 제공된 후보에서 maxres → standard → high → medium → default |
+| 미리보기 우선 수집 | oEmbed | oEmbed (Data API 호출 없음) |
+| 저장 후 우선 수집 | oEmbed | YouTube Data API `videos.list(part=snippet)` |
+| 저장 후 제목 | oEmbed 제목 | API의 `snippet.title` |
+| 썸네일 | oEmbed 제공 URL | 미리보기: oEmbed / 저장: maxres → standard → high → medium → default |
 | 영상 설명 | oEmbed 성공 시 없음 | `snippet.description`을 최대 2,000자로 제한 |
 | 설명 저장·AI 입력 | `description: null` | 기존 `metadata.description` 저장과 AI `description` 입력 사용 |
 | 영상 본문·자막 | oEmbed 성공 시 `content: null` | 모든 YouTube 경로에서 `content: null` |
 | 정상 수집의 외부 HTTP 호출 | 작업마다 1회 | 작업마다 1회 |
-| 미리보기 후 저장 | oEmbed 총 2회 | Data API 총 2회; 캐시 재사용 없음 |
-| 실패 시 | oEmbed → HTML | Data API → oEmbed → HTML |
+| 미리보기 후 저장 | oEmbed 총 2회 | oEmbed 1회 + Data API 1회; 캐시 재사용 없음 |
+| 실패 시 | oEmbed → HTML | 미리보기: 기존과 동일 / 저장: Data API → oEmbed → HTML |
 | 설정 | 별도 API 키 없음 | 선택적 `YOUTUBE_API_KEY`; 없으면 oEmbed 사용 |
 
-미리보기 응답은 기존 계약대로 제목·썸네일·출처만 반환한다. 설명은 API 응답에서
-읽지만 미리보기 응답에 추가하지 않는다. 개발 중 사용했던 oEmbed 후 Data API 설명
-보완 방식은 저장 수집에 2회 요청이 필요했으며, 최종 방식은 이를 1회로 처리한다.
-아래 속도 수치는 해당 중간 구현이 아닌 실제 main과의 비교다.
+미리보기는 설명을 요청하지 않고 제목·썸네일·출처만 반환한다. 저장 수집만 Data API를
+사용하므로 정상 경로에서 미리보기+저장은 1 unit을 사용한다. 다른 호출이 없다면 기본
+10,000 units로 하루 약 10,000건의 저장 수집이 가능하다는 계산이다. oEmbed 자체의
+서비스 제한을 의미하지 않는다. 아래 속도 수치는 실제 main과 최종 구현의 비교다.
 
 ## 속도 측정
 
@@ -36,20 +38,21 @@ Instagram 변경과 미리보기 robots.txt PR #121은 포함하지 않는다.
 - 같은 프로세스에서 순차 실행하며 전후 호출 순서를 회차마다 교대했다.
 - 서비스 호출부터 응답 본문 읽기·파싱·이미지 공개 URL 검증이 끝날 때까지 측정했다.
 - HTTP 컨트롤러·DB 저장·이미지 다운로드·색상 추출·LLM·큐 대기 시간은 포함하지 않는다.
-- 첫 시도는 테스트·빌드와 겹쳤으므로 제외하고, 검증 완료 후 재측정한 결과를 기록했다.
+- 최종 목적별 분리를 적용하고 테스트·빌드를 마친 뒤 재측정했다. 이전 양쪽 Data API 우선 측정값은 현재 결과로 대체했다.
 
 아래 각 행은 영상 2개의 측정 20건을 합한 값이다. p95는 정렬 후 nearest-rank로 계산했다.
 
 | 작업 | 이전 중앙값 | 이후 중앙값 | 차이 | 이전 p95 | 이후 p95 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| 미리보기 | 82.1ms | 93.9ms | +11.8ms (+14.4%) | 88.3ms | 112.0ms |
-| 저장 후 수집 | 80.0ms | 96.3ms | +16.3ms (+20.4%) | 87.0ms | 106.6ms |
+| 미리보기 | 83.05ms | 84.10ms | +1.05ms (+1.3%) | 98.8ms | 92.1ms |
+| 저장 후 수집 | 83.10ms | 98.45ms | +15.35ms (+18.5%) | 85.8ms | 108.9ms |
 
 표본 수가 작고 외부 API·로컬 네트워크·연결 재사용의 영향을 받는다. 운영 서버의
 응답 시간이나 장애율을 보장하는 수치로 해석하지 않는다. 정상 경로만 실측했으며,
-Data API 타임아웃 후 폴백은 기존 대비 최대 약 5초의 대기가 추가될 수 있다.
+저장 수집의 Data API 타임아웃 후 폴백은 기존 대비 최대 약 5초의 대기가 추가될 수 있다.
+미리보기는 Data API를 호출하지 않아 해당 API의 지연·할당량 오류 영향을 받지 않는다.
 
-## 실제 결과
+## 실제 저장 수집 결과
 
 | 영상 | 제목 | 이전 설명 | 이후 설명 | 이전 썸네일 | 이후 썸네일 |
 | --- | --- | --- | --- | --- | --- |
@@ -57,7 +60,8 @@ Data API 타임아웃 후 폴백은 기존 대비 최대 약 5초의 대기가 �
 | [rfscVS0vtbw](https://www.youtube.com/watch?v=rfscVS0vtbw) | Learn Python - Full Course for Beginners [Tutorial] | 없음 | 2,000자(기존 상한 적용) | hqdefault.jpg | maxresdefault.jpg |
 
 두 영상 모두 제목은 같았고, 썸네일은 API가 제공한 maxres 후보를 선택했다.
-이전 40건은 oEmbed만, 이후 40건은 Data API만 호출했다. 본문은 전후 모두 null이다.
+이전 40건은 oEmbed만 호출했다. 이후 미리보기 20건은 oEmbed만, 저장 수집 20건은
+Data API만 호출했다. 미리보기 썸네일은 전후 모두 hqdefault.jpg였다. 본문은 전후 모두 null이다.
 설명 원문과 중복된 `content`는 만들지 않는다.
 
 ## 검증 및 배포
@@ -87,4 +91,4 @@ node test/manual/youtube-content-benchmark.cjs > /tmp/youtube-benchmark.json
 ```
 
 환경 파일에서는 YouTube 키만 읽으며 출력에 키나 요청 쿼리 문자열을 포함하지 않는다.
-한 번 실행하면 준비 호출을 포함해 Data API 44회, oEmbed 44회를 요청한다.
+최종 코드에서 한 번 실행하면 준비 호출을 포함해 Data API 22회, oEmbed 66회를 요청한다.

@@ -61,21 +61,29 @@ describe('LinkContentService', () => {
         fetchSpy.mockRestore()
     })
 
-    it('YouTube 미리보기는 Data API 한 번으로 제목과 썸네일을 반환한다', async () => {
+    it('YouTube 미리보기는 API 사용 가능 여부와 관계없이 oEmbed만 조회한다', async () => {
         youtubeDataClient.fetchVideo.mockResolvedValueOnce({
             title: 'API 제목',
             description: 'API 설명',
             image: 'https://i.ytimg.com/vi/8Pbt-Aum5Q4/high.jpg',
         })
+        fetchSpy.mockResolvedValueOnce(
+            jsonResponse({
+                title: 'oEmbed 제목',
+                thumbnail_url:
+                    'https://i.ytimg.com/vi/8Pbt-Aum5Q4/hqdefault.jpg',
+            }),
+        )
         await expect(
             service.preview('https://www.youtube.com/watch?v=8Pbt-Aum5Q4'),
         ).resolves.toEqual({
-            title: 'API 제목',
-            thumbnailUrl: 'https://i.ytimg.com/vi/8Pbt-Aum5Q4/high.jpg',
+            title: 'oEmbed 제목',
+            thumbnailUrl: 'https://i.ytimg.com/vi/8Pbt-Aum5Q4/hqdefault.jpg',
             source: 'youtube.com',
         })
-        expect(youtubeDataClient.fetchVideo).toHaveBeenCalledTimes(1)
-        expect(fetchSpy).not.toHaveBeenCalled()
+        expect(youtubeDataClient.fetchVideo).not.toHaveBeenCalled()
+        expect(fetchSpy).toHaveBeenCalledTimes(1)
+        expect((fetchSpy.mock.calls[0][0] as URL).pathname).toBe('/oembed')
     })
 
     it.each([
@@ -109,7 +117,7 @@ describe('LinkContentService', () => {
     )
 
     it.each(['preview', 'collect'] as const)(
-        '키 미설정·영상 미조회 시 oEmbed로 폴백한다: %s',
+        'oEmbed 사용 시 목적에 따라 Data API 호출 여부를 구분한다: %s',
         async (method) => {
             fetchSpy.mockResolvedValueOnce(
                 jsonResponse({
@@ -120,9 +128,13 @@ describe('LinkContentService', () => {
             )
             const result = await service[method]('https://youtu.be/8Pbt-Aum5Q4')
             expect(result?.title).toBe('oEmbed 제목')
-            expect(
-                youtubeDataClient.fetchVideo.mock.invocationCallOrder[0],
-            ).toBeLessThan(fetchSpy.mock.invocationCallOrder[0])
+            if (method === 'collect') {
+                expect(
+                    youtubeDataClient.fetchVideo.mock.invocationCallOrder[0],
+                ).toBeLessThan(fetchSpy.mock.invocationCallOrder[0])
+            } else {
+                expect(youtubeDataClient.fetchVideo).not.toHaveBeenCalled()
+            }
             expect(fetchSpy).toHaveBeenCalledTimes(1)
         },
     )
@@ -158,7 +170,7 @@ describe('LinkContentService', () => {
     )
 
     it.each(['preview', 'collect'] as const)(
-        'Data API와 oEmbed 실패 시 기존 HTML 정책으로 폴백한다: %s',
+        'oEmbed 실패 시 기존 HTML 정책으로 폴백하며 미리보기는 Data API를 생략한다: %s',
         async (method) => {
             youtubeDataClient.fetchVideo.mockRejectedValueOnce(
                 new Error('timeout'),
@@ -186,6 +198,8 @@ describe('LinkContentService', () => {
                     description: 'HTML 설명',
                     content: null,
                 })
+            } else {
+                expect(youtubeDataClient.fetchVideo).not.toHaveBeenCalled()
             }
         },
     )
