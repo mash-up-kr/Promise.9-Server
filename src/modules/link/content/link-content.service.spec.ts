@@ -415,9 +415,11 @@ describe('LinkContentService', () => {
     })
 
     it('공개 호스트로 검증되지 않은 대표 이미지는 저장하지 않는다', async () => {
-        urlSecurity.resolvePublicUrl
-            .mockResolvedValueOnce({ address: '93.184.216.34' })
-            .mockRejectedValueOnce(new Error('private address'))
+        urlSecurity.resolvePublicUrl.mockImplementation((url: URL) =>
+            url.hostname === '127.0.0.1'
+                ? Promise.reject(new Error('private address'))
+                : Promise.resolve({ address: '93.184.216.34' }),
+        )
         fetchSpy
             .mockResolvedValueOnce(new Response('', { status: 404 }))
             .mockResolvedValueOnce(
