@@ -54,12 +54,14 @@ describe('LinkContentService', () => {
     })
 
     it('링크 미리보기에서 제목, 절대 이미지 URL, 출처를 반환한다', async () => {
-        fetchSpy.mockResolvedValueOnce(
-            htmlResponse(`
+        fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 404 }))
+            .mockResolvedValueOnce(
+                htmlResponse(`
                 <meta property="og:title" content="링크 제목" />
                 <meta property="og:image" content="/thumbnail.png" />
             `),
-        )
+            )
 
         const result = await service.preview('https://www.example.com/article')
 
@@ -68,15 +70,35 @@ describe('LinkContentService', () => {
             thumbnailUrl: 'https://www.example.com/thumbnail.png',
             source: 'example.com',
         })
+        expect(fetchSpy).toHaveBeenCalledTimes(2)
+    })
+
+    it('robots.txt가 차단한 미리보기는 HTML을 요청하지 않는다', async () => {
+        fetchSpy.mockResolvedValueOnce(
+            new Response('User-agent: *\nDisallow: /', { status: 200 }),
+        )
+
+        await expect(
+            service.preview('https://example.com/article'),
+        ).resolves.toEqual({
+            title: null,
+            thumbnailUrl: null,
+            source: 'example.com',
+        })
         expect(fetchSpy).toHaveBeenCalledTimes(1)
+        expect(fetchSpy.mock.calls[0][0]).toEqual(
+            new URL('https://example.com/robots.txt'),
+        )
     })
 
     it('일반 링크는 기존 브라우저 User-Agent로 HTML을 요청한다', async () => {
-        fetchSpy.mockResolvedValueOnce(htmlResponse('<title>링크 제목</title>'))
+        fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 404 }))
+            .mockResolvedValueOnce(htmlResponse('<title>링크 제목</title>'))
 
         await service.preview('https://example.com/article')
 
-        const [requestUrl, requestOptions] = fetchSpy.mock.calls[0]
+        const [requestUrl, requestOptions] = fetchSpy.mock.calls[1]
 
         expect(requestUrl).toEqual(new URL('https://example.com/article'))
         expect(requestOptions?.headers).toMatchObject({
@@ -85,13 +107,13 @@ describe('LinkContentService', () => {
     })
 
     it('Brunch 링크만 링크 수집기 User-Agent로 HTML을 요청한다', async () => {
-        fetchSpy.mockResolvedValueOnce(
-            htmlResponse('<title>Brunch 제목</title>'),
-        )
+        fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 404 }))
+            .mockResolvedValueOnce(htmlResponse('<title>Brunch 제목</title>'))
 
         await service.preview('https://brunch.co.kr/@author/1')
 
-        const [requestUrl, requestOptions] = fetchSpy.mock.calls[0]
+        const [requestUrl, requestOptions] = fetchSpy.mock.calls[1]
 
         expect(requestUrl).toEqual(new URL('https://brunch.co.kr/@author/1'))
         expect(requestOptions?.headers).toMatchObject({
@@ -117,6 +139,7 @@ describe('LinkContentService', () => {
 
     it('HTML 리다이렉트마다 도메인에 맞는 User-Agent를 다시 선택한다', async () => {
         fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 404 }))
             .mockResolvedValueOnce(
                 new Response(null, {
                     status: 302,
@@ -125,6 +148,7 @@ describe('LinkContentService', () => {
                     },
                 }),
             )
+            .mockResolvedValueOnce(new Response('', { status: 404 }))
             .mockResolvedValueOnce(htmlResponse('<title>Brunch 제목</title>'))
 
         await service.preview('https://example.com/redirect')
@@ -132,7 +156,7 @@ describe('LinkContentService', () => {
         expect(fetchSpy.mock.calls[0][1]?.headers).toMatchObject({
             'User-Agent': LINK_CONTENT_BROWSER_USER_AGENT,
         })
-        expect(fetchSpy.mock.calls[1][1]?.headers).toMatchObject({
+        expect(fetchSpy.mock.calls[3][1]?.headers).toMatchObject({
             'User-Agent': 'Promise9Bot/1.0',
         })
     })
@@ -197,7 +221,9 @@ describe('LinkContentService', () => {
     })
 
     it('TinyFish API key가 없으면 원본 URL로 HTML 수집을 계속한다', async () => {
-        fetchSpy.mockResolvedValueOnce(htmlResponse('<title>폴백 제목</title>'))
+        fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 404 }))
+            .mockResolvedValueOnce(htmlResponse('<title>폴백 제목</title>'))
 
         const resourceUrl =
             'https://x.com/OpenAI/status/2041581000120267067?ref_src=test'
@@ -280,6 +306,7 @@ describe('LinkContentService', () => {
     it('YouTube oEmbed가 실패하면 기존 OG 수집으로 폴백한다', async () => {
         fetchSpy
             .mockResolvedValueOnce(new Response('', { status: 503 }))
+            .mockResolvedValueOnce(new Response('', { status: 404 }))
             .mockResolvedValueOnce(
                 htmlResponse(`
                     <meta property="og:title" content="폴백 제목" />
@@ -296,8 +323,8 @@ describe('LinkContentService', () => {
             thumbnailUrl: 'https://www.youtube.com/fallback.jpg',
             source: 'youtube.com',
         })
-        expect(fetchSpy).toHaveBeenCalledTimes(2)
-        const [fallbackUrl, fallbackOptions] = fetchSpy.mock.calls[1]
+        expect(fetchSpy).toHaveBeenCalledTimes(3)
+        const [fallbackUrl, fallbackOptions] = fetchSpy.mock.calls[2]
 
         expect(fallbackUrl).toEqual(
             new URL('https://www.youtube.com/watch?v=video'),
