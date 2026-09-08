@@ -39,7 +39,8 @@ export function normalizeInstagramContent(
         ...content,
         title: caption ? limitInstagramPostTitle(caption.split('\n')[0]) : null,
         description: caption,
-        content: caption,
+        // 캡션은 description 하나로 DB와 AI에 전달한다.
+        content: null,
     }
 }
 

@@ -240,10 +240,12 @@ export class LinkContentService {
                 imageSource: image ? 'tinyfish' : null,
                 imageBaseUrl: resourceUrl,
                 source: this.toSource(resourceUrl),
-                ...(purpose === 'analysis' && !content
+                ...(purpose === 'analysis' &&
+                !content &&
+                !normalized.description
                     ? {
                           analysisUnavailableReason:
-                              'TinyFish에서 분석할 본문을 수집하지 못했습니다.',
+                              'TinyFish에서 분석할 설명이나 본문을 수집하지 못했습니다.',
                       }
                     : {}),
             }

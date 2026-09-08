@@ -62,7 +62,7 @@ describe('Instagram captioned 수집', () => {
     })
 
     it.each(['p', 'reel'])(
-        '%s의 캡션만 제목·설명·본문으로 사용한다',
+        '%s의 캡션은 제목·설명으로 사용하고 중복 본문은 비운다',
         (kind) => {
             const result = normalizeInstagramContent(
                 new URL(`https://instagram.com/${kind}/DX7lzTOJ1p6/`),
@@ -76,7 +76,7 @@ describe('Instagram captioned 수집', () => {
             expect(result).toEqual({
                 title: '제목 줄',
                 description: '제목 줄\n\n나머지 캡션 #태그',
-                content: '제목 줄\n\n나머지 캡션 #태그',
+                content: null,
                 imageLinks: [],
             })
         },

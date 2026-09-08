@@ -269,10 +269,15 @@ Add a comment...*Instagram*`
                         : {
                               title: '캡션 첫 줄',
                               description: caption,
-                              content: caption,
+                              content: null,
                               image: { url: cover, source: 'tinyfish' },
                           },
                 )
+                if (method === 'collect') {
+                    expect(result).not.toHaveProperty(
+                        'analysisUnavailableReason',
+                    )
+                }
                 expect(tinyFishFetchClient.fetch).toHaveBeenCalledTimes(1)
                 expect(tinyFishFetchClient.fetch).toHaveBeenCalledWith(
                     new URL(
@@ -283,7 +288,7 @@ Add a comment...*Instagram*`
             },
         )
 
-        it('긴 캡션은 DB 설명 2,000자와 AI 본문 제한에 맞춰 반환한다', async () => {
+        it('긴 캡션은 설명 2,000자로 반환하고 중복 본문은 비운다', async () => {
             const longCaption = '제목\n\n' + '가'.repeat(2200)
             tinyFishFetchClient.fetch.mockResolvedValueOnce(
                 outcome(raw(longCaption)),
@@ -293,7 +298,7 @@ Add a comment...*Instagram*`
             ).toMatchObject({
                 title: '제목',
                 description: longCaption.slice(0, 2000),
-                content: longCaption,
+                content: null,
             })
         })
 
