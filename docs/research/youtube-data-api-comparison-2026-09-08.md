@@ -75,20 +75,3 @@ Data API만 호출했다. 미리보기 썸네일은 전후 모두 hqdefault.jpg�
   API → oEmbed → HTML 폴백, 영상 URL 형식, 이미지 공개 URL 검증과 설명 길이를 확인했다.
 - 운영에서는 GitHub Actions secret `YOUTUBE_API_KEY` 설정이 필요하다. workflow는 값이
   있을 때만 서버 환경변수에 전달한다. 키가 없으면 기존 oEmbed로 계속 동작한다.
-
-## 재현
-
-[측정 스크립트](../../test/manual/youtube-content-benchmark.cjs)와
-[키를 제외한 원시 결과](youtube-data-api-benchmark-2026-09-08.jsonl)를 함께 보관한다.
-baseline 경로에 기준 커밋의 `src`, `tsconfig.json`, 설치된 `node_modules`를 준비한다.
-현재 작업 디렉터리에서도 의존성이 설치돼 있어야 한다.
-
-```sh
-YOUTUBE_BASELINE_ROOT=/path/to/baseline \
-YOUTUBE_BASELINE_COMMIT=4c0988f3a895ce72fa47135d4a6d427946240652 \
-YOUTUBE_BENCH_ENV_FILE=/path/to/local/.env \
-node test/manual/youtube-content-benchmark.cjs > /tmp/youtube-benchmark.json
-```
-
-환경 파일에서는 YouTube 키만 읽으며 출력에 키나 요청 쿼리 문자열을 포함하지 않는다.
-최종 코드에서 한 번 실행하면 준비 호출을 포함해 Data API 22회, oEmbed 66회를 요청한다.
