@@ -24,6 +24,8 @@ export type LinkContentOEmbedStrategy = LinkContentStrategyBase & {
 export type LinkContentTinyFishStrategy = LinkContentStrategyBase & {
     kind: 'tinyfish'
     prepareUrl: (resourceUrl: URL) => URL
+    // 원본 수집이 성공했지만 대표 이미지가 없을 때만 추가 조회한다.
+    imageFallbackUrl?: (resourceUrl: URL) => URL | null
     normalizeTitle?: (resourceUrl: URL, title: string | null) => string | null
     selectImage: (
         resourceUrl: URL,

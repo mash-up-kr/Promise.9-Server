@@ -22,6 +22,7 @@ export const INSTAGRAM_LINK_CONTENT_STRATEGY: LinkContentTinyFishStrategy = {
     name: 'instagram',
     supports: supportsInstagramUrl,
     prepareUrl: withoutSearchParams,
+    imageFallbackUrl: instagramReelEmbedUrl,
     normalizeTitle: normalizeInstagramTitle,
     selectImage: selectInstagramImage,
 }
@@ -62,7 +63,37 @@ export function selectInstagramImage(
     resourceUrl: URL,
     imageLinks: readonly string[],
 ): string | null {
-    if (/^\/reels?\//.test(resourceUrl.pathname)) return null
+    if (/^\/reels?\//.test(resourceUrl.pathname)) {
+        const shortcode = instagramReelShortcode(resourceUrl)
+        if (!shortcode) return null
+
+        const alphabet =
+            'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+        const mediaId = Array.from(shortcode)
+            .reduce((id, char) => id * 64n + BigInt(alphabet.indexOf(char)), 0n)
+            .toString()
+
+        return findFirstTinyFishImage(imageLinks, (url) => {
+            if (!isInstagramImageUrl(url)) return false
+            if (!/\/v\/t\d+\.\d+-15\//.test(url.pathname)) return false
+
+            const cacheKey = url.searchParams.get('ig_cache_key')?.split('.')[0]
+            if (!cacheKey || !/^[A-Za-z0-9+/]+={0,2}$/.test(cacheKey)) {
+                return false
+            }
+
+            const decoded = Buffer.from(cacheKey, 'base64').toString('utf8')
+            // 관측된 embed 캐시 키는 미디어 ID + 17자리 보조 식별자다.
+            // 보조 식별자는 파일명의 ID와 다를 수 있다. 전체 길이와 숫자 형식을
+            // 함께 검사해 다른 길이의 미디어 ID가 접두사로 일치하는 것을 막는다.
+            return (
+                decoded === mediaId ||
+                (decoded.length === mediaId.length + 17 &&
+                    /^\d+$/.test(decoded) &&
+                    decoded.slice(0, mediaId.length) === mediaId)
+            )
+        })
+    }
 
     const isPost = /^\/(?:p|tv)\//.test(resourceUrl.pathname)
 
@@ -73,6 +104,20 @@ export function selectInstagramImage(
             ? url.searchParams.has('ig_cache_key')
             : /\/v\/t\d+\.\d+-19\//.test(url.pathname)
     })
+}
+
+function instagramReelShortcode(url: URL): string | null {
+    return (
+        url.pathname.match(/^\/reels?\/([A-Za-z0-9_-]{1,11})\/?$/)?.[1] ?? null
+    )
+}
+
+export function instagramReelEmbedUrl(resourceUrl: URL): URL | null {
+    const shortcode = instagramReelShortcode(resourceUrl)
+    if (!shortcode || !INSTAGRAM_HOSTNAMES.has(resourceUrl.hostname))
+        return null
+
+    return new URL(`/reel/${shortcode}/embed/`, 'https://www.instagram.com')
 }
 
 function supportsInstagramUrl(url: URL): boolean {

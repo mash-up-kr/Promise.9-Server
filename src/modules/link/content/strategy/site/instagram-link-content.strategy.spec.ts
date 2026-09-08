@@ -1,5 +1,6 @@
 import {
     INSTAGRAM_LINK_CONTENT_STRATEGY,
+    instagramReelEmbedUrl,
     normalizeInstagramTitle,
     selectInstagramImage,
 } from './instagram-link-content.strategy'
@@ -124,5 +125,84 @@ describe('INSTAGRAM_LINK_CONTENT_STRATEGY', () => {
                 ],
             ),
         ).toBeNull()
+    })
+})
+
+describe('Instagram Reel 표지 보완', () => {
+    const reel = new URL('https://www.instagram.com/reel/DX7lzTOJ1p6/')
+    const mediaId = '3889868956217334394'
+    const imageId = '18588123736054628'
+    const image = (id: string, host = 'scontent.cdninstagram.com') => {
+        const url = new URL(
+            `https://${host}/v/t51.82787-15/683900142_18588123742054628_1842156675459391844_n.jpg`,
+        )
+        url.searchParams.set(
+            'ig_cache_key',
+            Buffer.from(id).toString('base64') + '.3-ccb7-5',
+        )
+        return url.toString()
+    }
+
+    it.each(['reel', 'reels'])(
+        '쿼리와 해시 없이 %s embed URL을 만든다',
+        (path) => {
+            const url = new URL(
+                `https://instagram.com/${path}/DX7lzTOJ1p6/?igsh=abc#comments`,
+            )
+            const original = url.toString()
+            expect(instagramReelEmbedUrl(url)?.toString()).toBe(
+                'https://www.instagram.com/reel/DX7lzTOJ1p6/embed/',
+            )
+            expect(url.toString()).toBe(original)
+        },
+    )
+
+    it.each([
+        'https://instagram.com/p/DX7lzTOJ1p6/',
+        'https://instagram.com/author/',
+        'https://instagram.com/reel/DX7lzTOJ1p6/embed/',
+        'https://instagram.com/reel/invalid%20id/',
+        'https://instagram.com/reel/abcdefghijkl/',
+        'https://instagram.com.evil.example/reel/DX7lzTOJ1p6/',
+    ])('지원하지 않는 URL에는 보완 요청을 만들지 않는다: %s', (url) => {
+        expect(instagramReelEmbedUrl(new URL(url))).toBeNull()
+    })
+
+    it('추천 이미지를 건너뛰고 파일명 ID와 캐시 키 보조 ID가 다른 실제 표지를 선택한다', () => {
+        const cover = image(mediaId + imageId)
+        expect(
+            selectInstagramImage(reel, [
+                image('3981219167379804392' + imageId),
+                cover,
+            ]),
+        ).toBe(cover)
+    })
+
+    it.each([
+        '38898689562173343940' + imageId,
+        '3889868956217334394' + '9999999999999999',
+        'not-a-media-id',
+    ])('접두사만 일치하거나 형식이 잘못된 캐시 키를 거부한다: %s', (key) => {
+        expect(selectInstagramImage(reel, [image(key)])).toBeNull()
+    })
+
+    it('위장 CDN, HTTP, 프로필 이미지를 거부한다', () => {
+        const cover = image(mediaId + imageId)
+        expect(
+            selectInstagramImage(reel, [
+                image(mediaId + imageId, 'cdninstagram.com.evil.example'),
+                cover.replace('https:', 'http:'),
+                cover.replace('-15/', '-19/'),
+                cover.replace('ig_cache_key=', 'other='),
+            ]),
+        ).toBeNull()
+    })
+
+    it('Meta CDN의 대상 표지도 선택한다', () => {
+        const cover = image(
+            mediaId + imageId,
+            'instagram.fcgk30-1.fna.fbcdn.net',
+        )
+        expect(selectInstagramImage(reel, [cover])).toBe(cover)
     })
 })
