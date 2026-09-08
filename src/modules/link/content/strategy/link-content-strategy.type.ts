@@ -1,3 +1,5 @@
+import { TinyFishResponseContent } from '../tinyfish/tinyfish-response.parser'
+
 export type LinkContentOEmbedPreview = {
     title: string | null
     image: string | null
@@ -24,6 +26,10 @@ export type LinkContentOEmbedStrategy = LinkContentStrategyBase & {
 export type LinkContentTinyFishStrategy = LinkContentStrategyBase & {
     kind: 'tinyfish'
     prepareUrl: (resourceUrl: URL) => URL
+    normalizeContent?: (
+        resourceUrl: URL,
+        content: TinyFishResponseContent,
+    ) => TinyFishResponseContent
     normalizeTitle?: (resourceUrl: URL, title: string | null) => string | null
     selectImage: (
         resourceUrl: URL,

@@ -12,6 +12,7 @@ import {
     LinkContentOEmbedStrategy,
     LinkContentTinyFishStrategy,
 } from './strategy/link-content-strategy.type'
+import { resolveNaverShortUrl } from './strategy/naver-short-url.resolver'
 import { TinyFishFetchClient } from './tinyfish/tinyfish-fetch.client'
 import { TinyFishFetchError } from './tinyfish/tinyfish-fetch.error'
 import {
@@ -124,6 +125,15 @@ export class LinkContentService {
         resourceUrl: URL,
         purpose: LinkContentPurpose,
     ): Promise<ResolvedLinkContent | null> {
+        if (
+            resourceUrl.hostname === 'naver.me' &&
+            this.tinyFishFetchClient.isEnabled()
+        ) {
+            resourceUrl = await resolveNaverShortUrl(
+                resourceUrl,
+                this.urlSecurity,
+            )
+        }
         const strategy = resolveLinkContentStrategy(resourceUrl)
 
         switch (strategy.kind) {
@@ -214,31 +224,34 @@ export class LinkContentService {
                     image: null,
                     imageSource: null,
                     imageBaseUrl: resourceUrl,
-                    source: this.toSource(resourceUrl),
+                    source: strategy.source ?? this.toSource(resourceUrl),
                     analysisUnavailableReason: outcome.reason,
                 }
             }
 
-            const content = outcome.content.content
+            const normalized = strategy.normalizeContent
+                ? strategy.normalizeContent(resourceUrl, outcome.content)
+                : outcome.content
+            const content = normalized.content
             const image = strategy.selectImage(
                 resourceUrl,
-                outcome.content.imageLinks,
+                normalized.imageLinks,
             )
             const title = strategy.normalizeTitle
-                ? strategy.normalizeTitle(resourceUrl, outcome.content.title)
-                : outcome.content.title
+                ? strategy.normalizeTitle(resourceUrl, normalized.title)
+                : normalized.title
 
             return {
                 title:
                     purpose === 'preview'
                         ? this.limitText(title, LINK_CONTENT_TEXT_LIMIT.title)
                         : title,
-                description: outcome.content.description,
+                description: normalized.description,
                 content,
                 image,
                 imageSource: image ? 'tinyfish' : null,
                 imageBaseUrl: resourceUrl,
-                source: this.toSource(resourceUrl),
+                source: strategy.source ?? this.toSource(resourceUrl),
                 ...(purpose === 'analysis' && !content
                     ? {
                           analysisUnavailableReason:

@@ -1,3 +1,5 @@
+import { HttpException } from '@nestjs/common'
+
 import { BaseException } from '../../../common/exception/base.exception'
 import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
 
@@ -51,6 +53,99 @@ describe('LinkContentService', () => {
 
     afterEach(() => {
         fetchSpy.mockRestore()
+    })
+
+    it('네이버 공유 링크를 풀어 모바일 장소를 한 번 수집하고 미리보기·저장에 같은 전략을 사용한다', async () => {
+        tinyFishFetchClient.isEnabled.mockReturnValue(true)
+        fetchSpy.mockResolvedValue(
+            new Response(null, {
+                status: 302,
+                headers: {
+                    location:
+                        'https://map.naver.com/p/entry/place/31048068?lng=126',
+                },
+            }),
+        )
+        const image =
+            'https://search.pstatic.net/common/?type=w560_sharpen&src=https%3A%2F%2Fldb.phinf.naver.net%2Fphoto.jpg'
+        tinyFishFetchClient.fetch.mockResolvedValue({
+            status: 'SUCCESS',
+            content: {
+                title: '모모야 이촌본점 : 네이버\u001c',
+                description: '장소 설명',
+                content: '주소',
+                imageLinks: [
+                    'https://g-place.pstatic.net/assets/shared/images/icon_default_profile.png',
+                    image,
+                ],
+            },
+        })
+        await expect(
+            service.preview('https://naver.me/example'),
+        ).resolves.toEqual({
+            title: '모모야 이촌본점',
+            thumbnailUrl: image,
+            source: 'map.naver.com',
+        })
+        expect(tinyFishFetchClient.fetch).toHaveBeenCalledTimes(1)
+        expect(tinyFishFetchClient.fetch.mock.calls[0][0].toString()).toBe(
+            'https://m.place.naver.com/place/31048068/home',
+        )
+        await expect(
+            service.collect(
+                'https://m.place.naver.com/restaurant/31048068/home',
+            ),
+        ).resolves.toMatchObject({
+            title: '모모야 이촌본점',
+            image: { url: image, source: 'tinyfish' },
+        })
+        expect(fetchSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('단축 URL이 내부망으로 연결되면 TinyFish에 전달하지 않는다', async () => {
+        tinyFishFetchClient.isEnabled.mockReturnValue(true)
+        fetchSpy.mockResolvedValueOnce(
+            new Response(null, {
+                status: 302,
+                headers: { location: 'http://127.0.0.1/private' },
+            }),
+        )
+        urlSecurity.resolvePublicUrl
+            .mockResolvedValueOnce({ address: '93.184.216.34' })
+            .mockRejectedValueOnce(new HttpException('blocked', 400))
+        await expect(
+            service.preview('https://naver.me/example'),
+        ).rejects.toThrow('blocked')
+        expect(fetchSpy).toHaveBeenCalledTimes(1)
+        expect(tinyFishFetchClient.fetch).not.toHaveBeenCalled()
+    })
+
+    it('단축 URL 순환은 제한된 요청 후 중단한다', async () => {
+        tinyFishFetchClient.isEnabled.mockReturnValue(true)
+        fetchSpy.mockResolvedValue(
+            new Response(null, { status: 302, headers: { location: '/loop' } }),
+        )
+        await expect(
+            service.preview('https://naver.me/example'),
+        ).rejects.toThrow()
+        expect(fetchSpy).toHaveBeenCalledTimes(4)
+        expect(tinyFishFetchClient.fetch).not.toHaveBeenCalled()
+    })
+
+    it('지도 이외의 네이버 공유 링크는 기존 HTML 수집을 사용한다', async () => {
+        tinyFishFetchClient.isEnabled.mockReturnValue(true)
+        fetchSpy
+            .mockResolvedValueOnce(
+                new Response(null, {
+                    status: 302,
+                    headers: { location: 'https://example.com/article' },
+                }),
+            )
+            .mockResolvedValueOnce(new Response('<title>일반 글</title>'))
+        await expect(
+            service.preview('https://naver.me/example'),
+        ).resolves.toMatchObject({ title: '일반 글', source: 'example.com' })
+        expect(tinyFishFetchClient.fetch).not.toHaveBeenCalled()
     })
 
     it('링크 미리보기에서 제목, 절대 이미지 URL, 출처를 반환한다', async () => {
