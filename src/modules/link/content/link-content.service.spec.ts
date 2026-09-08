@@ -1,9 +1,12 @@
+import { HttpException } from '@nestjs/common'
+
 import { BaseException } from '../../../common/exception/base.exception'
 import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
 
 import { LinkContentHtmlFetcher } from './html/link-content-html.fetcher'
 import { TinyFishFetchClient } from './tinyfish/tinyfish-fetch.client'
 import { TinyFishFetchError } from './tinyfish/tinyfish-fetch.error'
+import { YoutubeDataClient } from './youtube/youtube-data.client'
 import {
     LINK_CONTENT_BROWSER_USER_AGENT,
     LINK_CONTENT_IMAGE_URL_MAX_LENGTH,
@@ -19,6 +22,7 @@ describe('LinkContentService', () => {
     let tinyFishFetchClient: jest.Mocked<
         Pick<TinyFishFetchClient, 'isEnabled' | 'fetch'>
     >
+    let youtubeDataClient: jest.Mocked<Pick<YoutubeDataClient, 'fetchVideo'>>
 
     beforeEach(() => {
         urlSecurity = {
@@ -40,17 +44,189 @@ describe('LinkContentService', () => {
             isEnabled: jest.fn().mockReturnValue(false),
             fetch: jest.fn(),
         }
+        youtubeDataClient = {
+            fetchVideo: jest.fn().mockResolvedValue(null),
+        }
         service = new LinkContentService(
             urlSecurity as unknown as UrlSecurityService,
             new LinkContentHtmlFetcher(
                 urlSecurity as unknown as UrlSecurityService,
             ),
             tinyFishFetchClient as unknown as TinyFishFetchClient,
+            youtubeDataClient as unknown as YoutubeDataClient,
         )
     })
 
     afterEach(() => {
         fetchSpy.mockRestore()
+    })
+
+    it('YouTube 미리보기는 Data API 한 번으로 제목과 썸네일을 반환한다', async () => {
+        youtubeDataClient.fetchVideo.mockResolvedValueOnce({
+            title: 'API 제목',
+            description: 'API 설명',
+            image: 'https://i.ytimg.com/vi/8Pbt-Aum5Q4/high.jpg',
+        })
+        await expect(
+            service.preview('https://www.youtube.com/watch?v=8Pbt-Aum5Q4'),
+        ).resolves.toEqual({
+            title: 'API 제목',
+            thumbnailUrl: 'https://i.ytimg.com/vi/8Pbt-Aum5Q4/high.jpg',
+            source: 'youtube.com',
+        })
+        expect(youtubeDataClient.fetchVideo).toHaveBeenCalledTimes(1)
+        expect(fetchSpy).not.toHaveBeenCalled()
+    })
+
+    it.each([
+        'https://www.youtube.com/watch?v=8Pbt-Aum5Q4&list=playlist',
+        'https://youtu.be/8Pbt-Aum5Q4?si=share',
+        'https://www.youtube.com/shorts/8Pbt-Aum5Q4',
+        'https://www.youtube.com/embed/8Pbt-Aum5Q4',
+    ])(
+        'YouTube 저장 수집은 Data API만으로 메타데이터를 반환한다: %s',
+        async (url) => {
+            youtubeDataClient.fetchVideo.mockResolvedValueOnce({
+                title: 'API 제목',
+                description: '영상 설명\n두 번째 줄',
+                image: 'https://i.ytimg.com/vi/8Pbt-Aum5Q4/high.jpg',
+            })
+            await expect(service.collect(url)).resolves.toEqual({
+                title: 'API 제목',
+                description: '영상 설명\n두 번째 줄',
+                content: null,
+                image: {
+                    url: 'https://i.ytimg.com/vi/8Pbt-Aum5Q4/high.jpg',
+                    source: 'youtube-data-api',
+                },
+            })
+            expect(youtubeDataClient.fetchVideo).toHaveBeenCalledWith(
+                '8Pbt-Aum5Q4',
+            )
+            expect(fetchSpy).not.toHaveBeenCalled()
+            expect(tinyFishFetchClient.fetch).not.toHaveBeenCalled()
+        },
+    )
+
+    it.each(['preview', 'collect'] as const)(
+        '키 미설정·영상 미조회 시 oEmbed로 폴백한다: %s',
+        async (method) => {
+            fetchSpy.mockResolvedValueOnce(
+                jsonResponse({
+                    title: 'oEmbed 제목',
+                    thumbnail_url:
+                        'https://i.ytimg.com/vi/8Pbt-Aum5Q4/high.jpg',
+                }),
+            )
+            const result = await service[method]('https://youtu.be/8Pbt-Aum5Q4')
+            expect(result?.title).toBe('oEmbed 제목')
+            expect(
+                youtubeDataClient.fetchVideo.mock.invocationCallOrder[0],
+            ).toBeLessThan(fetchSpy.mock.invocationCallOrder[0])
+            expect(fetchSpy).toHaveBeenCalledTimes(1)
+        },
+    )
+
+    it.each([403, 429, 500, 502])(
+        'Data API HTTP %i 실패에도 oEmbed 결과로 저장 수집을 계속한다',
+        async (status) => {
+            youtubeDataClient.fetchVideo.mockRejectedValueOnce(
+                new HttpException('API 실패', status),
+            )
+            fetchSpy.mockResolvedValueOnce(
+                jsonResponse({
+                    title: '폴백 제목',
+                    thumbnail_url:
+                        'https://i.ytimg.com/vi/8Pbt-Aum5Q4/high.jpg',
+                }),
+            )
+            await expect(
+                service.collect('https://youtu.be/8Pbt-Aum5Q4'),
+            ).resolves.toEqual({
+                title: '폴백 제목',
+                description: null,
+                content: null,
+                image: {
+                    url: 'https://i.ytimg.com/vi/8Pbt-Aum5Q4/high.jpg',
+                    source: 'oembed',
+                },
+            })
+            expect(
+                youtubeDataClient.fetchVideo.mock.invocationCallOrder[0],
+            ).toBeLessThan(fetchSpy.mock.invocationCallOrder[0])
+        },
+    )
+
+    it.each(['preview', 'collect'] as const)(
+        'Data API와 oEmbed 실패 시 기존 HTML 정책으로 폴백한다: %s',
+        async (method) => {
+            youtubeDataClient.fetchVideo.mockRejectedValueOnce(
+                new Error('timeout'),
+            )
+            fetchSpy.mockResolvedValueOnce(new Response('', { status: 503 }))
+            if (method === 'collect')
+                fetchSpy.mockResolvedValueOnce(
+                    new Response('', { status: 404 }),
+                )
+            fetchSpy.mockResolvedValueOnce(
+                htmlResponse(
+                    '<title>HTML 제목</title><meta name="description" content="HTML 설명"><body>추천 영상 메뉴</body>',
+                ),
+            )
+            const result = await service[method](
+                'https://www.youtube.com/watch?v=8Pbt-Aum5Q4',
+            )
+            expect(result?.title).toBe('HTML 제목')
+            expect(fetchSpy).toHaveBeenCalledTimes(method === 'collect' ? 3 : 2)
+            if (method === 'collect') {
+                expect(fetchSpy.mock.calls[1][0]).toEqual(
+                    new URL('https://www.youtube.com/robots.txt'),
+                )
+                expect(result).toMatchObject({
+                    description: 'HTML 설명',
+                    content: null,
+                })
+            }
+        },
+    )
+
+    it('모든 수집 경로의 네트워크 실패는 호출부로 전달한다', async () => {
+        youtubeDataClient.fetchVideo.mockRejectedValueOnce(new Error('timeout'))
+        fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 503 }))
+            .mockRejectedValueOnce(new Error('network failure'))
+        await expect(
+            service.collect('https://youtu.be/8Pbt-Aum5Q4'),
+        ).rejects.toBeInstanceOf(BaseException)
+    })
+
+    it('Data API 성공 시 설명·이미지가 없어도 불필요한 폴백을 하지 않는다', async () => {
+        youtubeDataClient.fetchVideo.mockResolvedValueOnce({
+            title: '제목',
+            description: null,
+            image: null,
+        })
+        await expect(
+            service.collect('https://youtu.be/8Pbt-Aum5Q4'),
+        ).resolves.toMatchObject({
+            title: '제목',
+            description: null,
+            content: null,
+        })
+        expect(fetchSpy).not.toHaveBeenCalled()
+    })
+
+    it('Data API 이미지에도 공개 URL 검증과 기존 설명 길이 제한을 적용한다', async () => {
+        youtubeDataClient.fetchVideo.mockResolvedValueOnce({
+            title: '제목',
+            description: '가'.repeat(2500),
+            image: 'http://127.0.0.1/private.png',
+        })
+        urlSecurity.resolvePublicUrl.mockRejectedValueOnce(new Error('blocked'))
+        const result = await service.collect('https://youtu.be/8Pbt-Aum5Q4')
+        expect(result?.description).toHaveLength(2000)
+        expect(result?.image).toBeNull()
+        expect(result?.content).toBeNull()
     })
 
     it('링크 미리보기에서 제목, 절대 이미지 URL, 출처를 반환한다', async () => {

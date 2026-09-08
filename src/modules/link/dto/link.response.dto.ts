@@ -17,7 +17,8 @@ export class LinkPreviewResponseDto {
         type: String,
         nullable: true,
         example: TITLE_EXAMPLE,
-        description: 'OG 제목 (og:title → <title> 순, 없으면 null)',
+        description:
+            '수집한 제목 (YouTube는 Data API 우선, HTML은 og:title → <title>, 없으면 null)',
     })
     title!: string | null
 
@@ -26,13 +27,14 @@ export class LinkPreviewResponseDto {
         nullable: true,
         example: THUMBNAIL_EXAMPLE,
         description:
-            'OG 대표 이미지 절대 URL (og:image → twitter:image 순, 없으면 null)',
+            '대표 이미지 절대 URL (YouTube는 Data API 우선, HTML은 og:image → twitter:image, 없으면 null)',
     })
     thumbnailUrl!: string | null
 
     @ApiProperty({
         example: 'toss.tech',
-        description: '최종 URL의 표시용 도메인 (선행 www. 제거)',
+        description:
+            '표시용 도메인 (YouTube는 youtube.com, HTML은 최종 호스트에서 www. 제거)',
     })
     source!: string
 }

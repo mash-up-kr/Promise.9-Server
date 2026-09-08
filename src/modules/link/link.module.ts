@@ -14,6 +14,7 @@ import { LinkAnalysisService } from './analysis/link-analysis.service'
 import { LinkContentHtmlFetcher } from './content/html/link-content-html.fetcher'
 import { LinkContentService } from './content/link-content.service'
 import { TinyFishFetchClient } from './content/tinyfish/tinyfish-fetch.client'
+import { YoutubeDataClient } from './content/youtube/youtube-data.client'
 import { EmbeddingService } from './embedding/embedding.service'
 import { RelatedLinkRepository } from './related/related-link.repository'
 import { RelatedLinkService } from './related/related-link.service'
@@ -49,6 +50,7 @@ import { LinkService } from './link.service'
         LinkContentService,
         LinkContentHtmlFetcher,
         TinyFishFetchClient,
+        YoutubeDataClient,
         RelatedLinkRepository,
         RelatedLinkService,
         ReminderRepository,

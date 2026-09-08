@@ -65,6 +65,7 @@ const appEnvSchema = z
         OPENAI_API_KEY: z.string().min(1).optional(),
         GEMINI_API_KEY: z.string().min(1).optional(),
         TINY_FISH_API_KEY: z.string().min(1).optional(),
+        YOUTUBE_API_KEY: z.string().trim().min(1).optional(),
         AWS_REGION: z.string().min(1).default('ap-northeast-2'),
         SQS_LINK_ANALYSIS_QUEUE_URL: z.url().optional(),
         SQS_ENDPOINT: z.url().optional(),

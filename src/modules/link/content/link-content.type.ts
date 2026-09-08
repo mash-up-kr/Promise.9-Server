@@ -1,5 +1,5 @@
 export type LinkImageSource =
-    'og:image' | 'twitter:image' | 'oembed' | 'tinyfish'
+    'og:image' | 'twitter:image' | 'oembed' | 'tinyfish' | 'youtube-data-api'
 
 export type CollectedLinkImage = {
     url: string
