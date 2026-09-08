@@ -48,7 +48,12 @@ export class AuthController {
     async socialLogin(
         @Body(new ZodValidationPipe(socialLoginSchema)) dto: SocialLoginInput,
     ) {
-        return this.authService.socialLogin(dto.provider, dto.idToken)
+        return this.authService.socialLogin(
+            dto.provider,
+            dto.idToken,
+            dto.authorizationCode,
+            dto.redirectUri,
+        )
     }
 
     @Post('kakao/exchange')

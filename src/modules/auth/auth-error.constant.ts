@@ -32,4 +32,19 @@ export const AUTH_ERROR = {
         errorCode: 950006,
         message: 'Kakao 서버 응답에 실패했습니다. 잠시 후 다시 시도해주세요.',
     },
+    APPLE_EXCHANGE_FAILED: {
+        code: HttpStatus.BAD_REQUEST,
+        errorCode: 950008,
+        message: 'Apple authorization code 검증에 실패했습니다.',
+    },
+    APPLE_UPSTREAM_UNAVAILABLE: {
+        code: HttpStatus.BAD_GATEWAY,
+        errorCode: 950009,
+        message: 'Apple 서버 응답에 실패했습니다. 잠시 후 다시 시도해주세요.',
+    },
+    APPLE_REVOKE_FAILED: {
+        code: HttpStatus.BAD_GATEWAY,
+        errorCode: 950010,
+        message: 'Apple 로그인 연결 해제에 실패했습니다. 다시 시도해주세요.',
+    },
 } as const

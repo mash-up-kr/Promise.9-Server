@@ -9,6 +9,10 @@ const developmentEnvironment = {
     KAKAO_CLIENT_ID: 'kakao-client-id',
     KAKAO_NATIVE_APP_KEY: 'kakao-native-app-key',
     APPLE_CLIENT_ID: 'apple-client-id',
+    APPLE_TEAM_ID: 'apple-team-id',
+    APPLE_KEY_ID: 'apple-key-id',
+    APPLE_PRIVATE_KEY: 'apple-private-key',
+    APPLE_TOKEN_ENCRYPTION_KEY: '01'.repeat(32),
 }
 
 const productionEnvironment = {
@@ -20,6 +24,10 @@ const productionEnvironment = {
     KAKAO_CLIENT_ID: 'kakao-client-id',
     KAKAO_NATIVE_APP_KEY: 'kakao-native-app-key',
     APPLE_CLIENT_ID: 'apple-client-id',
+    APPLE_TEAM_ID: 'apple-team-id',
+    APPLE_KEY_ID: 'apple-key-id',
+    APPLE_PRIVATE_KEY: 'apple-private-key',
+    APPLE_TOKEN_ENCRYPTION_KEY: '01'.repeat(32),
     OPENAI_API_KEY: 'openai-api-key',
 }
 
@@ -62,6 +70,15 @@ describe('validateEnvironment', () => {
         ).toMatchObject({
             TINY_FISH_API_KEY: 'tinyfish-api-key',
         })
+    })
+
+    it('Apple token 암호화 키는 32바이트 hex만 허용한다', () => {
+        expect(() =>
+            validateEnvironment({
+                ...developmentEnvironment,
+                APPLE_TOKEN_ENCRYPTION_KEY: 'too-short',
+            }),
+        ).toThrow()
     })
 
     it('development에서 production 링크 분석 큐 consumer 활성화를 거부한다', () => {

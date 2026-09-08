@@ -53,6 +53,10 @@ const appEnvSchema = z
         // 네이티브 앱 키라, 두 값을 모두 audience로 허용해야 앱 로그인이 검증된다.
         KAKAO_NATIVE_APP_KEY: z.string().min(1),
         APPLE_CLIENT_ID: z.string().min(1),
+        APPLE_TEAM_ID: z.string().min(1),
+        APPLE_KEY_ID: z.string().min(1),
+        APPLE_PRIVATE_KEY: z.string().min(1),
+        APPLE_TOKEN_ENCRYPTION_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/),
         MASTER_ACCESS_TOKEN: z.string().optional(),
         MASTER_USER_ID: z.coerce.number().int().positive().optional(),
         LLM_DEFAULT_MODEL: z.enum(LLM_MODEL).default(LLM_MODEL.GPT_5_4_MINI),

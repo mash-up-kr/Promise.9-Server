@@ -38,6 +38,8 @@ export class UserRepository {
         email: string
         provider: string
         providerUserId: string
+        providerRefreshTokenEncrypted?: string
+        providerClientId?: string
     }): Promise<{ userId: number; isNewUser: boolean }> {
         return this.db.transaction(async (tx) => {
             const existingSocialAccount =
@@ -48,6 +50,21 @@ export class UserRepository {
                 )
 
             if (existingSocialAccount) {
+                if (
+                    input.providerRefreshTokenEncrypted &&
+                    input.providerClientId
+                ) {
+                    await this.socialAccountRepository.updateProviderCredential(
+                        existingSocialAccount.id,
+                        {
+                            providerRefreshTokenEncrypted:
+                                input.providerRefreshTokenEncrypted,
+                            providerClientId: input.providerClientId,
+                        },
+                        tx,
+                    )
+                }
+
                 return {
                     userId: existingSocialAccount.userId,
                     isNewUser: false,
@@ -87,6 +104,9 @@ export class UserRepository {
                     provider: input.provider,
                     providerUserId: input.providerUserId,
                     providerEmail: input.email,
+                    providerRefreshTokenEncrypted:
+                        input.providerRefreshTokenEncrypted,
+                    providerClientId: input.providerClientId,
                 },
                 tx,
             )

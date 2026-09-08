@@ -1,13 +1,23 @@
-import { ApiProperty } from '@nestjs/swagger'
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { z } from 'zod'
 
 export const SUPPORTED_PROVIDERS = ['google', 'kakao', 'apple'] as const
 export type SupportedProvider = (typeof SUPPORTED_PROVIDERS)[number]
 
-export const socialLoginSchema = z.object({
-    provider: z.enum(SUPPORTED_PROVIDERS),
-    idToken: z.string().min(1),
-})
+export const socialLoginSchema = z
+    .object({
+        provider: z.enum(SUPPORTED_PROVIDERS),
+        idToken: z.string().min(1),
+        authorizationCode: z.string().min(1).optional(),
+        redirectUri: z.url().optional(),
+    })
+    .refine(
+        (input) => input.provider !== 'apple' || !!input.authorizationCode,
+        {
+            path: ['authorizationCode'],
+            message: 'Apple 로그인에는 authorizationCode가 필요합니다.',
+        },
+    )
 export type SocialLoginInput = z.infer<typeof socialLoginSchema>
 
 export const refreshSchema = z.object({
@@ -45,6 +55,20 @@ export class SocialLoginDto {
         description: '[필수] 소셜 로그인 제공자가 발급한 ID 토큰',
     })
     idToken!: string
+
+    @ApiPropertyOptional({
+        example: 'c1234567890abcdef.0.abcd...',
+        description:
+            '[Apple 필수] Sign in with Apple에서 ID 토큰과 함께 발급한 authorization code',
+    })
+    authorizationCode?: string
+
+    @ApiPropertyOptional({
+        example: 'https://example.com/oauth/apple/callback',
+        description:
+            '[Apple 웹 로그인 선택] authorization code 발급 요청에 사용한 redirect_uri',
+    })
+    redirectUri?: string
 }
 
 export class RefreshDto {

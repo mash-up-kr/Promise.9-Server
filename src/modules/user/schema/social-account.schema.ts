@@ -1,6 +1,7 @@
 import {
     bigint,
     pgTable,
+    text,
     timestamp,
     unique,
     varchar,
@@ -20,6 +21,8 @@ export const socialAccounts = pgTable(
         provider: varchar({ length: 20 }).notNull(), // 예: google, kakao
         providerUserId: varchar({ length: 255 }).notNull(),
         providerEmail: varchar({ length: 320 }),
+        providerRefreshTokenEncrypted: text(),
+        providerClientId: varchar({ length: 255 }),
         createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     },

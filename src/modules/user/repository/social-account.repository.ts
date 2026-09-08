@@ -42,6 +42,8 @@ export class SocialAccountRepository {
             provider: string
             providerUserId: string
             providerEmail: string | null
+            providerRefreshTokenEncrypted?: string | null
+            providerClientId?: string | null
         },
         executor: DbExecutor = this.db,
     ) {
@@ -52,6 +54,20 @@ export class SocialAccountRepository {
             .returning({ userId: socialAccounts.userId })
 
         return row
+    }
+
+    async updateProviderCredential(
+        socialAccountId: number,
+        values: {
+            providerRefreshTokenEncrypted: string
+            providerClientId: string
+        },
+        executor: DbExecutor = this.db,
+    ) {
+        await executor
+            .update(socialAccounts)
+            .set({ ...values, updatedAt: new Date() })
+            .where(eq(socialAccounts.id, socialAccountId))
     }
 
     async deleteByUserId(userId: number, executor: DbExecutor = this.db) {

@@ -7,6 +7,7 @@ import type { StringValue } from 'ms'
 import { BaseException } from '../../common/exception/base.exception'
 import { DatabaseService } from '../../config/database/database.service'
 import { ValidatedEnvironment } from '../../config/environment'
+import { SocialAccountRepository } from '../user/repository/social-account.repository'
 import { UserRepository } from '../user/repository/user.repository'
 
 import { SupportedProvider } from './dto/auth.dto'
@@ -49,6 +50,7 @@ export class AuthService {
     constructor(
         private readonly databaseService: DatabaseService,
         private readonly userRepository: UserRepository,
+        private readonly socialAccountRepository: SocialAccountRepository,
         private readonly refreshTokenRepository: RefreshTokenRepository,
         private readonly jwtService: JwtService,
         private readonly googleProvider: GoogleProvider,
@@ -73,15 +75,19 @@ export class AuthService {
     async socialLogin(
         provider: SupportedProvider,
         idToken: string,
+        authorizationCode?: string,
+        redirectUri?: string,
     ): Promise<SocialLoginResult> {
         const socialProvider = this.getProvider(provider)
-        const { providerId, email } = await socialProvider.verify(idToken)
+        const { providerId, email, ...credential } =
+            await socialProvider.verify(idToken, authorizationCode, redirectUri)
 
         const { userId, isNewUser } =
             await this.userRepository.upsertWithSocialAccount({
                 email,
                 provider,
                 providerUserId: providerId,
+                ...credential,
             })
 
         const tokens = await this.issueTokens(userId)
@@ -154,6 +160,23 @@ export class AuthService {
 
         if (!stored) {
             throw new BaseException(AUTH_ERROR.INVALID_TOKEN)
+        }
+
+        const socialAccount = await this.socialAccountRepository.findByUserId(
+            payload.sub,
+        )
+
+        if (
+            socialAccount?.provider === 'apple' &&
+            socialAccount.providerRefreshTokenEncrypted
+        ) {
+            if (!socialAccount.providerClientId) {
+                throw new BaseException(AUTH_ERROR.APPLE_REVOKE_FAILED)
+            }
+            await this.appleProvider.revoke(
+                socialAccount.providerRefreshTokenEncrypted,
+                socialAccount.providerClientId,
+            )
         }
 
         // 리프레시 토큰(auth 도메인) 삭제와 회원·소셜 정리(user 도메인)를 한 트랜잭션으로 묶는다.

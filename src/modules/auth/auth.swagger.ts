@@ -41,7 +41,9 @@ Google, Kakao, Apple 소셜 로그인을 지원합니다.
 
 - \`provider=google\`: Google ID 토큰 검증 (OAuth2Client, audience=GOOGLE_CLIENT_ID)
 - \`provider=kakao\`: Kakao OIDC ID 토큰 검증 (JWKS, audience=KAKAO_CLIENT_ID)
-- \`provider=apple\`: Apple OIDC ID 토큰 검증 (JWKS, audience=APPLE_CLIENT_ID)
+- \`provider=apple\`: Apple OIDC ID 토큰 검증 후 authorization code를 서버에서
+  refresh token으로 교환해 보관합니다. 회원 탈퇴 시 이 토큰으로 Apple 연결을
+  revoke합니다.
 
 이메일이 이미 다른 provider로 가입돼 있으면 자동으로 병합하지 않고
 \`409 Conflict\`(\`errorCode=960002\`)를 반환합니다. 같은 사람이어도
@@ -57,7 +59,7 @@ export const ApiSocialLogin = () =>
         ApiBody({
             type: SocialLoginDto,
             description:
-                '- `provider` (필수): `google` | `kakao` | `apple`\n- `idToken` (필수): 소셜 로그인 제공자가 발급한 ID 토큰',
+                '- `provider` (필수): `google` | `kakao` | `apple`\n- `idToken` (필수): 소셜 로그인 제공자가 발급한 ID 토큰\n- `authorizationCode` (`apple` 필수): ID 토큰과 함께 발급된 일회용 code\n- `redirectUri` (Apple 웹 로그인 선택): code 발급에 사용한 redirect_uri',
         }),
         ApiCommonResponse(SocialLoginResponseDto, {
             description: '로그인 성공',
@@ -67,6 +69,8 @@ export const ApiSocialLogin = () =>
             COMMON_ERROR.VALIDATION,
             AUTH_ERROR.INVALID_SOCIAL_TOKEN,
             AUTH_ERROR.UNSUPPORTED_PROVIDER,
+            AUTH_ERROR.APPLE_EXCHANGE_FAILED,
+            AUTH_ERROR.APPLE_UPSTREAM_UNAVAILABLE,
             USER_ERROR.EMAIL_ALREADY_REGISTERED,
         ),
     )
@@ -176,7 +180,11 @@ export const ApiLogout = () =>
 
 export const ApiWithdraw = () =>
     applyDecorators(
-        ApiOperation({ summary: '회원 탈퇴' }),
+        ApiOperation({
+            summary: '회원 탈퇴',
+            description:
+                'Apple 회원은 저장된 token을 revoke한 뒤 탈퇴 처리합니다. Apple 호출 실패 시 502를 반환합니다.',
+        }),
         ApiBody({
             type: WithdrawDto,
             description:
@@ -187,5 +195,7 @@ export const ApiWithdraw = () =>
             COMMON_ERROR.VALIDATION,
             AUTH_ERROR.INVALID_TOKEN,
             AUTH_ERROR.EXPIRED_TOKEN,
+            AUTH_ERROR.APPLE_REVOKE_FAILED,
+            AUTH_ERROR.APPLE_UPSTREAM_UNAVAILABLE,
         ),
     )
