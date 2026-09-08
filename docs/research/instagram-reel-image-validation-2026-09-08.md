@@ -1,39 +1,45 @@
-# Instagram Reel 표지 보완 검증 — 2026-09-08
+# Instagram 게시물·릴스 캡션 수집 검증 — 2026-09-08
 
-## 변경 내용
+## 최종 동작
 
-- 원본 TinyFish 수집 결과에 대상 릴스 표지가 없을 때 `/reel/{shortcode}/embed/`를 추가 조회한다.
-- 제목·설명·본문은 원본 결과를 유지하며 embed에서는 이미지만 사용한다.
-- 허용된 HTTPS CDN의 콘텐츠 이미지에서 캐시 키의 미디어 ID를 대상 shortcode와 비교한다. 실제 관측된 `미디어 ID + 17자리 보조 식별자` 형식은 전체 길이와 숫자 형식도 검사한다. 보조 식별자는 파일명 ID와 같다고 가정하지 않는다.
-- 원본 수집 실패·수집 불가에는 추가 요청하지 않는다. 보완 요청만 실패하면 원본 결과를 유지하고 이미지는 null로 둔다. 이미지 보완 실패만을 위한 큐 재시도는 없다.
+- 일반 게시물과 릴스 모두 TinyFish `/embed/captioned/`를 한 번 조회한다.
+- 응답 `text`에는 캡션과 UI 문구가 함께 있다. 캡션 경계를 식별해 작성자 글만 사용한다.
+- 제목은 캡션 첫 줄 최대 100자, DB `metadata.description`은 캡션 최대 2,000자다. AI에는 캡션을 기존 16,000자 제한 내에서 전달한다.
+- 캡션 경계를 식별하지 못하거나 캡션이 없으면 제목·설명·본문은 null로 반환하고 AI 분석 불가를 표시한다. UI 문구나 원본 메타데이터를 대신 저장하지 않는다.
+- 프로필은 기존 원본 URL 수집을 유지한다. 별도 DB 컬럼이나 마이그레이션은 없다.
 
-## 실제 서비스 호출 결과
+## 실제 서비스 호출
 
-실제 `LinkContentService.preview()`와 `collect()`를 호출했다. TinyFish 클라이언트와 공개 URL 검증을 대체하지 않았으며, 반환된 이미지 URL에 HEAD 요청을 보냈다. DB 저장과 AI 호출은 실행하지 않았다. 시간은 이미지 HEAD 요청까지 포함한다.
+실제 `LinkContentService.preview()`와 `collect()`를 호출하고 TinyFish 호출 횟수·URL을 기록했다. 반환된 이미지에는 HEAD 요청을 보냈다. DB 저장·AI 호출은 실행하지 않았다. 아래 시간은 이미지 HEAD 요청까지 포함한다. 기존 TinyFish 캐시 설정을 사용했으므로 고정 성능이나 캐시 없는 지연을 의미하지 않는다.
 
-| URL | 경로 | 표지 | 이미지 HTTP | 시간 |
-| --- | --- | --- | --- | --- |
-| [릴스 DX7lzTOJ1p6](https://www.instagram.com/reel/DX7lzTOJ1p6/) | preview | 반환 | 200 / image/jpeg | 12.32초 |
-| [릴스 DX7lzTOJ1p6](https://www.instagram.com/reel/DX7lzTOJ1p6/) | collect | 반환 | 200 / image/jpeg | 15.43초 |
-| [릴스 DdAIb1EplDo](https://www.instagram.com/reel/DdAIb1EplDo/) | preview | 반환 | 200 / image/jpeg | 12.00초 |
-| [릴스 DdAIb1EplDo](https://www.instagram.com/reel/DdAIb1EplDo/) | collect | 반환 | 200 / image/jpeg | 14.76초 |
-| [릴스 Dc9DJx2p3Dl](https://www.instagram.com/reel/Dc9DJx2p3Dl/) | preview | 반환 | 200 / image/jpeg | 9.80초 |
-| [릴스 Dc9DJx2p3Dl](https://www.instagram.com/reel/Dc9DJx2p3Dl/) | collect | 반환 | 200 / image/jpeg | 11.18초 |
-| [릴스 DUa5b_BDmmD](https://www.instagram.com/reel/DUa5b_BDmmD/) | preview | 반환 | 200 / image/jpeg | 7.82초 |
-| [릴스 DUa5b_BDmmD](https://www.instagram.com/reel/DUa5b_BDmmD/) | collect | 반환 | 200 / image/jpeg | 10.47초 |
+| URL | 경로 | TinyFish 요청 | 캡션 기반 제목 | 이미지 HTTP | 시간 |
+| --- | --- | --- | --- | --- | --- |
+| [DX7lzTOJ1p6](https://www.instagram.com/reel/DX7lzTOJ1p6/) | preview | 1회 | 반환 | 200 | 2.06초 |
+| [DX7lzTOJ1p6](https://www.instagram.com/reel/DX7lzTOJ1p6/) | collect | 1회 | 반환 | 200 | 11.81초 |
+| [DdAIb1EplDo](https://www.instagram.com/reel/DdAIb1EplDo/) | preview | 1회 | 반환 | 200 | 2.65초 |
+| [DdAIb1EplDo](https://www.instagram.com/reel/DdAIb1EplDo/) | collect | 1회 | 반환 | 200 | 1.29초 |
+| [Dc9DJx2p3Dl](https://www.instagram.com/reel/Dc9DJx2p3Dl/) | preview | 1회 | 반환 | 200 | 1.55초 |
+| [Dc9DJx2p3Dl](https://www.instagram.com/reel/Dc9DJx2p3Dl/) | collect | 1회 | 반환 | 200 | 1.34초 |
+| [DUa5b_BDmmD](https://www.instagram.com/reel/DUa5b_BDmmD/) | preview | 1회 | 반환 | 200 | 1.37초 |
+| [DUa5b_BDmmD](https://www.instagram.com/reel/DUa5b_BDmmD/) | collect | 1회 | 반환 | 200 | 1.27초 |
+| [DW04l9PES8g](https://www.instagram.com/p/DW04l9PES8g/) | preview | 1회 | 반환 | 200 | 1.39초 |
+| [DW04l9PES8g](https://www.instagram.com/p/DW04l9PES8g/) | collect | 1회 | 반환 | 200 | 1.41초 |
+| [Dcyu9p5N9oy](https://www.instagram.com/p/Dcyu9p5N9oy/) | preview | 1회 | 반환 | 200 | 1.35초 |
+| [Dcyu9p5N9oy](https://www.instagram.com/p/Dcyu9p5N9oy/) | collect | 1회 | 반환 | 200 | 1.33초 |
 
-8회 모두 원본 제목과 표지가 반환됐으며, collect 4회 모두 원본 본문이 유지됐다. 첫 3건은 동일 작성자의 릴스이고 마지막 1건은 저장소의 기존 검증 기록에서 가져왔다. 이 표본으로 전체 Instagram 성공률을 보장할 수는 없다.
+릴스 4건·일반 게시물 2건의 12회 호출 모두 한 번의 captioned 요청으로 제목과 표지가 반환됐다. collect 6회 모두 캡션과 DB 저장용 description이 일치했다(2,000자 제한 적용). 표본 중 릴스 3건은 같은 작성자다.
 
 ## 자동 검증
 
-- Jest: robots.txt 변경을 제외한 별도 PR 브랜치에서 49 suites, 343 tests 통과
-- TypeScript: `tsc -p tsconfig.build.json` 통과
-- 변경한 TypeScript 파일 ESLint 통과
-- 원본 텍스트 보존, 추가 요청 생략, 보완 오류·수집 불가, 다른 릴스 후보, 미디어 ID 접두사 오탐, CDN 위장, HTTP·프로필 이미지 제외를 검증했다.
+- Jest 50 suites / 356 tests 통과
+- TypeScript 빌드와 변경 파일 ESLint 통과
+- 게시물·릴스 단일 요청, 2,000자 제한, 프로필 유지, 이미지 없음·수집 실패에 추가 조회하지 않는 동작 검증
+- 음악·재생 버튼·프로필 카드·인증 배지·빈 줄 없는 응답·이스케이프된 계정명 및 UI와 같은 문구를 포함한 캡션 회귀 테스트
+- 캡션 없음·식별 불가 시 부가 정보가 저장용 설명에 들어가지 않는 동작 검증
 
 ## 제한
 
-- 캐시 키 형식과 embed 이미지 제공은 관측에 기반한 동작이다. 형식 변경 시 표지가 null로 남을 수 있으므로 재검증이 필요하다.
-- 추가 TinyFish 요청으로 지연이 늘어난다. 보완 요청에는 기존 25초 제한이 적용된다.
-- Instagram CDN URL 만료 문제와 영상의 음성·장면 분석은 이번 변경 범위에 포함하지 않는다.
-- robots.txt 정책 변경은 별도 PR #121에서 다루며 이 PR에는 포함하지 않는다. 배포하지 않았다.
+- 캡션 경계와 CDN 이미지 형식은 실제 관측에 기반한다. 응답 구조·언어 변경 시 추가 검증이 필요하다.
+- 일반 게시물 이미지는 기존 `ig_cache_key` 후보 선택을 유지한다. 캐러셀 자식 이미지 ID에는 릴스의 게시물 ID 비교를 적용하지 않는다.
+- 게시물의 모든 이미지 수집, CDN URL 만료 대응, 영상 음성·장면 분석은 별도 범위다.
+- 전체 Instagram 성공률을 보장하는 검증은 아니며 배포하지 않았다.

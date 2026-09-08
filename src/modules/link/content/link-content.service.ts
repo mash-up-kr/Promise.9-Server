@@ -219,24 +219,22 @@ export class LinkContentService {
                 }
             }
 
-            const content = outcome.content.content
-            const originalImage = strategy.selectImage(
+            const normalized = strategy.normalizeContent
+                ? strategy.normalizeContent(resourceUrl, outcome.content)
+                : outcome.content
+            const content = normalized.content
+            const image = strategy.selectImage(
                 resourceUrl,
-                outcome.content.imageLinks,
+                normalized.imageLinks,
             )
-            const image =
-                originalImage ??
-                (await this.resolveTinyFishImageFallback(resourceUrl, strategy))
-            const title = strategy.normalizeTitle
-                ? strategy.normalizeTitle(resourceUrl, outcome.content.title)
-                : outcome.content.title
+            const title = normalized.title
 
             return {
                 title:
                     purpose === 'preview'
                         ? this.limitText(title, LINK_CONTENT_TEXT_LIMIT.title)
                         : title,
-                description: outcome.content.description,
+                description: normalized.description,
                 content,
                 image,
                 imageSource: image ? 'tinyfish' : null,
@@ -260,27 +258,6 @@ export class LinkContentService {
                     ? LINK_ERROR.PREVIEW_BAD_STATUS
                     : LINK_ERROR.PREVIEW_FETCH_FAILED,
             )
-        }
-    }
-
-    // 이미지 보완 실패가 이미 수집한 제목·본문과 AI 분석까지 실패시키지는 않는다.
-    private async resolveTinyFishImageFallback(
-        resourceUrl: URL,
-        strategy: LinkContentTinyFishStrategy,
-    ): Promise<string | null> {
-        const fallbackUrl = strategy.imageFallbackUrl?.(resourceUrl)
-        if (!fallbackUrl) return null
-
-        try {
-            const outcome = await this.tinyFishFetchClient.fetch(fallbackUrl)
-            return outcome.status === 'SUCCESS'
-                ? strategy.selectImage(resourceUrl, outcome.content.imageLinks)
-                : null
-        } catch {
-            this.logger.warn(
-                `${strategy.name} 대표 이미지 보완 수집에 실패했습니다.`,
-            )
-            return null
         }
     }
 

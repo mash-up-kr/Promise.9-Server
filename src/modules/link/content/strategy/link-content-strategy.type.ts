@@ -1,3 +1,5 @@
+import { TinyFishResponseContent } from '../tinyfish/tinyfish-response.parser'
+
 export type LinkContentOEmbedPreview = {
     title: string | null
     image: string | null
@@ -24,9 +26,10 @@ export type LinkContentOEmbedStrategy = LinkContentStrategyBase & {
 export type LinkContentTinyFishStrategy = LinkContentStrategyBase & {
     kind: 'tinyfish'
     prepareUrl: (resourceUrl: URL) => URL
-    // 원본 수집이 성공했지만 대표 이미지가 없을 때만 추가 조회한다.
-    imageFallbackUrl?: (resourceUrl: URL) => URL | null
-    normalizeTitle?: (resourceUrl: URL, title: string | null) => string | null
+    normalizeContent?: (
+        resourceUrl: URL,
+        content: TinyFishResponseContent,
+    ) => TinyFishResponseContent
     selectImage: (
         resourceUrl: URL,
         imageLinks: readonly string[],

@@ -1,11 +1,13 @@
 import { findFirstTinyFishImage } from '../../tinyfish/tinyfish-image.selector'
+import { TinyFishResponseContent } from '../../tinyfish/tinyfish-response.parser'
 import { LinkContentTinyFishStrategy } from '../link-content-strategy.type'
 import { withoutSearchParams } from '../link-content-url.util'
+
+import { parseInstagramCaption } from './instagram-caption.parser'
 
 const INSTAGRAM_HOSTNAMES = new Set(['instagram.com', 'www.instagram.com'])
 const INSTAGRAM_CONTENT_PATHS = new Set(['p', 'reel', 'reels', 'tv'])
 const INSTAGRAM_POST_TITLE_MAX_LENGTH = 100
-const INSTAGRAM_TITLE_PREFIX_PATTERN = / on Instagram:\s*(["“])/g
 const INSTAGRAM_RESERVED_PATHS = new Set([
     'accounts',
     'developer',
@@ -21,35 +23,24 @@ export const INSTAGRAM_LINK_CONTENT_STRATEGY: LinkContentTinyFishStrategy = {
     kind: 'tinyfish',
     name: 'instagram',
     supports: supportsInstagramUrl,
-    prepareUrl: withoutSearchParams,
-    imageFallbackUrl: instagramReelEmbedUrl,
-    normalizeTitle: normalizeInstagramTitle,
+    prepareUrl: prepareInstagramUrl,
+    normalizeContent: normalizeInstagramContent,
     selectImage: selectInstagramImage,
 }
 
-export function normalizeInstagramTitle(
+export function normalizeInstagramContent(
     resourceUrl: URL,
-    title: string | null,
-): string | null {
-    if (!title || !isInstagramContentUrl(resourceUrl)) return title
+    content: TinyFishResponseContent,
+): TinyFishResponseContent {
+    if (!isInstagramContentUrl(resourceUrl)) return content
 
-    const titlePrefix = Array.from(
-        title.matchAll(INSTAGRAM_TITLE_PREFIX_PATTERN),
-    ).at(-1)
-    if (!titlePrefix) return limitInstagramPostTitle(title)
-
-    const closingQuote = titlePrefix[1] === '“' ? '”' : '"'
-    const captionStart = (titlePrefix.index ?? 0) + titlePrefix[0].length
-    const captionWithClosingQuote = title.slice(captionStart).trim()
-    const caption = captionWithClosingQuote.endsWith(closingQuote)
-        ? captionWithClosingQuote.slice(0, -closingQuote.length).trimEnd()
-        : captionWithClosingQuote
-    const firstLine = caption
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .find(Boolean)
-
-    return firstLine ? limitInstagramPostTitle(firstLine) : null
+    const caption = parseInstagramCaption(content.content)
+    return {
+        ...content,
+        title: caption ? limitInstagramPostTitle(caption.split('\n')[0]) : null,
+        description: caption,
+        content: caption,
+    }
 }
 
 function limitInstagramPostTitle(title: string): string | null {
@@ -108,16 +99,25 @@ export function selectInstagramImage(
 
 function instagramReelShortcode(url: URL): string | null {
     return (
-        url.pathname.match(/^\/reels?\/([A-Za-z0-9_-]{1,11})\/?$/)?.[1] ?? null
+        url.pathname.match(
+            /^\/reels?\/([A-Za-z0-9_-]{1,11})(?:\/embed(?:\/captioned)?)?\/?$/,
+        )?.[1] ?? null
     )
 }
 
-export function instagramReelEmbedUrl(resourceUrl: URL): URL | null {
-    const shortcode = instagramReelShortcode(resourceUrl)
-    if (!shortcode || !INSTAGRAM_HOSTNAMES.has(resourceUrl.hostname))
-        return null
+export function prepareInstagramUrl(resourceUrl: URL): URL {
+    const match = resourceUrl.pathname.match(
+        /^\/(p|reel|reels|tv)\/([A-Za-z0-9_-]{1,11})(?:\/(?:embed(?:\/captioned)?)?)?\/?$/,
+    )
+    if (!match || !INSTAGRAM_HOSTNAMES.has(resourceUrl.hostname)) {
+        return withoutSearchParams(resourceUrl)
+    }
 
-    return new URL(`/reel/${shortcode}/embed/`, 'https://www.instagram.com')
+    const kind = match[1] === 'reels' ? 'reel' : match[1]
+    return new URL(
+        `/${kind}/${match[2]}/embed/captioned/`,
+        'https://www.instagram.com',
+    )
 }
 
 function supportsInstagramUrl(url: URL): boolean {

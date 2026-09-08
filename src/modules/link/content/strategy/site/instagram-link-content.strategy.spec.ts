@@ -1,87 +1,136 @@
 import {
     INSTAGRAM_LINK_CONTENT_STRATEGY,
-    instagramReelEmbedUrl,
-    normalizeInstagramTitle,
+    normalizeInstagramContent,
+    prepareInstagramUrl,
     selectInstagramImage,
 } from './instagram-link-content.strategy'
 
-describe('INSTAGRAM_LINK_CONTENT_STRATEGY', () => {
-    it('TinyFish 요청 URL에서는 query만 제거하고 원본은 변경하지 않는다', () => {
-        const resourceUrl = new URL(
-            'https://instagram.com/p/example?img_index=2#comments',
+const captioned = (caption: string) => `author
+
+Original audio
+
+View profile
+
+1,977 likes
+
+author
+
+${caption}
+
+View all 48 comments
+
+Add a comment...*Instagram*`
+
+describe('Instagram captioned 수집', () => {
+    it.each(['p', 'reel', 'reels', 'tv'])(
+        '%s를 한 번의 captioned 요청 URL로 변환한다',
+        (kind) => {
+            const url = new URL(
+                `https://instagram.com/${kind}/DX7lzTOJ1p6/?igsh=abc#comments`,
+            )
+            const original = url.toString()
+            expect(prepareInstagramUrl(url).toString()).toBe(
+                `https://www.instagram.com/${kind === 'reels' ? 'reel' : kind}/DX7lzTOJ1p6/embed/captioned/`,
+            )
+            expect(url.toString()).toBe(original)
+        },
+    )
+
+    it.each(['embed/', 'embed/captioned/'])(
+        '이미 %s인 URL에 경로를 중복 추가하지 않는다',
+        (suffix) => {
+            expect(
+                prepareInstagramUrl(
+                    new URL(`https://instagram.com/p/DW04l9PES8g/${suffix}`),
+                ).pathname,
+            ).toBe('/p/DW04l9PES8g/embed/captioned/')
+        },
+    )
+
+    it('프로필은 기존 원본 URL을 사용한다', () => {
+        expect(
+            prepareInstagramUrl(
+                new URL('https://instagram.com/author?igsh=abc'),
+            ).toString(),
+        ).toBe('https://instagram.com/author')
+    })
+
+    it('위장 hostname에 Instagram 전용 URL 변환을 적용하지 않는다', () => {
+        const url = new URL('https://instagram.com.evil.example/p/DW04l9PES8g/')
+        expect(INSTAGRAM_LINK_CONTENT_STRATEGY.supports(url)).toBe(false)
+        expect(prepareInstagramUrl(url).hostname).toBe(url.hostname)
+    })
+
+    it.each(['p', 'reel'])(
+        '%s의 캡션만 제목·설명·본문으로 사용한다',
+        (kind) => {
+            const result = normalizeInstagramContent(
+                new URL(`https://instagram.com/${kind}/DX7lzTOJ1p6/`),
+                {
+                    title: 'Instagram',
+                    description: '잘못된 메타데이터',
+                    content: captioned('제목 줄\n\n나머지 캡션 #태그'),
+                    imageLinks: [],
+                },
+            )
+            expect(result).toEqual({
+                title: '제목 줄',
+                description: '제목 줄\n\n나머지 캡션 #태그',
+                content: '제목 줄\n\n나머지 캡션 #태그',
+                imageLinks: [],
+            })
+        },
+    )
+
+    it('제목의 100자 경계에서 이모지를 나누지 않는다', () => {
+        const result = normalizeInstagramContent(
+            new URL('https://instagram.com/p/DW04l9PES8g/'),
+            {
+                title: 'Instagram',
+                description: null,
+                content: captioned('제'.repeat(99) + '😀나머지\n두 번째 줄'),
+                imageLinks: [],
+            },
         )
-
-        expect(
-            INSTAGRAM_LINK_CONTENT_STRATEGY.prepareUrl(resourceUrl).toString(),
-        ).toBe('https://instagram.com/p/example#comments')
-        expect(resourceUrl.toString()).toBe(
-            'https://instagram.com/p/example?img_index=2#comments',
-        )
+        expect(result.title).toBe('제'.repeat(99) + '😀')
     })
 
-    it('게시물 제목에서 작성자를 제거하고 캡션 첫 줄을 사용한다', () => {
+    it('프로필의 제목과 본문은 기존 결과를 유지한다', () => {
+        const content = {
+            title: 'Author (@author)',
+            description: '프로필 소개',
+            content: '프로필 본문',
+            imageLinks: [],
+        }
         expect(
-            normalizeInstagramTitle(
-                new URL('https://instagram.com/p/example'),
-                '브이지피 서울 on Instagram: "자양동 골목이 요즘 그렇게 핫하다고 해서 다녀왔는데\n\n칼레오커피로스터스"',
+            normalizeInstagramContent(
+                new URL('https://instagram.com/author'),
+                content,
             ),
-        ).toBe('자양동 골목이 요즘 그렇게 핫하다고 해서 다녀왔는데')
+        ).toEqual(content)
     })
 
-    it('게시물 제목을 100자로 제한한다', () => {
+    it('캡션 경계를 찾지 못하면 메타데이터나 UI를 대신 저장하지 않는다', () => {
         expect(
-            normalizeInstagramTitle(
-                new URL('https://instagram.com/reel/example'),
-                `작성자 on Instagram: "${'제'.repeat(120)}"`,
+            normalizeInstagramContent(
+                new URL('https://instagram.com/reel/DX7lzTOJ1p6/'),
+                {
+                    title: 'Instagram',
+                    description: '1,977 likes',
+                    content: 'View profile',
+                    imageLinks: [],
+                },
             ),
-        ).toBe('제'.repeat(100))
+        ).toEqual({
+            title: null,
+            description: null,
+            content: null,
+            imageLinks: [],
+        })
     })
+})
 
-    it('100자 경계의 이모지를 나누지 않는다', () => {
-        expect(
-            normalizeInstagramTitle(
-                new URL('https://instagram.com/p/example'),
-                `작성자 on Instagram: "${'제'.repeat(99)}😀나머지"`,
-            ),
-        ).toBe(`${'제'.repeat(99)}😀`)
-    })
-
-    it('여러 줄 캡션 첫 줄의 사용자 인용부호를 유지한다', () => {
-        expect(
-            normalizeInstagramTitle(
-                new URL('https://instagram.com/p/example'),
-                '작성자 on Instagram: "그는 "안녕"이라고 말했다"\n다음 내용"',
-            ),
-        ).toBe('그는 "안녕"이라고 말했다"')
-    })
-
-    it('작성자 이름에 포함된 구분자 대신 캡션 앞 구분자를 사용한다', () => {
-        expect(
-            normalizeInstagramTitle(
-                new URL('https://instagram.com/p/example'),
-                'Tips on Instagram: Daily on Instagram: "실제 캡션"',
-            ),
-        ).toBe('실제 캡션')
-    })
-
-    it('곡선 인용부호로 감싼 캡션도 정규화한다', () => {
-        expect(
-            normalizeInstagramTitle(
-                new URL('https://instagram.com/p/example'),
-                '작성자 on Instagram: “실제 캡션”',
-            ),
-        ).toBe('실제 캡션')
-    })
-
-    it('프로필 제목은 작성자 정보를 유지한다', () => {
-        expect(
-            normalizeInstagramTitle(
-                new URL('https://instagram.com/example'),
-                'Example (@example) • Instagram photos and videos',
-            ),
-        ).toBe('Example (@example) • Instagram photos and videos')
-    })
-
+describe('Instagram 이미지 선택', () => {
     it('게시물 경로 종류와 무관하게 ig_cache_key 이미지를 선택한다', () => {
         expect(
             selectInstagramImage(new URL('https://instagram.com/p/example'), [
@@ -142,31 +191,6 @@ describe('Instagram Reel 표지 보완', () => {
         )
         return url.toString()
     }
-
-    it.each(['reel', 'reels'])(
-        '쿼리와 해시 없이 %s embed URL을 만든다',
-        (path) => {
-            const url = new URL(
-                `https://instagram.com/${path}/DX7lzTOJ1p6/?igsh=abc#comments`,
-            )
-            const original = url.toString()
-            expect(instagramReelEmbedUrl(url)?.toString()).toBe(
-                'https://www.instagram.com/reel/DX7lzTOJ1p6/embed/',
-            )
-            expect(url.toString()).toBe(original)
-        },
-    )
-
-    it.each([
-        'https://instagram.com/p/DX7lzTOJ1p6/',
-        'https://instagram.com/author/',
-        'https://instagram.com/reel/DX7lzTOJ1p6/embed/',
-        'https://instagram.com/reel/invalid%20id/',
-        'https://instagram.com/reel/abcdefghijkl/',
-        'https://instagram.com.evil.example/reel/DX7lzTOJ1p6/',
-    ])('지원하지 않는 URL에는 보완 요청을 만들지 않는다: %s', (url) => {
-        expect(instagramReelEmbedUrl(new URL(url))).toBeNull()
-    })
 
     it('추천 이미지를 건너뛰고 파일명 ID와 캐시 키 보조 ID가 다른 실제 표지를 선택한다', () => {
         const cover = image(mediaId + imageId)
