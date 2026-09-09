@@ -181,6 +181,26 @@ TinyFish의 `image_links`는 대표 이미지 순서를 보장하지 않는다. 
 때는 실제 URL 여러 건의 응답 이미지를 확인하고, 사이트 규칙의 `selectImage`에 검증할 수
 있는 조건을 작성한다. 배열의 첫 이미지를 그대로 사용하지 않는다.
 
+## 네이버 지도·플레이스
+
+네이버 장소 URL은 `naver-place` 전략으로 모바일 `m.place.naver.com/place/{id}/home`에
+정규화한 뒤 기존 TinyFish 클라이언트로 수집한다. PC entry/search의 장소 상세 경로,
+플레이스 상세 경로와 `/share?id=`를 지원한다. 장소를 특정할 수 없는 검색·길찾기는
+기존 HTML 처리를 유지한다.
+
+TinyFish가 활성화된 환경에서는 `naver.me`를 전략 선택 전에 수동 리다이렉트로 해석한다.
+공개 URL 검사, 5초 제한, 리다이렉트 횟수 제한을 적용하며 최종 URL로 전략을 선택한다.
+네이버 이외 링크에 대한 일반적인 전략 재선택 기능을 추가한 것은 아니다.
+
+제목에서 `: 네이버`와 제어 문자를 제거한다. 사진은 `search.pstatic.net/common/`의
+`w560_sharpen` 후보 중 `ldb.phinf.naver.net`, `ldb-phinf.pstatic.net` 원본을 우선하며,
+없으면 허용된 리뷰·블로그·클립 후보를 사용한다. 후보가 없으면 null이다. 이는 관측된
+URL 규칙이며 모든 장소에서 네이버 첫 사진과 일치한다는 보장은 없다.
+
+TinyFish 키가 없을 때는 기존 HTML 경로를 사용한다. 공통 TinyFish 경로와 동일하게
+대상 robots.txt를 별도로 조회하지 않는다. 로딩·공통 화면은 빈 결과로 처리되며,
+일시적인 로딩 실패의 자동 재시도 구분은 아직 보완이 필요하다.
+
 ### Instagram 게시물·릴스 캡션 수집
 
 일반 게시물(`/p/`)과 릴스(`/reel/`, `/reels/`), `/tv/`는 TinyFish에 원본 URL 대신

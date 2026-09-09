@@ -13,6 +13,7 @@ import {
     LinkContentTinyFishStrategy,
     LinkContentYoutubeStrategy,
 } from './strategy/link-content-strategy.type'
+import { resolveNaverShortUrl } from './strategy/naver-short-url.resolver'
 import { TinyFishFetchClient } from './tinyfish/tinyfish-fetch.client'
 import { TinyFishFetchError } from './tinyfish/tinyfish-fetch.error'
 import { YoutubeDataClient } from './youtube/youtube-data.client'
@@ -127,6 +128,15 @@ export class LinkContentService {
         resourceUrl: URL,
         purpose: LinkContentPurpose,
     ): Promise<ResolvedLinkContent | null> {
+        if (
+            resourceUrl.hostname === 'naver.me' &&
+            this.tinyFishFetchClient.isEnabled()
+        ) {
+            resourceUrl = await resolveNaverShortUrl(
+                resourceUrl,
+                this.urlSecurity,
+            )
+        }
         const strategy = resolveLinkContentStrategy(resourceUrl)
 
         switch (strategy.kind) {
@@ -257,7 +267,7 @@ export class LinkContentService {
                     image: null,
                     imageSource: null,
                     imageBaseUrl: resourceUrl,
-                    source: this.toSource(resourceUrl),
+                    source: strategy.source ?? this.toSource(resourceUrl),
                     analysisUnavailableReason: outcome.reason,
                 }
             }
@@ -282,7 +292,7 @@ export class LinkContentService {
                 image,
                 imageSource: image ? 'tinyfish' : null,
                 imageBaseUrl: resourceUrl,
-                source: this.toSource(resourceUrl),
+                source: strategy.source ?? this.toSource(resourceUrl),
                 ...(purpose === 'analysis' &&
                 !content &&
                 !normalized.description
