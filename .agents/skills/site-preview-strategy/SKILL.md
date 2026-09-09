@@ -16,7 +16,7 @@ description: Promise.9의 사이트별 링크 미리보기·본문·썸네일 �
 - `html/`, `robots.parser.ts`, `tinyfish/`: 직접 HTML 수집·robots 판정·TinyFish 공통 요청/응답
 - `link-content.service.ts`: preview와 collect의 실행 흐름·최종 URL 검증
 
-가능하면 기존 훅(`prepareUrl`, `fetchOptions`, `normalizeContent`, `selectImage`)을 사용한다. 사이트 파싱은 사이트 전략에, 통신·오류 처리는 공통 클라이언트에 둔다. 새 사이트마다 서비스에 도메인 분기를 늘리지 않는다. 필요한 공통 훅이 없다면 최소한의 확장을 검토하고 구조 변경 이유를 설명한다.
+기존 훅(`prepareUrl`, `fetchOptions`, `normalizeContent`, `selectImage`)을 우선 사용한다. 사이트 파싱은 전략에, 통신·오류 처리는 공통 클라이언트에 둔다. 공통 확장이 필요하면 이유를 설명한다. 기존 공개 URL·리다이렉트·timeout·응답 크기 제한은 유지한다.
 
 ## 1. 수집 경로 선택
 
@@ -25,21 +25,21 @@ description: Promise.9의 사이트별 링크 미리보기·본문·썸네일 �
 3. HTML만으로 내용이 부족하거나 렌더링이 필요한 경우 같은 후보를 TinyFish Fetch로 비교한다. 요청마다 모든 경로를 순회하는 폴백 체인 대신, 조사로 가장 적합한 기본 경로를 정한다.
 4. 사이트 특성상 공식 API가 유리하면 키·할당량·운영 비용과 필요한 필드를 비교해 사용한다. 모든 사이트에 별도 API를 도입하지 않는다.
 
-YouTube는 예외의 예다. 현재 서버는 preview에 oEmbed를 사용하고, 설명이 필요한 collect에 Data API를 먼저 사용한다. 이는 영상의 구조화된 메타데이터와 할당량을 고려한 선택이며 다른 사이트의 기본 규칙이 아니다. API를 검토할 때는 [YouTube videos.list 공식 문서](https://developers.google.com/youtube/v3/docs/videos/list)처럼 해당 사이트의 공식 계약을 확인한다.
+경로 선택 예: 네이버 장소는 모바일 상세 페이지, Instagram 게시물·릴스는 `/{kind}/{shortcode}/embed/captioned/`를 TinyFish에 요청한다. 같은 콘텐츠의 원본·embed·모바일 URL을 바꿔 넣고 필요한 내용·이미지와 시간을 비교한다.
+
+YouTube는 preview에 oEmbed, 설명이 필요한 collect에 Data API를 쓰는 사이트별 예외다. [videos.list 공식 문서](https://developers.google.com/youtube/v3/docs/videos/list)와 필요한 필드·할당량을 확인하며, 이 구조를 모든 사이트의 기본값으로 삼지 않는다.
 
 ### robots와 접근 범위
 
-- 직접 HTML 요청은 실제 호스트·경로·User-Agent로 robots 허용 여부를 판정한다. 모바일·embed와 리다이렉트 목적지도 해당 정책을 확인한다.
-- TinyFish는 제공자가 페이지 수집을 수행하는 별도 외부 수집 방법이다. 직접 요청의 robots 판정과 제공자의 처리 정책을 구분하고, 필요한 동작은 최신 공식 문서와 실제 응답으로 확인한다. 공식 API는 자체 접근 정책과 인증 조건을 따른다.
-- **현재 구현:** HTML preview/collect는 서버가 robots를 검사한다. TinyFish 경로에서는 서버가 대상 robots를 별도로 조회하지 않고 Fetch API에 수집을 요청한다.
-- robots 거부, 로그인 필요·비공개, 네트워크 실패, 렌더링 부족을 구분해 결과를 기록한다. 지원하지 않는 콘텐츠는 수집 불가로 명시한다.
-- 기존 공개 URL·리다이렉트·timeout·응답 크기 제한을 유지한다. 키는 기존 환경 설정으로 읽고 `.env`, 인증 헤더, 서명 URL 토큰을 로그·fixture·PR에 넣지 않는다.
+- 직접 HTML은 실제 호스트·경로·User-Agent와 리다이렉트 목적지의 robots 정책을 확인한다. 현재 HTML preview/collect는 서버가 검사하고, TinyFish 경로는 제공자에게 수집을 요청한다. 직접 요청의 판정과 제공자의 처리 정책을 구분한다.
+- robots 거부, 로그인 필요·비공개, 네트워크 실패, 렌더링 부족을 구분한다. 지원하지 않는 콘텐츠는 수집 불가로 명시한다. 공식 API는 해당 접근·인증 정책을 따른다.
+- 키는 기존 환경 설정으로 읽고 `.env`, 인증 헤더, 서명 URL 토큰은 로그·fixture·PR에서 제외한다.
 
 ## 2. TinyFish 응답으로 규칙 찾기
 
 작업 시 [Fetch API 공식 문서](https://docs.tinyfish.ai/fetch-api/reference)를 다시 확인한다. Agent API와 혼동하지 말고 기존 `TinyFishFetchClient`를 재사용한다.
 
-- `POST https://api.fetch.tinyfish.ai`, `X-API-Key`. 현재 서버는 `markdown`, `image_links: true`를 사용한다. 조사에 `html`·`json`·`links`가 필요하면 응답 구조도 함께 확인하고 문자열용 파서에 그대로 넣지 않는다.
+- 현재 서버는 `markdown`, `image_links: true`를 사용한다. 조사에 `html`·`json`·`links`가 필요하면 응답 구조와 기존 파서의 호환성을 확인한다.
 - HTTP 200만 보지 말고 `results[]`와 `errors[]`를 확인한다. `final_url`, `title`, `description`, `text`, `image_links`를 원본 화면과 대조한다.
 - `include_selectors`는 text·links·image_links 범위를 제한하지만 title·description은 전체 문서 기준이다. `exclude_selectors`가 먼저 적용된다. include가 전혀 매칭되지 않으면 `selector_not_matched`이며 전체 페이지로 자동 폴백하지 않는다.
 
@@ -56,16 +56,15 @@ YouTube는 예외의 예다. 현재 서버는 preview에 oEmbed를 사용하고,
 
 ## 4. 속도와 품질을 함께 검증
 
-TinyFish도 요청 대상이 원본인지 embed인지 모바일인지에 따라 응답 크기·렌더링 비용과 수집 내용이 달라질 수 있다. [Fetch 개요](https://docs.tinyfish.ai/fetch-api)와 실제 측정으로 경로를 선택한다. 가벼운 응답이라도 필요한 캡션·사진이 빠지면 좋은 경로가 아니다.
+요청 URL·응답 형식·캐시에 따라 시간과 수집 품질이 달라질 수 있다. [Fetch 개요](https://docs.tinyfish.ai/fetch-api)를 확인하되, 경로 선택은 실측과 필요한 필드의 확보 여부로 판단한다.
 
-- 같은 콘텐츠로 후보 URL·format·scope를 비교한다. 범위 옵션은 추출 결과를 줄이는 기능이지 원본 fetch·렌더링을 생략하거나 항상 더 빠르게 만드는 기능이 아니다.
+- 같은 콘텐츠로 URL·format·scope를 하나씩 바꿔 비교한다. scope는 추출 범위 설정이며 렌더링 생략이나 속도 향상을 보장하지 않는다.
 - 정상 수집은 가능한 한 1회로 끝낸다. 필요한 추가 요청은 이미지/본문 회복 효과와 지연·비용을 함께 기록한다. preview와 collect가 필요한 필드가 다르면 목적별 경로를 분리할 수 있다.
 - `ttl: 0`은 live fetch, 양수는 해당 시간 내 캐시 허용이다. 캐시 허용 측정과 live 측정을 구분하고 여러 번 재어 범위·중앙값·성공률·요청 수를 기록한다. 캐시 적중을 확인하지 못했다면 warm/cold라고 단정하지 않는다.
-- format이나 경로를 바꿀 때 한 변수를 기준으로 비교한다. 캐시·대상·환경이 다른 단일 측정으로 속도 개선율을 주장하지 않는다. 운영 timeout은 기존 요청 예산과 맞춘다.
+- 캐시·대상·환경이 다른 단일 측정으로 속도 개선율을 주장하지 않는다.
 
 ## 완료 기준
 
 - 구현한 `preview`·`collect`로 실제 링크를 재검증하고 원본 제목·이미지와 비교한다. 이미지 없음도 정상 결과로 확인한다.
 - 회귀 테스트는 누락·순서 변경·경계 오인처럼 실제 실패 조건과 다른 글 혼입 방지에 집중한다. 관련 테스트·빌드·린트를 수행하고 공통 코드를 바꾸면 영향받는 사이트도 검증한다.
 - 결과는 **선택 경로, 핵심 규칙, 확인한 케이스, 요청 수/실측 조건, 남은 한계**만 짧게 정리한다. 미검증을 성공으로 표시하지 않는다.
-- 브랜치·커밋·PR은 팀 컨벤션과 사용자가 요청한 범위에 따른다. 스킬 사용 자체가 배포·머지·타인에게 메시지 전송을 허가하지 않는다.
