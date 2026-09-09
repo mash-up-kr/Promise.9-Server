@@ -49,7 +49,7 @@ export class LinkContentHtmlFetcher {
             if (error instanceof RobotsDisallowedError) return null
             if (error instanceof HttpException) throw error
 
-            if (this.isAbortError(error)) {
+            if (controller.signal.aborted || this.isAbortError(error)) {
                 throw new BaseException(LINK_ERROR.PREVIEW_TIMEOUT)
             }
 
@@ -71,10 +71,12 @@ export class LinkContentHtmlFetcher {
             redirectCount <= LINK_CONTENT_FETCH.maxRedirects;
             redirectCount++
         ) {
+            signal.throwIfAborted()
             await this.urlSecurity.resolvePublicUrl(currentUrl)
+            signal.throwIfAborted()
 
             if (options.respectRobots) {
-                await this.assertCrawlingAllowed(currentUrl)
+                await this.assertCrawlingAllowed(currentUrl, signal)
             }
 
             const response = await fetch(currentUrl, {
@@ -99,32 +101,48 @@ export class LinkContentHtmlFetcher {
         throw new BaseException(LINK_ERROR.PREVIEW_REDIRECT_FAILED)
     }
 
-    private async assertCrawlingAllowed(url: URL): Promise<void> {
-        if (!(await this.isCrawlingAllowed(url))) {
+    private async assertCrawlingAllowed(
+        url: URL,
+        signal: AbortSignal,
+    ): Promise<void> {
+        if (!(await this.isCrawlingAllowed(url, signal))) {
             throw new RobotsDisallowedError(
                 'robots.txt에서 크롤링을 허용하지 않았습니다.',
             )
         }
     }
 
-    private async isCrawlingAllowed(url: URL): Promise<boolean> {
-        const controller = new AbortController()
+    private async isCrawlingAllowed(
+        url: URL,
+        signal: AbortSignal,
+    ): Promise<boolean> {
+        // robots 파일이 다른 호스트로 이동해도 원래 HTML 요청의 UA와 경로로 판정한다.
         const userAgent = resolveLinkContentHtmlUserAgent(url)
-        const timeout = setTimeout(
-            () => controller.abort(),
-            LINK_CONTENT_FETCH.timeoutMs,
-        )
+        let robotsUrl = new URL('/robots.txt', url.origin)
 
-        try {
-            const robotsUrl = new URL('/robots.txt', url.origin)
+        for (
+            let redirectCount = 0;
+            redirectCount <= LINK_CONTENT_FETCH.maxRedirects;
+            redirectCount++
+        ) {
+            signal.throwIfAborted()
+            await this.urlSecurity.resolvePublicUrl(robotsUrl)
+            signal.throwIfAborted()
+
             const response = await fetch(robotsUrl, {
                 headers: {
                     ...buildLinkContentRequestHeaders(userAgent),
                     Accept: 'text/plain,*/*',
                 },
                 redirect: 'manual',
-                signal: controller.signal,
+                signal,
             })
+
+            if (LINK_CONTENT_REDIRECT_STATUSES.includes(response.status)) {
+                cancelLinkContentResponse(response)
+                robotsUrl = this.getRedirectUrl(response, robotsUrl)
+                continue
+            }
 
             if (response.status === 404) {
                 cancelLinkContentResponse(response)
@@ -146,17 +164,9 @@ export class LinkContentHtmlFetcher {
                 url.pathname + url.search,
                 userAgent,
             )
-        } catch (error) {
-            if (error instanceof HttpException) throw error
-
-            if (this.isAbortError(error)) {
-                throw new BaseException(LINK_ERROR.PREVIEW_TIMEOUT)
-            }
-
-            throw new BaseException(LINK_ERROR.PREVIEW_FETCH_FAILED)
-        } finally {
-            clearTimeout(timeout)
         }
+
+        throw new BaseException(LINK_ERROR.PREVIEW_REDIRECT_FAILED)
     }
 
     private async readHtml(

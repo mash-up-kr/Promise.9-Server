@@ -44,7 +44,7 @@ URL에 맞는 수집 방식 선택
 
 `preview`와 `collect`는 사이트별 방식 선택을 공유하고, 기존 `purpose` 값으로 목적을 구분한다.
 
-- `preview`: 저장 전에 제목, 썸네일, 출처를 반환한다.
+- `preview`: 저장 전에 제목, 썸네일, 출처를 반환한다. HTML 요청 전에 robots.txt 허용 여부를 확인한다.
 - `collect`: 저장 후 제목, 설명, 본문, 대표 이미지를 수집한다. AI 입력으로 사용할 수
   있으므로 HTML 요청 전에 robots.txt 허용 여부를 확인한다.
 
@@ -104,7 +104,7 @@ Brunch는 새로운 수집 방식이 필요한 사이트가 아니다. 수집 �
 User-Agent가 필요하므로 HTML 요청 설정에만 예외를 둔다. TinyFish로 수집하는 X와
 Instagram에는 HTML User-Agent 설정이 적용되지 않는다.
 
-HTML 리다이렉트가 발생하면 이동한 URL도 다시 공개 URL인지 검사하고, 저장 후 수집은
+HTML 리다이렉트가 발생하면 이동한 URL도 다시 공개 URL인지 검사하고, 미리보기와 저장 후 수집 모두
 robots.txt도 다시 확인한다. User-Agent 역시 이동한 도메인에 맞게 다시 선택한다.
 
 현재 HTML 수집을 시작한 뒤 리다이렉트된 URL에 맞춰 oEmbed나 TinyFish로 방식을 바꾸지는
@@ -171,9 +171,8 @@ TinyFish client는 특정 사이트의 URL 범위나 대표 이미지 규칙을 
 검증하고 공통 형태로 변환하는 일까지만 담당한다. TinyFish에 전달할 URL 정리와 대표
 이미지 선택, 제목 후처리는 X·Instagram 사이트 규칙에서 담당한다.
 
-Instagram 게시물·Reel·TV는 별도의 제목 필드가 없으므로 TinyFish가 반환한 문서
-제목에서 작성자 표기를 제거하고 캡션 첫 줄을 최대 100자로 사용한다. 프로필은 작성자
-정보가 제목의 핵심이므로 원래 제목을 유지한다.
+Instagram 게시물·Reel·TV는 captioned embed를 한 번 조회하고 반환된 Markdown에서
+작성자 캡션을 추출한다. 제목은 캡션 첫 줄 최대 100자다. 프로필은 원본 URL과 제목을 유지한다.
 
 API key가 없으면 HTML로 다시 시도한다. API key가 있는데 TinyFish 요청이 실패하면
 불완전한 HTML/OG 결과와 합쳐 성공처럼 반환하지 않는다.
@@ -181,3 +180,31 @@ API key가 없으면 HTML로 다시 시도한다. API key가 있는데 TinyFish 
 TinyFish의 `image_links`는 대표 이미지 순서를 보장하지 않는다. 지원 사이트를 추가할
 때는 실제 URL 여러 건의 응답 이미지를 확인하고, 사이트 규칙의 `selectImage`에 검증할 수
 있는 조건을 작성한다. 배열의 첫 이미지를 그대로 사용하지 않는다.
+
+### Instagram 게시물·릴스 캡션 수집
+
+일반 게시물(`/p/`)과 릴스(`/reel/`, `/reels/`), `/tv/`는 TinyFish에 원본 URL 대신
+`/{kind}/{shortcode}/embed/captioned/`를 한 번 요청한다. `/reels/`는 `/reel/`로 정규화한다.
+추가 원본 조회나 이미지 보완 요청은 없다. 프로필은 기존 원본 수집 방식을 유지한다.
+
+captioned 응답의 `title`은 `Instagram`, `description`은 null일 수 있다. 캡션은 별도 필드가
+아니라 `text`의 일부이므로 `instagram-caption.parser.ts`가 작성자·좋아요·댓글 링크·버튼의
+경계를 확인해 작성자 글만 추출한다. 음악·재생 버튼·프로필 카드와 Markdown 배지·줄바꿈
+변형을 처리하며, 캡션 안에 같은 문구가 있다는 이유만으로 삭제하지 않는다.
+
+- 제목: 캡션 첫 줄 최대 100자(이모지 코드 포인트 보존)
+- DB 저장: 기존 `metadata.description`에 캡션 최대 2,000자
+- AI 입력: `description`에 캡션 최대 2,000자를 전달하며, 중복되는 `content`는 수집 단계에서 null로 둔다.
+  공통 분석 흐름은 설명 또는 본문이 있으면 실행한다. 별도 Instagram AI 처리기나 본문 컬럼은 추가하지 않는다.
+- 캡션 없음 또는 형식 식별 실패: 제목·설명·본문은 null. UI 문구를 대신 저장하거나 분석하지 않는다.
+
+이미지는 기존 사이트별 규칙으로 선택한다. 릴스는 허용된 HTTPS CDN의 콘텐츠 이미지에서
+대상 shortcode의 미디어 ID와 `ig_cache_key`를 비교한다. 관측된 `미디어 ID + 17자리 보조 식별자`
+형식은 전체 길이와 숫자 형식까지 검사한다. 보조 식별자를 이미지 파일명 ID와 동일하다고
+가정하지 않는다. 일반 게시물은 기존 `ig_cache_key` 후보 선택을 유지한다. 캐러셀의 자식 이미지
+ID는 게시물 ID와 다르므로 릴스 ID 규칙을 적용하지 않는다. 대표 이미지 한 개만 사용한다.
+
+최종 이미지는 공개 URL·길이 검증을 거친다. TinyFish 요청이 실패하면 기존 오류·재시도 정책을
+따르며, 요청당 기존 25초 제한을 사용한다. embed 이미지와 캡션 경계는 관측에 기반한 규칙이므로
+Instagram 응답 형식·언어가 바뀌면 재검증이 필요하다. API key가 없는 환경의 HTML 대체 수집
+정책은 기존과 같다.
