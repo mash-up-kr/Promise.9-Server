@@ -228,7 +228,9 @@ GET /links/{linkId}
 
 ### 비동기 처리 중 응답
 
-`processingStatus`는 `aiSummaryStatus`를 반환하며 `PENDING`, `SUCCESS`, `NEEDS_REVIEW`, `FAILED` 중 하나다. 요약에 필요한 크롤링 또는 AI 요약이 오류·타임아웃으로 실패하면 `FAILED`가 된다. 재시도 중에도 `FAILED`를 유지하며 요약 저장에 성공하면 `SUCCESS`로 바뀐다. 태그·임베딩만 실패하거나 이미지 다운로드·색상 추출이 실패한 경우에는 성공한 요약 상태를 변경하지 않는다.
+`processingStatus`는 `aiSummaryStatus`를 반환하며 `PENDING`, `SUCCESS`, `FAILED` 중 하나다. 요약에 필요한 크롤링 또는 AI 요약이 오류나 타임아웃으로 실패하면 `FAILED`가 된다. 재시도 중에도 `FAILED`를 유지하며 요약 저장에 성공하면 `SUCCESS`로 바뀐다. 태그나 임베딩만 실패하거나 이미지 다운로드나 색상 추출이 실패한 경우에는 성공한 요약 상태를 변경하지 않는다.
+
+DB의 `ai_summary_status`에는 개발자 검토용 `NEEDS_REVIEW` 값이 추가로 존재하지만, 내부 운영 상태이므로 API에서는 `SUCCESS`로 변환해 내려준다. 클라이언트는 이 값을 볼 수 없다.
 
 ```json
 {

@@ -30,26 +30,26 @@ erDiagram
 
 ## 필드
 
-| 필드              | 타입        | 필수 | 설명                                                                                            |
-| ----------------- | ----------- | ---- | ----------------------------------------------------------------------------------------------- |
-| id                | bigint      | Y    | 사용자 저장 링크 식별자                                                                         |
-| user_id           | bigint      | Y    | 링크를 저장한 회원 ID                                                                           |
-| folder_id         | bigint      | N    | 저장된 커스텀 폴더 ID. `NULL`이면 미분류                                                        |
-| original_url      | text        | Y    | 사용자가 저장을 요청한 원본 URL                                                                 |
-| normalized_url    | text        | Y    | 사용자별 중복 저장 판단 키. redirect 추적 성공 시 `final_url`, 실패 시 `original_url`을 정규화  |
-| final_url         | text        | N    | redirect 이후 최종 도착 URL. 추적 실패 시 `NULL` 가능                                           |
-| domain            | varchar     | N    | 출처 표시와 검색에 사용하는 도메인. `final_url` 우선, 없으면 `original_url` 기준                |
-| title             | varchar     | N    | 수집된 제목. 수집 실패 시 `NULL` 가능                                                           |
-| metadata          | jsonb       | N    | Open Graph, favicon, description, 이미지 정보, 색상 등 확장 메타데이터. 최상위에 `version` 포함 |
-| ai_summary        | text        | N    | AI 요약 결과                                                                                    |
-| ai_summary_status | varchar     | Y    | 비동기 분석 대표 상태. 요약·태그·임베딩이 모두 성공해야 `SUCCESS`                               |
-| memo              | text        | N    | 사용자 메모. 최대 500자                                                                         |
-| reminder_at       | timestamptz | N    | 리마인드를 받을 절대 시각. `NULL`이면 리마인드를 설정하지 않음                                  |
-| is_favorite       | boolean     | Y    | 즐겨찾기 여부. 기본값은 `false`                                                                 |
-| viewed_at         | timestamptz | N    | 링크 상세 화면을 마지막으로 조회한 시각. 조회 전에는 `NULL`                                     |
-| deleted_at        | timestamptz | N    | 최근 삭제된 항목으로 이동한 일시                                                                |
-| created_at        | timestamptz | Y    | 링크 저장 일시이자 레코드 생성 일시                                                             |
-| updated_at        | timestamptz | Y    | 레코드 수정 일시                                                                                |
+| 필드              | 타입        | 필수 | 설명                                                                                                          |
+| ----------------- | ----------- | ---- | ------------------------------------------------------------------------------------------------------------- |
+| id                | bigint      | Y    | 사용자 저장 링크 식별자                                                                                       |
+| user_id           | bigint      | Y    | 링크를 저장한 회원 ID                                                                                         |
+| folder_id         | bigint      | N    | 저장된 커스텀 폴더 ID. `NULL`이면 미분류                                                                      |
+| original_url      | text        | Y    | 사용자가 저장을 요청한 원본 URL                                                                               |
+| normalized_url    | text        | Y    | 사용자별 중복 저장 판단 키. redirect 추적 성공 시 `final_url`, 실패 시 `original_url`을 정규화                |
+| final_url         | text        | N    | redirect 이후 최종 도착 URL. 추적 실패 시 `NULL` 가능                                                         |
+| domain            | varchar     | N    | 출처 표시와 검색에 사용하는 도메인. `final_url` 우선, 없으면 `original_url` 기준                              |
+| title             | varchar     | N    | 수집된 제목. 수집 실패 시 `NULL` 가능                                                                         |
+| metadata          | jsonb       | N    | Open Graph, favicon, description, 이미지 정보, 색상 등 확장 메타데이터. 최상위에 `version` 포함               |
+| ai_summary        | text        | N    | AI 요약 결과                                                                                                  |
+| ai_summary_status | varchar     | Y    | 비동기 분석 대표 상태. 요약, 태그, 임베딩이 모두 성공해야 `SUCCESS`, AI가 검토 대상으로 판정하면 `NEEDS_REVIEW` |
+| memo              | text        | N    | 사용자 메모. 최대 500자                                                                                       |
+| reminder_at       | timestamptz | N    | 리마인드를 받을 절대 시각. `NULL`이면 리마인드를 설정하지 않음                                                |
+| is_favorite       | boolean     | Y    | 즐겨찾기 여부. 기본값은 `false`                                                                               |
+| viewed_at         | timestamptz | N    | 링크 상세 화면을 마지막으로 조회한 시각. 조회 전에는 `NULL`                                                   |
+| deleted_at        | timestamptz | N    | 최근 삭제된 항목으로 이동한 일시                                                                              |
+| created_at        | timestamptz | Y    | 링크 저장 일시이자 레코드 생성 일시                                                                           |
+| updated_at        | timestamptz | Y    | 레코드 수정 일시                                                                                              |
 
 ## 제약
 
@@ -68,6 +68,7 @@ erDiagram
 - 복원 시 `deleted_at`을 `NULL`로 되돌린다.
 - 검색 대상은 `title`, `domain`, `original_url`, `final_url`, `ai_summary`, `memo`이며, `deleted_at IS NULL`인 링크만 포함한다.
 - `ai_summary_status`는 목록/상세 화면에서 사용하는 사용자 저장 링크 단위 대표 상태다.
+- `NEEDS_REVIEW`는 요약, 태그 생성은 성공했지만 AI가 링크 내용의 이상(로그인, 오류 페이지, URL 불일치, 유해, 스팸 의심, 내용 부족)을 감지한 상태다. 개발자만 확인하며 재시도 대상이 아니다. 사유는 같은 링크의 `ai_metrics.generated_result.reviewReason`에서 조회한다.
 - AI 요약·태그 LLM 호출의 모델, 프롬프트, 토큰, TTLB, 에러, 생성 결과는 `ai_metrics`에 저장한다.
 - `ai_metrics.status`는 개별 LLM 호출 결과이며, `links.ai_summary_status`는 링크 분석 전체 상태다.
 - `metadata`는 확장 정보 보관용이며, 목록/검색/정렬에 자주 쓰는 값은 별도 컬럼으로 둔다.
