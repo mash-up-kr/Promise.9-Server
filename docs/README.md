@@ -14,6 +14,7 @@ Promise.9 서버 레포에서 쓰는 문서의 시작점입니다.
 | [Infrastructure](./infrastructure/README.md) | AWS CLI, IAM, CDK, 팀 접근과 인프라 관리 기준            |
 | [Deploy](./deploy/README.md)         | 서버 배포와 운영 설정                                    |
 | [Search](./search/README.md)         | 링크 검색 구조, pgvector 벡터 검색, 검색 점수 산정       |
+| [Skills](./skills/README.md) | 사이트별 링크 수집 등 팀 공유 작업 스킬 |
 
 ## 문서 추가 규칙
 

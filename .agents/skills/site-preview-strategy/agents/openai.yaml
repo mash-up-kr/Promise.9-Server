@@ -1,0 +1,4 @@
+interface:
+  display_name: "사이트별 링크 수집 전략"
+  short_description: "공개 경로와 TinyFish 응답으로 제목·본문·이미지 수집 전략을 개선합니다"
+  default_prompt: "$site-preview-strategy를 사용해 이 사이트의 링크 수집 전략을 구현해줘. 공개 embed·모바일 경로와 robots 정책부터 확인하고 실제 내용·이미지와 요청 시간을 검증해줘."

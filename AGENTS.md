@@ -11,3 +11,7 @@
 - 인증/인가가 필요한 API에서 guard, middleware, validation 누락을 P1로 봐줘.
 - Drizzle schema, migration, repository/query 로직 변경 시 데이터 손실이나 호환성 위험을 확인해줘.
 - 민감 정보, 토큰, 개인정보가 로그나 API 응답에 노출되는 변경을 지적해줘.
+
+## 팀 공유 스킬
+
+사이트별 링크 미리보기·본문·썸네일 수집을 추가하거나 개선할 때는 [site-preview-strategy](.agents/skills/site-preview-strategy/SKILL.md)를 참고한다.
