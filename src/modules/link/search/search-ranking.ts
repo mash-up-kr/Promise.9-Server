@@ -3,13 +3,20 @@ import {
     tokenizeLinkText,
 } from '../link-similarity.util'
 
-import { SEARCH_RANKING_WEIGHTS } from './search-ranking.constant'
+import {
+    SEARCH_EXACT_FOLDER_SCORE_SCALE,
+    SEARCH_RANKING_WEIGHTS,
+    SEARCH_SCORE_RANGE_SPLIT,
+    SEARCH_VECTOR_STDDEV_MULTIPLIER,
+} from './search-ranking.constant'
 
 type SearchSignalKey = keyof typeof SEARCH_RANKING_WEIGHTS
+type SearchSignals = Partial<Record<SearchSignalKey, number | null | undefined>>
 
 export type SearchRankingCandidate = {
     id: number
-    signals: Partial<Record<SearchSignalKey, number | null | undefined>>
+    signals: SearchSignals
+    hasExactFolderMatch?: boolean
 }
 
 export type RankedSearchCandidate = {
@@ -19,6 +26,7 @@ export type RankedSearchCandidate = {
 
 export type SearchCandidateFeatures = {
     title?: string | null
+    aiSummary?: string | null
     folder?: string | null
     tags?: readonly string[] | null
     content?: string | null
@@ -32,30 +40,101 @@ const SEARCH_SIGNAL_KEYS = Object.keys(
 export function rankSearchCandidates(
     candidates: readonly SearchRankingCandidate[],
 ): RankedSearchCandidate[] {
+    const vectorThreshold = calculateVectorThreshold(candidates)
+
     return candidates
+        .filter(({ signals }) => {
+            if (hasKeywordMatch(signals)) return true
+
+            const similarity = signals.embedding
+
+            return (
+                vectorThreshold !== null &&
+                typeof similarity === 'number' &&
+                Number.isFinite(similarity) &&
+                normalizeCosineSimilarity(similarity) > vectorThreshold
+            )
+        })
         .map((candidate) => {
-            let weightedScore = 0
-            let availableWeight = 0
+            const baseScore = calculateWeightedScore(candidate.signals)
 
-            for (const key of SEARCH_SIGNAL_KEYS) {
-                const rawSignal = candidate.signals[key]
-
-                // null은 계산되지 않은 신호다. 실제로 계산된 0과 구분해
-                // 결측 신호의 가중치만 제외하고 나머지 가중치를 재정규화한다.
-                if (rawSignal === null) continue
-
-                weightedScore +=
-                    clampSearchSignal(rawSignal) * SEARCH_RANKING_WEIGHTS[key]
-                availableWeight += SEARCH_RANKING_WEIGHTS[key]
-            }
-
+            // 폴더명 전체 일치의 우선순위를 점수에 담아 (score, id) 커서를 유지한다.
             return {
                 id: candidate.id,
-                score:
-                    availableWeight > 0 ? weightedScore / availableWeight : 0,
+                score: candidate.hasExactFolderMatch
+                    ? SEARCH_SCORE_RANGE_SPLIT +
+                      SEARCH_EXACT_FOLDER_SCORE_SCALE * baseScore
+                    : Math.min(
+                          SEARCH_SCORE_RANGE_SPLIT,
+                          SEARCH_SCORE_RANGE_SPLIT * baseScore,
+                      ),
             }
         })
         .sort((left, right) => right.score - left.score || right.id - left.id)
+}
+
+function calculateVectorThreshold(
+    candidates: readonly SearchRankingCandidate[],
+): number | null {
+    // 페이지나 최종 상위 30개가 아니라 요청 범위의 후보 합집합을 사용한다.
+    // 키워드 일치 후보의 벡터도 포함하며 계산 불가능한 신호는 제외한다.
+    const similarities = candidates.flatMap(({ signals }) => {
+        const similarity = signals.embedding
+
+        return typeof similarity === 'number' && Number.isFinite(similarity)
+            ? [normalizeCosineSimilarity(similarity)]
+            : []
+    })
+
+    if (similarities.length === 0) return null
+
+    // 동일 점수의 합산 오차로 평균 경계가 흔들리지 않도록 편차를 합산한다.
+    const referenceSimilarity = similarities[0]
+    const mean =
+        referenceSimilarity +
+        similarities.reduce(
+            (sum, similarity) => sum + (similarity - referenceSimilarity),
+            0,
+        ) /
+            similarities.length
+    const variance =
+        similarities.reduce(
+            (sum, similarity) => sum + (similarity - mean) ** 2,
+            0,
+        ) / similarities.length
+
+    return mean + SEARCH_VECTOR_STDDEV_MULTIPLIER * Math.sqrt(variance)
+}
+
+function hasKeywordMatch(signals: SearchSignals): boolean {
+    // 기타 본문(메모·URL 등)의 일치만으로는 관련성 필터를 우회하지 않는다.
+    return (
+        clampSearchSignal(signals.titleKeyword ?? undefined) > 0 ||
+        clampSearchSignal(signals.summaryKeyword ?? undefined) > 0 ||
+        clampSearchSignal(signals.tagKeyword ?? undefined) > 0 ||
+        clampSearchSignal(signals.folderKeyword ?? undefined) > 0
+    )
+}
+
+function calculateWeightedScore(signals: SearchSignals): number {
+    let weightedScore = 0
+    let availableWeightPercent = 0
+
+    for (const key of SEARCH_SIGNAL_KEYS) {
+        const rawSignal = signals[key]
+
+        // 계산 불가인 null만 제외하고, 실제 0과 생략된 undefined는 유지한다.
+        if (rawSignal === null) continue
+
+        const weight = SEARCH_RANKING_WEIGHTS[key]
+        weightedScore += clampSearchSignal(rawSignal) * weight
+        // 소수 가중치의 누적 오차가 분모에 섞이지 않도록 정수 백분율로 합산한다.
+        availableWeightPercent += weight * 100
+    }
+
+    return availableWeightPercent > 0
+        ? weightedScore / (availableWeightPercent / 100)
+        : 0
 }
 
 function clampSearchSignal(value: number | undefined): number {
@@ -104,12 +183,27 @@ function normalizeKeywordTarget(text: string | null | undefined): string {
     return text?.toLocaleLowerCase('und').replace(/\s/gu, '') ?? ''
 }
 
+// 정확 일치는 토큰열 전체를 비교한다. 폴더명 장식·구두점 때문에
+// 검색어 토큰화 이후의 완전 일치가 사라지지 않도록 양쪽 기준을 맞춘다.
+export function isExactFolderMatch(
+    query: string,
+    folderName: string | null | undefined,
+): boolean {
+    const queryTokenSequence = tokenizeLinkText(query).join(' ')
+
+    return (
+        queryTokenSequence.length > 0 &&
+        tokenizeLinkText(folderName).join(' ') === queryTokenSequence
+    )
+}
+
 export function calculateSearchSignals(
     query: string,
     candidate: SearchCandidateFeatures,
 ) {
     return {
         titleKeyword: queryTokenCoverage(query, candidate.title),
+        summaryKeyword: queryTokenCoverage(query, candidate.aiSummary),
         folderKeyword: queryTokenCoverage(query, candidate.folder),
         tagKeyword: queryTokenCoverageAcrossTargets(
             query,
@@ -117,8 +211,8 @@ export function calculateSearchSignals(
         ),
         contentKeyword: queryTokenCoverage(query, candidate.content),
         embedding:
-            candidate.embeddingSimilarity === null ||
-            candidate.embeddingSimilarity === undefined
+            typeof candidate.embeddingSimilarity !== 'number' ||
+            !Number.isFinite(candidate.embeddingSimilarity)
                 ? null
                 : normalizeCosineSimilarity(candidate.embeddingSimilarity),
     }

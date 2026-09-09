@@ -21,6 +21,7 @@ import {
 } from './search.util'
 import {
     calculateSearchSignals,
+    isExactFolderMatch,
     RankedSearchCandidate,
     rankSearchCandidates,
 } from './search-ranking'
@@ -152,17 +153,28 @@ export class SearchService {
             queryEmbedding,
             scope,
         )
+        const rankingQuery = tokens.join(' ')
         const ranked = rankSearchCandidates(
-            candidates.map((candidate) => ({
-                id: candidate.id,
-                signals: calculateSearchSignals(tokens.join(' '), {
+            candidates.map((candidate) => {
+                const features = {
                     title: candidate.title,
+                    aiSummary: candidate.aiSummary,
                     folder: candidate.folderName,
                     tags: candidate.tags,
-                    content: this.queryContent(candidate),
+                    content: this.buildAuxiliarySearchText(candidate),
                     embeddingSimilarity: candidate.embeddingSimilarity,
-                }),
-            })),
+                }
+
+                return {
+                    id: candidate.id,
+                    signals: calculateSearchSignals(rankingQuery, features),
+                    // 전체 일치는 중복 제거·12개 제한 전의 원문 토큰열로 판단한다.
+                    hasExactFolderMatch: isExactFolderMatch(
+                        query,
+                        candidate.folderName,
+                    ),
+                }
+            }),
         )
 
         return { candidates, ranked }
@@ -183,9 +195,8 @@ export class SearchService {
         return parsed
     }
 
-    private queryContent(candidate: SearchLinkCandidate): string {
+    private buildAuxiliarySearchText(candidate: SearchLinkCandidate): string {
         return [
-            candidate.aiSummary,
             candidate.memo,
             candidate.domain,
             candidate.originalUrl,
