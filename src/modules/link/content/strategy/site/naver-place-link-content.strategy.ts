@@ -1,4 +1,5 @@
 import { LinkContentTinyFishStrategy } from '../link-content-strategy.type'
+import { TinyFishFetchError } from '../../tinyfish/tinyfish-fetch.error'
 
 export function extractNaverPlaceId(url: URL): string | null {
     if (
@@ -44,11 +45,18 @@ export const NAVER_PLACE_LINK_CONTENT_STRATEGY: LinkContentTinyFishStrategy = {
                 .replace(/\s*:\s*네이버\s*$/, '')
                 .trim() || null
         if (
-            !title ||
+            title &&
             /^(?:네이버\s*(?:지도|플레이스)|장소\s*-\s*네이버지도|로딩중|loading)$/i.test(
                 title,
             )
         ) {
+            throw new TinyFishFetchError({
+                message:
+                    'TinyFish가 네이버 장소 페이지 렌더링을 완료하지 못했습니다.',
+                retryable: true,
+            })
+        }
+        if (!title) {
             return {
                 title: null,
                 description: null,
