@@ -20,7 +20,7 @@ export type AiLinkAnalysisInput = {
     llm?: LlmTargetOptions
 }
 
-/** 요약·태그와 개발자 검토 판정을 한 번의 LLM 호출로 생성한 결과. */
+/** 요약, 태그와 개발자 검토 판정을 한 번의 LLM 호출로 생성한 결과. */
 export type AiLinkAnalysisResult = {
     summary: string
     tags: string[]

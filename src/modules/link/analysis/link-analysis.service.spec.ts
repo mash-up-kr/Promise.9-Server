@@ -362,7 +362,7 @@ describe('LinkAnalysisService', () => {
         ])
     })
 
-    it('검토 대상 링크는 요약·태그를 저장하되 상태를 NEEDS_REVIEW로 남긴다', async () => {
+    it('검토 대상 링크는 요약, 태그를 저장하되 상태를 NEEDS_REVIEW로 남긴다', async () => {
         aiService.generateLinkAnalysis.mockResolvedValueOnce({
             summary: '로그인이 필요한 페이지예요.',
             tags: ['기타'],

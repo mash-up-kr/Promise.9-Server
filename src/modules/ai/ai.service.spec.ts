@@ -121,7 +121,7 @@ describe('AiService', () => {
         },
     )
 
-    it('수집한 링크 정보로 요약·태그·검토 판정을 한 번의 호출로 생성한다', async () => {
+    it('수집한 링크 정보로 요약, 태그, 검토 판정을 한 번의 호출로 생성한다', async () => {
         llmService.generateObjectWithResolvedTarget.mockResolvedValueOnce({
             model: 'gpt-test',
             data: {

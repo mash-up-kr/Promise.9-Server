@@ -13,7 +13,7 @@ const buildLinkInformationPromptV1 = (input: AiLinkAnalysisInput): string =>
         .filter((value): value is string => Boolean(value))
         .join('\n')
 
-// 요약·태그·검토 판정을 한 번의 호출로 생성한다. 필드별 규칙은 [필드명] 블록으로 구분한다.
+// 요약, 태그, 검토 판정을 한 번의 호출로 생성한다. 필드별 규칙은 [필드명] 블록으로 구분한다.
 const linkAnalysisPromptV1 = {
     promptKey: 'link_analysis_v1',
     system: [
@@ -44,9 +44,9 @@ const linkAnalysisPromptV1 = {
         '[needsReview / reviewReason]',
         'needsReview는 개발자가 이 링크를 직접 확인해야 하는 경우에만 true로 설정한다. 사용자에게 보이는 값이 아니다.',
         '다음 중 하나에 해당하면 true다.',
-        '- 수집된 내용이 실제 콘텐츠가 아니라 로그인·권한·연령 확인·봇 확인·오류·삭제 안내 페이지다.',
-        '- 제목·설명·본문이 서로 다른 페이지를 가리키는 등 URL과 내용이 맞지 않는다.',
-        '- 성인·도박·불법·폭력·혐오 등 유해 콘텐츠이거나 스팸·피싱·사기가 의심된다.',
+        '- 수집된 내용이 실제 콘텐츠가 아니라 로그인, 권한, 연령 확인, 봇 확인, 오류, 삭제 안내 페이지다.',
+        '- 제목, 설명, 본문이 서로 다른 페이지를 가리키는 등 URL과 내용이 맞지 않는다.',
+        '- 성인, 도박, 불법, 폭력, 혐오 등 유해 콘텐츠이거나 스팸, 피싱, 사기가 의심된다.',
         '- 내용이 너무 빈약하거나 알아볼 수 없어 요약과 태그의 품질을 보장할 수 없다.',
         '주제가 낯설거나 글이 짧다는 이유만으로는 true로 설정하지 않는다.',
         'reviewReason은 needsReview가 true일 때만 판단 근거를 한국어 한 문장, 200자 이내로 작성하고, false이면 null로 둔다.',

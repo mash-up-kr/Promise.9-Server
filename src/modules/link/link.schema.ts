@@ -67,7 +67,7 @@ export const links = pgTable(
         metadata: jsonb().$type<LinkMetadata>(),
         aiSummary: text(),
         // 링크 비동기 분석 상태: PENDING | SUCCESS | NEEDS_REVIEW | FAILED
-        // NEEDS_REVIEW는 요약·태그는 저장됐지만 AI가 개발자 확인이 필요하다고 판정한 링크다.
+        // NEEDS_REVIEW는 요약, 태그는 저장됐지만 AI가 개발자 확인이 필요하다고 판정한 링크다.
         aiSummaryStatus: varchar({ length: 20 }).notNull().default('PENDING'),
         // 의미 검색용 임베딩 벡터. 제목·태그·AI 요약으로 생성하며 미생성 시 null.
         embedding: vector({ dimensions: EMBEDDING_DIMENSIONS }),
