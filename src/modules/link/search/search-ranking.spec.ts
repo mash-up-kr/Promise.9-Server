@@ -52,9 +52,7 @@ describe('rankSearchCandidates', () => {
             },
         ])
 
-        expect(result.score).toBe(
-            SEARCH_RANKING_WEIGHTS.titleKeyword,
-        )
+        expect(result.score).toBe(SEARCH_RANKING_WEIGHTS.titleKeyword)
     })
 
     it('모든 원점수를 0..1로 보정한 뒤 가중합한다', () => {
