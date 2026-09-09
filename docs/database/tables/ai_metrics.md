@@ -51,8 +51,9 @@ erDiagram
 
 현재 분류값은 다음과 같다.
 
-- `SUMMARY_GENERATE`
-- `TAG_GENERATE`
+- `LINK_ANALYSIS_GENERATE`: 요약, 태그, 검토 판정을 한 번에 생성하는 호출. `generated_result`에 `summary`, `tags`, `needsReview`, `reviewReason`이 저장된다.
+
+과거 분류값 `SUMMARY_GENERATE`, `TAG_GENERATE`는 요약과 태그를 별도 호출로 생성하던 시기의 row에만 남아 있다.
 
 task type은 metrics 분류만 담당한다.
 task별 prompt, 결과 schema, parsing, 품질 판정은 `AiService`의 도메인별 public AI 유스케이스가 정의한다.

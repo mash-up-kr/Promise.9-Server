@@ -1,6 +1,5 @@
 export const AI_TASK_TYPE = {
-    SUMMARY_GENERATE: 'SUMMARY_GENERATE',
-    TAG_GENERATE: 'TAG_GENERATE',
+    LINK_ANALYSIS_GENERATE: 'LINK_ANALYSIS_GENERATE',
 } as const
 
 export type AiTaskType = (typeof AI_TASK_TYPE)[keyof typeof AI_TASK_TYPE]
@@ -11,8 +10,7 @@ export const AI_EMBEDDING_TASK_TYPE = 'EMBEDDING_GENERATE' as const
 export type AiErrorTaskType = AiTaskType | typeof AI_EMBEDDING_TASK_TYPE
 
 export const AI_TASK_RESPONSE_SCHEMA_NAME = {
-    [AI_TASK_TYPE.SUMMARY_GENERATE]: 'summary_result',
-    [AI_TASK_TYPE.TAG_GENERATE]: 'tag_result',
+    [AI_TASK_TYPE.LINK_ANALYSIS_GENERATE]: 'link_analysis_result',
 } as const satisfies Record<AiTaskType, string>
 
 export const AI_METRIC_STATUS = {
@@ -32,4 +30,5 @@ export const AI_LINK_ANALYSIS = {
     summaryMaxLength: 300,
     tagMaxCount: 5,
     tagMaxLength: 20,
+    reviewReasonMaxLength: 200,
 } as const

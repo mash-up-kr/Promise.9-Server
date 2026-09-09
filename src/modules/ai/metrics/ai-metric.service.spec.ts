@@ -44,7 +44,7 @@ describe('AiMetricService', () => {
 
         const result = await service.record({
             userLinkId: 1,
-            taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+            taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
             status: AI_METRIC_STATUS.SUCCESS,
             modelProvider: 'openai',
             modelName: 'gpt-test',
@@ -60,7 +60,7 @@ describe('AiMetricService', () => {
         expect(typeof metric.id).toBe('string')
         expect(metric).toMatchObject({
             userLinkId: 1,
-            taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+            taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
             status: AI_METRIC_STATUS.SUCCESS,
             modelProvider: 'openai',
             modelName: 'gpt-test',
@@ -82,7 +82,7 @@ describe('AiMetricService', () => {
 
         const result = await service.record({
             userLinkId: 1,
-            taskType: AI_TASK_TYPE.TAG_GENERATE,
+            taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
             status: AI_METRIC_STATUS.FAILED,
             modelProvider: 'gemini',
             modelName: 'gemini-test',
@@ -97,7 +97,7 @@ describe('AiMetricService', () => {
 
         expect(metric).toMatchObject({
             userLinkId: 1,
-            taskType: AI_TASK_TYPE.TAG_GENERATE,
+            taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
             status: AI_METRIC_STATUS.FAILED,
             modelProvider: 'gemini',
             modelName: 'gemini-test',
@@ -118,7 +118,7 @@ describe('AiMetricService', () => {
         await expect(
             service.record({
                 userLinkId: 1,
-                taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+                taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
                 status: AI_METRIC_STATUS.FAILED,
                 modelProvider: 'openai',
                 modelName: 'gpt-test',

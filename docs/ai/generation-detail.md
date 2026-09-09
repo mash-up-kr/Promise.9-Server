@@ -18,7 +18,7 @@ AI 기능을 사용하는 방법은 [AI 사용 가이드](./usage.md)를 참고�
 
 ## 외부 경계
 
-다른 모듈에는 `generateSummary`, `generateTags` 같은 도메인별 public AI 유스케이스만 공개한다.
+다른 모듈에는 `generateLinkAnalysis` 같은 도메인별 public AI 유스케이스만 공개한다.
 generic `generateText`, `generateObject`는 private로 유지한다.
 
 ```text

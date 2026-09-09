@@ -121,16 +121,19 @@ describe('AiService', () => {
         },
     )
 
-    it('수집한 링크 정보로 최대 300자 요약을 생성한다', async () => {
+    it('수집한 링크 정보로 요약, 태그, 검토 판정을 한 번의 호출로 생성한다', async () => {
         llmService.generateObjectWithResolvedTarget.mockResolvedValueOnce({
             model: 'gpt-test',
             data: {
                 summary: ' 생성된 요약 ',
+                tags: ['AI', '링크 저장', 'NestJS', 'LLM'],
+                needsReview: false,
+                reviewReason: '검토 대상이 아니면 버려지는 사유',
             },
             ttlbMs: 120,
         })
 
-        const result = await service.generateSummary({
+        const result = await service.generateLinkAnalysis({
             userLinkId: 1,
             url: 'https://example.com/article',
             title: '링크 제목',
@@ -140,35 +143,48 @@ describe('AiService', () => {
 
         expect(result).toEqual({
             summary: '생성된 요약',
+            tags: ['AI', '링크 저장', 'NestJS', 'LLM'],
+            needsReview: false,
+            reviewReason: null,
         })
-        const summaryRequest =
+        expect(
+            llmService.generateObjectWithResolvedTarget,
+        ).toHaveBeenCalledTimes(1)
+        const request =
             llmService.generateObjectWithResolvedTarget.mock.calls[0]?.[0]
 
-        expect(summaryRequest?.prompt).toContain('CONTENT:\n링크 본문')
-        expect(summaryRequest?.system).toContain(
-            '자연스러운 한국어 ~요체로 작성한다.',
+        expect(request?.prompt).toContain('CONTENT:\n링크 본문')
+        expect(request?.system).toContain('자연스러운 한국어 ~요체로 작성한다.')
+        expect(request?.system).toContain(
+            '태그 값에는 # 문자를 포함하지 않는다.',
         )
-        expect(summaryRequest?.responseSchemaName).toBe(
-            AI_TASK_RESPONSE_SCHEMA_NAME[AI_TASK_TYPE.SUMMARY_GENERATE],
+        expect(request?.system).toContain(
+            'needsReview는 개발자가 이 링크를 직접 확인해야 하는 경우에만 true로 설정한다.',
+        )
+        expect(request?.responseSchemaName).toBe(
+            AI_TASK_RESPONSE_SCHEMA_NAME[AI_TASK_TYPE.LINK_ANALYSIS_GENERATE],
         )
         expect(aiMetricService.record).toHaveBeenCalledWith(
             expect.objectContaining({
-                taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
-                promptKey: 'link_summary_v1',
+                taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
+                promptKey: 'link_analysis_v1',
             }),
         )
     })
 
-    it('대분류 없이 생성한 내용 태그를 그대로 반환한다', async () => {
+    it('수집 정보가 없으면 URL 한정 안내를 넣고 검토 사유를 정리해 반환한다', async () => {
         llmService.generateObjectWithResolvedTarget.mockResolvedValueOnce({
             model: 'gpt-test',
             data: {
-                tags: ['AI', '링크 저장', 'NestJS', 'LLM'],
+                summary: '로그인이 필요한 페이지예요.',
+                tags: [],
+                needsReview: true,
+                reviewReason: ' 로그인 안내 페이지만 수집되었습니다. ',
             },
             ttlbMs: 120,
         })
 
-        const result = await service.generateTags({
+        const result = await service.generateLinkAnalysis({
             userLinkId: 1,
             url: 'https://example.com/article',
             title: null,
@@ -177,21 +193,38 @@ describe('AiService', () => {
         })
 
         expect(result).toEqual({
-            tags: ['AI', '링크 저장', 'NestJS', 'LLM'],
+            summary: '로그인이 필요한 페이지예요.',
+            tags: [],
+            needsReview: true,
+            reviewReason: '로그인 안내 페이지만 수집되었습니다.',
         })
-        const tagRequest =
+        const request =
             llmService.generateObjectWithResolvedTarget.mock.calls[0]?.[0]
 
-        expect(tagRequest?.prompt).toContain('수집된 페이지 정보가 없으므로')
-        expect(tagRequest?.system).toContain(
-            '태그 값에는 # 문자를 포함하지 않는다.',
-        )
-        expect(tagRequest?.system).toContain(
-            '같은 의미나 같은 표기의 태그를 중복해서 생성하지 않는다.',
-        )
-        expect(tagRequest?.responseSchemaName).toBe(
-            AI_TASK_RESPONSE_SCHEMA_NAME[AI_TASK_TYPE.TAG_GENERATE],
-        )
+        expect(request?.prompt).toContain('수집된 페이지 정보가 없으므로')
+    })
+
+    it('검토 대상인데 사유가 비어 있으면 null로 정리한다', async () => {
+        llmService.generateObjectWithResolvedTarget.mockResolvedValueOnce({
+            model: 'gpt-test',
+            data: {
+                summary: '요약',
+                tags: ['태그'],
+                needsReview: true,
+                reviewReason: '   ',
+            },
+            ttlbMs: 120,
+        })
+
+        const result = await service.generateLinkAnalysis({
+            userLinkId: 1,
+            url: 'https://example.com/article',
+            title: null,
+            description: null,
+            content: null,
+        })
+
+        expect(result).toMatchObject({ needsReview: true, reviewReason: null })
     })
 
     it('텍스트 생성 성공 시 결과와 성공 메트릭을 반환한다', async () => {
@@ -207,7 +240,7 @@ describe('AiService', () => {
 
         const result = await internalService.generateText({
             userLinkId: 1,
-            taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+            taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
             prompt: '텍스트를 생성해줘',
         })
 
@@ -227,7 +260,7 @@ describe('AiService', () => {
         expect(aiMetricService.record).toHaveBeenCalledWith(
             expect.objectContaining({
                 userLinkId: 1,
-                taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+                taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
                 status: AI_METRIC_STATUS.SUCCESS,
                 modelProvider: 'openai',
                 modelName: LLM_MODEL.GPT_5_4_MINI,
@@ -253,7 +286,7 @@ describe('AiService', () => {
 
         const result = await internalService.generateObject({
             userLinkId: 1,
-            taskType: AI_TASK_TYPE.TAG_GENERATE,
+            taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
             prompt: 'object를 생성해줘',
             schema,
         })
@@ -275,11 +308,13 @@ describe('AiService', () => {
             },
             schema,
             responseSchemaName:
-                AI_TASK_RESPONSE_SCHEMA_NAME[AI_TASK_TYPE.TAG_GENERATE],
+                AI_TASK_RESPONSE_SCHEMA_NAME[
+                    AI_TASK_TYPE.LINK_ANALYSIS_GENERATE
+                ],
         })
         expect(aiMetricService.record).toHaveBeenCalledWith(
             expect.objectContaining({
-                taskType: AI_TASK_TYPE.TAG_GENERATE,
+                taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
                 status: AI_METRIC_STATUS.SUCCESS,
                 generatedResult: {
                     value: '생성된 값',
@@ -300,7 +335,7 @@ describe('AiService', () => {
 
         const result = await internalService.generateText({
             userLinkId: 1,
-            taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+            taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
             prompt: '텍스트를 생성해줘',
         })
 
@@ -323,13 +358,13 @@ describe('AiService', () => {
 
         const result = internalService.generateText({
             userLinkId: 1,
-            taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+            taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
             prompt: '텍스트를 생성해줘',
         })
 
         await expect(result).rejects.toMatchObject({
             code: 'LLM_CONFIGURATION_ERROR',
-            taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+            taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
             cause: configurationError,
         })
         expect(llmService.generateTextWithResolvedTarget).not.toHaveBeenCalled()
@@ -346,7 +381,7 @@ describe('AiService', () => {
 
         const result = internalService.generateObject({
             userLinkId: 1,
-            taskType: AI_TASK_TYPE.TAG_GENERATE,
+            taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
             prompt: 'object를 생성해줘',
             schema: z.object({
                 value: z.string(),
@@ -355,7 +390,7 @@ describe('AiService', () => {
 
         await expect(result).rejects.toMatchObject({
             code: 'LLM_CONFIGURATION_ERROR',
-            taskType: AI_TASK_TYPE.TAG_GENERATE,
+            taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
             cause: configurationError,
         })
         expect(aiMetricService.record).not.toHaveBeenCalled()
@@ -373,20 +408,20 @@ describe('AiService', () => {
 
         const result = internalService.generateText({
             userLinkId: 1,
-            taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+            taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
             prompt: '텍스트를 생성해줘',
         })
 
         await expect(result).rejects.toBeInstanceOf(AiGenerationError)
         await expect(result).rejects.toMatchObject({
             code: 'OPENAI_REQUEST_FAILED',
-            taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+            taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
             cause: llmError,
         })
         expect(aiMetricService.record).toHaveBeenCalledWith(
             expect.objectContaining({
                 userLinkId: 1,
-                taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+                taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
                 status: AI_METRIC_STATUS.FAILED,
                 modelProvider: 'openai',
                 modelName: LLM_MODEL.GPT_5_4_MINI,
@@ -409,13 +444,13 @@ describe('AiService', () => {
 
         const result = internalService.generateText({
             userLinkId: 1,
-            taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+            taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
             prompt: '텍스트를 생성해줘',
         })
 
         await expect(result).rejects.toMatchObject({
             code: 'OPENAI_REQUEST_FAILED',
-            taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+            taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
             cause: llmError,
         })
         expect(loggerErrorSpy).toHaveBeenCalled()
@@ -435,7 +470,7 @@ describe('AiService', () => {
         await expect(
             internalService.generateObject({
                 userLinkId: 1,
-                taskType: AI_TASK_TYPE.TAG_GENERATE,
+                taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
                 prompt: 'object를 생성해줘',
                 schema: z.object({
                     value: z.string(),

@@ -26,16 +26,12 @@ import {
     AiGenerateTextResult,
     AiGenerationFailure,
     AiLinkAnalysisInput,
+    AiLinkAnalysisResult,
     AiRecordMetricInput,
     AiResolveTargetInput,
-    AiSummaryResult,
-    AiTagsResult,
 } from './ai.type'
 import { AI_LINK_ANALYSIS_PROMPT } from './ai-link-analysis.prompt'
-import {
-    aiSummaryResultSchema,
-    aiTagsResultSchema,
-} from './ai-link-analysis.schema'
+import { aiLinkAnalysisResultSchema } from './ai-link-analysis.schema'
 
 @Injectable()
 export class AiService {
@@ -67,40 +63,29 @@ export class AiService {
         }
     }
 
-    // 수집한 링크 정보를 기반으로 최대 300자의 한국어 요약을 생성한다.
-    async generateSummary(
+    // 수집한 링크 정보로 300자 내외 요약, 최대 5개 태그, 개발자 검토 필요 여부를 한 번에 생성한다.
+    async generateLinkAnalysis(
         input: AiLinkAnalysisInput,
-    ): Promise<AiSummaryResult> {
-        const prompt = AI_LINK_ANALYSIS_PROMPT.summary.current
+    ): Promise<AiLinkAnalysisResult> {
+        const prompt = AI_LINK_ANALYSIS_PROMPT.current
         const result = await this.generateObject({
             userLinkId: input.userLinkId,
-            taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+            taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
             promptKey: prompt.promptKey,
             llm: input.llm,
             system: prompt.system,
             prompt: prompt.buildPrompt(input),
-            schema: aiSummaryResultSchema,
+            schema: aiLinkAnalysisResultSchema,
         })
+        const { summary, tags, needsReview, reviewReason } = result.data
 
+        // 검토 대상이 아니면 모델이 남긴 사유를 버려 needsReview와 reviewReason이 항상 함께 움직이게 한다.
         return {
-            summary: result.data.summary.trim(),
+            summary: summary.trim(),
+            tags,
+            needsReview,
+            reviewReason: needsReview ? reviewReason?.trim() || null : null,
         }
-    }
-
-    // 수집한 링크 정보를 기반으로 대분류 구분 없이 내용 태그를 최대 5개 생성한다.
-    async generateTags(input: AiLinkAnalysisInput): Promise<AiTagsResult> {
-        const prompt = AI_LINK_ANALYSIS_PROMPT.tags.current
-        const result = await this.generateObject({
-            userLinkId: input.userLinkId,
-            taskType: AI_TASK_TYPE.TAG_GENERATE,
-            promptKey: prompt.promptKey,
-            llm: input.llm,
-            system: prompt.system,
-            prompt: prompt.buildPrompt(input),
-            schema: aiTagsResultSchema,
-        })
-
-        return result.data
     }
 
     private async generateText(

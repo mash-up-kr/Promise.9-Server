@@ -1,4 +1,5 @@
 import {
+    LINK_ANALYSIS_CONTENT_DEPENDENT_TASKS,
     LINK_ANALYSIS_MESSAGE_VERSION,
     LINK_ANALYSIS_TASKS,
 } from './link-analysis.constant'
@@ -11,6 +12,10 @@ export type LinkAnalysisInput = {
 }
 
 export type LinkAnalysisTask = (typeof LINK_ANALYSIS_TASKS)[number]
+
+// 한 번의 LLM 호출 결과를 나눠 저장하는 AI 작업. 수집 결과를 입력으로 쓴다.
+export type LinkAnalysisAiTask =
+    (typeof LINK_ANALYSIS_CONTENT_DEPENDENT_TASKS)[number]
 
 // 다시 실행하면 결과가 달라질 수 있는 실패와, 반복해도 같은 실패를 구분한다.
 // PERMANENT는 큐에 넣지 않고 즉시 종료해 DLQ 오염과 불필요한 재시도를 막는다.

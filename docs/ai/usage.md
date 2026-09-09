@@ -4,8 +4,7 @@
 도메인별 public AI 유스케이스는 각 도메인 모듈이 호출하는 `AiService`의 공개 기능을 뜻한다.
 각 도메인 모듈은 `LlmService`를 직접 호출하지 않고 이러한 AI 유스케이스를 사용한다.
 
-현재 `generateSummary`, `generateTags`는 구현 위치만 준비된 placeholder다.
-실제 입력과 반환 타입은 각 유스케이스를 구현할 때 확정한다.
+현재 구현된 유스케이스는 `generateLinkAnalysis`다. 링크 요약, 태그, 개발자 검토 필요 여부를 LLM 1회 호출로 함께 생성한다.
 
 ## 최종 구조
 
@@ -13,7 +12,7 @@
 
 ```text
 도메인 서비스
-  -> AiService.generateSummary / generateTags / 새로운 public AI 유스케이스
+  -> AiService.generateLinkAnalysis / 새로운 public AI 유스케이스
       -> private generateText 또는 generateObject
           -> LlmService
               -> model에 맞는 OpenAIProvider 또는 GeminiProvider
@@ -50,13 +49,14 @@ export class ExampleModule {}
 ```ts
 constructor(private readonly aiService: AiService) {}
 
-const summary = await this.aiService.generateSummary({
+const analysis = await this.aiService.generateLinkAnalysis({
     userLinkId: 1,
     url: 'https://example.com/article',
     title: '링크 제목',
     description: '링크 설명',
     content: '수집한 링크 본문',
 })
+// analysis: { summary, tags, needsReview, reviewReason }
 ```
 
 호출하는 도메인 모듈은 권한 확인, 대상 데이터 조회, 결과 저장을 담당한다.
@@ -70,16 +70,18 @@ LLM 응답 형태에 따라 private `generateText` 또는 `generateObject` 중 �
 - `generateText`: 자유 형식 문자열이 필요하거나 유스케이스가 직접 parsing할 때 사용한다.
 - `generateObject`: JSON 형태와 Zod schema 검증이 필요할 때 사용한다.
 
-`generateSummary`와 `generateTags`는 링크 URL과 수집한 제목·설명·본문을 받아
-각각 structured output으로 결과를 생성한다. 요약은 최대 300자이며, 태그는
-대분류 없이 최대 5개를 반환한다.
+`generateLinkAnalysis`는 링크 URL과 수집한 제목, 설명, 본문을 받아 하나의 structured output으로
+요약, 태그, 검토 판정을 함께 생성한다. 요약과 태그를 따로 호출하지 않으므로 링크당 LLM 호출은 1회다.
 
-```ts
-const [summary, tags] = await Promise.all([
-    this.aiService.generateSummary(linkInput),
-    this.aiService.generateTags(linkInput),
-])
-```
+| 필드           | 규칙                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| `summary`      | 300자 이내 한국어 요약. 앞뒤 공백을 제거해 반환한다.                                       |
+| `tags`         | 최대 5개, 각 20자 이내. 넓은 범주에서 세부 개념 순서로 정렬된다.                           |
+| `needsReview`  | 로그인, 오류 페이지, URL 불일치, 유해, 스팸 의심, 내용 부족 등 개발자 확인이 필요하면 `true` |
+| `reviewReason` | `needsReview`가 `true`일 때만 200자 이내 한국어 사유. `false`이면 항상 `null`              |
+
+검토 판정은 사용자에게 노출하지 않는다. 호출한 도메인 모듈이 `needsReview`를 보고 상태를 기록하며,
+링크 분석에서는 `user_links.ai_summary_status`를 `NEEDS_REVIEW`로 저장한다.
 
 generic 실행기를 public으로 노출하거나 다른 모듈에서 `LlmModule`을 직접 import하지 않는다.
 그래야 모든 애플리케이션 LLM 호출이 같은 오류 처리와 metrics 기록 경로를 거친다.
@@ -88,15 +90,15 @@ generic 실행기를 public으로 노출하거나 다른 모듈에서 `LlmModule
 
 `generateText`와 `generateObject`가 공통으로 받는 값은 다음과 같다.
 
-| 파라미터     | 필수       | 역할                                                                                                   |
-| ------------ | ---------- | ------------------------------------------------------------------------------------------------------ |
-| `userLinkId` | O          | 호출 대상 링크. `ai_metrics`를 링크와 연결할 때 사용한다.                                              |
-| `taskType`   | O          | `SUMMARY_GENERATE`, `TAG_GENERATE` 같은 작업 구분값이다. metrics 분류와 object schema 이름에 사용한다. |
-| `promptKey`  | X          | prompt 종류나 버전을 식별한다. 예: `summary_v1`                                                        |
-| `system`     | X          | 모델의 역할과 공통 지침을 전달한다.                                                                    |
-| `prompt`     | O          | 모델이 처리할 실제 요청 내용이다.                                                                      |
-| `llm`        | X          | 기본 모델 대신 특정 모델과 공통 생성 옵션을 사용할 때 지정한다.                                        |
-| `schema`     | object만 O | object 결과가 지켜야 할 Zod schema다.                                                                  |
+| 파라미터     | 필수       | 역할                                                                                         |
+| ------------ | ---------- | -------------------------------------------------------------------------------------------- |
+| `userLinkId` | O          | 호출 대상 링크. `ai_metrics`를 링크와 연결할 때 사용한다.                                    |
+| `taskType`   | O          | `LINK_ANALYSIS_GENERATE` 같은 작업 구분값이다. metrics 분류와 object schema 이름에 사용한다. |
+| `promptKey`  | X          | prompt 종류나 버전을 식별한다. 예: `link_analysis_v1`                                        |
+| `system`     | X          | 모델의 역할과 공통 지침을 전달한다.                                                          |
+| `prompt`     | O          | 모델이 처리할 실제 요청 내용이다.                                                            |
+| `llm`        | X          | 기본 모델 대신 특정 모델과 공통 생성 옵션을 사용할 때 지정한다.                              |
+| `schema`     | object만 O | object 결과가 지켜야 할 Zod schema다.                                                        |
 
 `llm`을 생략하면 `LLM_DEFAULT_MODEL`을 사용한다. provider는 model에 따라 내부에서 결정된다.
 

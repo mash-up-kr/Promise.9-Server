@@ -17,7 +17,12 @@ import { SearchResultRow, SearchService } from './search/search.service'
 import { toSearchCursorPayload } from './search/search.util'
 import { LinkRepository, LinkUpdatePatch } from './link.repository'
 import { LinkRow } from './link.schema'
-import { extractDomain, normalizeUrl, pickThumbnailUrl } from './link.util'
+import {
+    extractDomain,
+    normalizeUrl,
+    pickThumbnailUrl,
+    toProcessingStatus,
+} from './link.util'
 import { LINK_ERROR } from './link-error.constant'
 
 @Injectable()
@@ -91,7 +96,7 @@ export class LinkService {
             savedAt: link.createdAt,
             isFavorite: link.isFavorite,
             viewedAt: link.viewedAt,
-            processingStatus: link.aiSummaryStatus,
+            processingStatus: toProcessingStatus(link.aiSummaryStatus),
             aiSummary: link.aiSummary,
             tags: this.toTagResponses(tagRows),
             memo: link.memo,
