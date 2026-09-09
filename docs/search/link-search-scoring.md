@@ -44,19 +44,15 @@
 | `embedding`      | `clamp(1 - cosineDistance, 0, 1)`             |        0.30 |
 
 ```text
-baseScore = titleKeyword * 0.30
+score = titleKeyword * 0.30
       + summaryKeyword * 0.25
       + folderKeyword * 0.05
       + tagKeyword * 0.05
       + contentKeyword * 0.05
       + embedding * 0.30
-
-score = exactFolderMatch
-      ? 0.90 + 0.10 * baseScore
-      : min(0.90, 0.90 * baseScore)
 ```
 
-폴더명 전체 일치는 중복 제거·12개 제한 전의 원문 검색어와 폴더명 양쪽에 `tokenizeLinkText(value).join(' ')`를 적용한 토큰열 전체의 동등성으로 판단한다. 장식용 emoji·구두점 차이로 정확 일치가 사라지지 않게 한다. 전체 일치 폴더는 상위 점수 구간에 배치하며, 우선순위를 점수에 포함해 기존 `(score, id)` 커서와 0~1 응답 범위를 유지한다. 정확 폴더 일치도 최종 상위 30개 한도는 적용된다.
+폴더명 완전 일치에 별도 우선순위를 부여하지 않으며 모든 후보를 같은 가중합으로 정렬한다.
 
 AI 요약은 별도 신호로 분리하고, 기타 본문은 메모·도메인·원본 URL·최종 URL·metadata description만 포함한다. 같은 요약 일치를 두 신호에 중복 반영하지 않는다. 후보 조회에서는 기존 본문 경로를 공유하므로 DB 스키마나 인덱스 변경은 없다.
 

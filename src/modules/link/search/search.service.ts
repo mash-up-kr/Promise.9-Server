@@ -21,7 +21,6 @@ import {
 } from './search.util'
 import {
     calculateSearchSignals,
-    isExactFolderMatch,
     RankedSearchCandidate,
     rankSearchCandidates,
 } from './search-ranking'
@@ -168,11 +167,6 @@ export class SearchService {
                 return {
                     id: candidate.id,
                     signals: calculateSearchSignals(rankingQuery, features),
-                    // 전체 일치는 중복 제거·12개 제한 전의 원문 토큰열로 판단한다.
-                    hasExactFolderMatch: isExactFolderMatch(
-                        query,
-                        candidate.folderName,
-                    ),
                 }
             }),
         )

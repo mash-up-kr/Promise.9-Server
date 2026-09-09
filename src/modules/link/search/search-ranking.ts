@@ -4,9 +4,7 @@ import {
 } from '../link-similarity.util'
 
 import {
-    SEARCH_EXACT_FOLDER_SCORE_SCALE,
     SEARCH_RANKING_WEIGHTS,
-    SEARCH_SCORE_RANGE_SPLIT,
     SEARCH_VECTOR_STDDEV_MULTIPLIER,
 } from './search-ranking.constant'
 
@@ -16,7 +14,6 @@ type SearchSignals = Partial<Record<SearchSignalKey, number | null | undefined>>
 export type SearchRankingCandidate = {
     id: number
     signals: SearchSignals
-    hasExactFolderMatch?: boolean
 }
 
 export type RankedSearchCandidate = {
@@ -55,21 +52,10 @@ export function rankSearchCandidates(
                 normalizeCosineSimilarity(similarity) > vectorThreshold
             )
         })
-        .map((candidate) => {
-            const baseScore = calculateWeightedScore(candidate.signals)
-
-            // 폴더명 전체 일치의 우선순위를 점수에 담아 (score, id) 커서를 유지한다.
-            return {
-                id: candidate.id,
-                score: candidate.hasExactFolderMatch
-                    ? SEARCH_SCORE_RANGE_SPLIT +
-                      SEARCH_EXACT_FOLDER_SCORE_SCALE * baseScore
-                    : Math.min(
-                          SEARCH_SCORE_RANGE_SPLIT,
-                          SEARCH_SCORE_RANGE_SPLIT * baseScore,
-                      ),
-            }
-        })
+        .map(({ id, signals }) => ({
+            id,
+            score: calculateWeightedScore(signals),
+        }))
         .sort((left, right) => right.score - left.score || right.id - left.id)
 }
 
@@ -181,20 +167,6 @@ function queryTokenCoverageAcrossTargets(
 
 function normalizeKeywordTarget(text: string | null | undefined): string {
     return text?.toLocaleLowerCase('und').replace(/\s/gu, '') ?? ''
-}
-
-// 정확 일치는 토큰열 전체를 비교한다. 폴더명 장식·구두점 때문에
-// 검색어 토큰화 이후의 완전 일치가 사라지지 않도록 양쪽 기준을 맞춘다.
-export function isExactFolderMatch(
-    query: string,
-    folderName: string | null | undefined,
-): boolean {
-    const queryTokenSequence = tokenizeLinkText(query).join(' ')
-
-    return (
-        queryTokenSequence.length > 0 &&
-        tokenizeLinkText(folderName).join(' ') === queryTokenSequence
-    )
 }
 
 export function calculateSearchSignals(

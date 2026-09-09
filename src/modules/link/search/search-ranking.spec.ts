@@ -4,10 +4,7 @@ import {
     rankSearchCandidates,
     SearchRankingCandidate,
 } from './search-ranking'
-import {
-    SEARCH_RANKING_WEIGHTS,
-    SEARCH_SCORE_RANGE_SPLIT,
-} from './search-ranking.constant'
+import { SEARCH_RANKING_WEIGHTS } from './search-ranking.constant'
 
 describe('rankSearchCandidates', () => {
     it('undefined로 생략한 신호는 0으로 두고 가중치를 재분배하지 않는다', () => {
@@ -17,8 +14,7 @@ describe('rankSearchCandidates', () => {
 
         expect(result).toEqual({
             id: 1,
-            score:
-                SEARCH_SCORE_RANGE_SPLIT * SEARCH_RANKING_WEIGHTS.titleKeyword,
+            score: SEARCH_RANKING_WEIGHTS.titleKeyword,
         })
     })
 
@@ -37,9 +33,8 @@ describe('rankSearchCandidates', () => {
         ])
 
         expect(result.score).toBeCloseTo(
-            SEARCH_SCORE_RANGE_SPLIT *
-                (SEARCH_RANKING_WEIGHTS.titleKeyword /
-                    (1 - SEARCH_RANKING_WEIGHTS.embedding)),
+            SEARCH_RANKING_WEIGHTS.titleKeyword /
+                (1 - SEARCH_RANKING_WEIGHTS.embedding),
         )
     })
 
@@ -58,7 +53,7 @@ describe('rankSearchCandidates', () => {
         ])
 
         expect(result.score).toBe(
-            SEARCH_SCORE_RANGE_SPLIT * SEARCH_RANKING_WEIGHTS.titleKeyword,
+            SEARCH_RANKING_WEIGHTS.titleKeyword,
         )
     })
 
@@ -77,9 +72,8 @@ describe('rankSearchCandidates', () => {
         ])
 
         expect(result.score).toBe(
-            SEARCH_SCORE_RANGE_SPLIT *
-                (SEARCH_RANKING_WEIGHTS.titleKeyword +
-                    SEARCH_RANKING_WEIGHTS.embedding * 0.5),
+            SEARCH_RANKING_WEIGHTS.titleKeyword +
+                SEARCH_RANKING_WEIGHTS.embedding * 0.5,
         )
     })
 
@@ -94,6 +88,15 @@ describe('rankSearchCandidates', () => {
 
         expect(result.map(({ id }) => id)).toEqual([3, 2, 1])
         expect(candidates.map(({ id }) => id)).toEqual([1, 3, 2])
+    })
+
+    it('폴더명만 일치한 후보보다 제목 일치 후보를 우선한다', () => {
+        const result = rankSearchCandidates([
+            { id: 1, signals: { titleKeyword: 1 } },
+            { id: 2, signals: { folderKeyword: 1 } },
+        ])
+
+        expect(result.map(({ id }) => id)).toEqual([1, 2])
     })
 })
 describe('search keyword signals', () => {
