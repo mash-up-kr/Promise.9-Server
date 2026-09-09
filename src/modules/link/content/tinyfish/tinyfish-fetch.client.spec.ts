@@ -74,6 +74,35 @@ describe('TinyFishFetchClient', () => {
         expect(body.urls).toEqual(['https://x.com/OpenAI/status/1?page=2'])
     })
 
+    it('전략의 선택자 옵션을 전달하고 기본 요청 설정을 유지한다', async () => {
+        fetchSpy.mockResolvedValueOnce(
+            new Response(
+                JSON.stringify({
+                    results: [{ title: 'X', text: '본문' }],
+                    errors: [],
+                }),
+            ),
+        )
+        await createClient('tinyfish-api-key').fetch(
+            new URL('https://x.com/NASA/status/1'),
+            {
+                includeSelectors: ['article'],
+                excludeSelectors: ['article article'],
+            },
+        )
+        const body: unknown = JSON.parse(
+            fetchSpy.mock.calls[0][1]?.body as string,
+        )
+        expect(body).toMatchObject({
+            include_selectors: ['article'],
+            exclude_selectors: ['article article'],
+            format: 'markdown',
+            image_links: true,
+            ttl: 3600,
+            per_url_timeout_ms: 20000,
+        })
+    })
+
     it('오류 응답 body를 취소한 뒤 재시도 가능한 예외를 던진다', async () => {
         let canceled = false
         const body = new ReadableStream({

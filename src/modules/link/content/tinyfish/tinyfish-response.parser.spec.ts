@@ -69,3 +69,20 @@ describe('parseTinyFishResponse', () => {
         })
     })
 })
+
+it('게시물 영역이 아직 없으면 재시도 가능한 오류로 처리한다', () => {
+    expect(() =>
+        parseTinyFishResponse({
+            results: [],
+            errors: [{ error: 'selector_not_matched' }],
+        }),
+    ).toThrow()
+    try {
+        parseTinyFishResponse({
+            results: [],
+            errors: [{ error: 'selector_not_matched' }],
+        })
+    } catch (error) {
+        expect(error).toMatchObject({ retryable: true })
+    }
+})

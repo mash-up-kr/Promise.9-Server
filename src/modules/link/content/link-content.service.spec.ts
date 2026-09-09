@@ -482,9 +482,10 @@ describe('LinkContentService', () => {
         tinyFishFetchClient.fetch.mockResolvedValueOnce({
             status: 'SUCCESS',
             content: {
-                title: 'X 게시물 제목',
-                description: 'X 게시물 설명',
-                content: 'X 게시물 본문',
+                title: 'OpenAI (@OpenAI) on X',
+                description: 'X 게시물 본문',
+                content:
+                    'OpenAI\n\n@OpenAI\n\nX 게시물 본문\n\n1:32 PM · Apr 3, 2026\n12',
                 imageLinks: ['https://pbs.twimg.com/media/example.jpg'],
             },
         })
@@ -494,14 +495,76 @@ describe('LinkContentService', () => {
         )
 
         expect(result).toEqual({
-            title: 'X 게시물 제목',
+            title: 'X 게시물 본문',
             thumbnailUrl: 'https://pbs.twimg.com/media/example.jpg',
             source: 'x.com',
         })
         expect(tinyFishFetchClient.fetch).toHaveBeenCalledWith(
             new URL('https://x.com/OpenAI/status/2041581000120267067'),
+            expect.objectContaining({
+                includeSelectors: [
+                    'article:has(a[href$="/status/2041581000120267067"])',
+                ],
+            }),
         )
         expect(fetchSpy).not.toHaveBeenCalled()
+        expect(tinyFishFetchClient.fetch).toHaveBeenCalledTimes(1)
+    })
+
+    it('X 저장 수집은 정리한 본문과 제목을 반환하며 파싱 실패는 재시도 가능하다', async () => {
+        tinyFishFetchClient.isEnabled.mockReturnValue(true)
+        tinyFishFetchClient.fetch.mockResolvedValueOnce({
+            status: 'SUCCESS',
+            content: {
+                title: 'NASA (@NASA) on X',
+                description: '본문',
+                content: 'NASA\n@NASA\n본문\n1:32 PM · Apr 3, 2026\n12',
+                imageLinks: [],
+            },
+        })
+        await expect(
+            service.collect('https://x.com/NASA/status/123'),
+        ).resolves.toMatchObject({
+            title: '본문',
+            description: '본문',
+            content: '본문',
+            image: null,
+        })
+        tinyFishFetchClient.fetch.mockResolvedValueOnce({
+            status: 'SUCCESS',
+            content: {
+                title: 'X',
+                description: null,
+                content: 'loading',
+                imageLinks: [],
+            },
+        })
+        await expect(
+            service.collect('https://x.com/NASA/status/123'),
+        ).rejects.toMatchObject({ retryable: true })
+    })
+
+    it('자체 이미지가 없으면 추가 조회 없이 본문과 null 이미지를 반환한다', async () => {
+        tinyFishFetchClient.isEnabled.mockReturnValue(true)
+        tinyFishFetchClient.fetch.mockResolvedValueOnce({
+            status: 'SUCCESS',
+            content: {
+                title: 'NASA',
+                description: '자체 본문',
+                content: 'NASA\n@NASA\n자체 본문\n1:32 PM · Apr 3, 2026',
+                imageLinks: [
+                    'https://pbs.twimg.com/profile_images/123/avatar.jpg',
+                ],
+            },
+        })
+        expect(
+            await service.collect('https://x.com/NASA/status/123'),
+        ).toMatchObject({
+            title: '자체 본문',
+            content: '자체 본문',
+            image: null,
+        })
+        expect(tinyFishFetchClient.fetch).toHaveBeenCalledTimes(1)
     })
 
     it('TinyFish API key가 없으면 원본 URL로 HTML 수집을 계속한다', async () => {
