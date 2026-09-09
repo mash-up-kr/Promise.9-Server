@@ -4,7 +4,10 @@ import {
     rankSearchCandidates,
     SearchRankingCandidate,
 } from './search-ranking'
-import { SEARCH_RANKING_WEIGHTS } from './search-ranking.constant'
+import {
+    SEARCH_RANKING_WEIGHTS,
+    SEARCH_SCORE_RANGE_SPLIT,
+} from './search-ranking.constant'
 
 describe('rankSearchCandidates', () => {
     it('undefined로 생략한 신호는 0으로 두고 가중치를 재분배하지 않는다', () => {
@@ -14,7 +17,8 @@ describe('rankSearchCandidates', () => {
 
         expect(result).toEqual({
             id: 1,
-            score: SEARCH_RANKING_WEIGHTS.titleKeyword,
+            score:
+                SEARCH_SCORE_RANGE_SPLIT * SEARCH_RANKING_WEIGHTS.titleKeyword,
         })
     })
 
@@ -33,8 +37,9 @@ describe('rankSearchCandidates', () => {
         ])
 
         expect(result.score).toBeCloseTo(
-            SEARCH_RANKING_WEIGHTS.titleKeyword /
-                (1 - SEARCH_RANKING_WEIGHTS.embedding),
+            SEARCH_SCORE_RANGE_SPLIT *
+                (SEARCH_RANKING_WEIGHTS.titleKeyword /
+                    (1 - SEARCH_RANKING_WEIGHTS.embedding)),
         )
     })
 
@@ -52,7 +57,9 @@ describe('rankSearchCandidates', () => {
             },
         ])
 
-        expect(result.score).toBe(SEARCH_RANKING_WEIGHTS.titleKeyword)
+        expect(result.score).toBe(
+            SEARCH_SCORE_RANGE_SPLIT * SEARCH_RANKING_WEIGHTS.titleKeyword,
+        )
     })
 
     it('모든 원점수를 0..1로 보정한 뒤 가중합한다', () => {
@@ -70,8 +77,9 @@ describe('rankSearchCandidates', () => {
         ])
 
         expect(result.score).toBe(
-            SEARCH_RANKING_WEIGHTS.titleKeyword +
-                SEARCH_RANKING_WEIGHTS.embedding * 0.5,
+            SEARCH_SCORE_RANGE_SPLIT *
+                (SEARCH_RANKING_WEIGHTS.titleKeyword +
+                    SEARCH_RANKING_WEIGHTS.embedding * 0.5),
         )
     })
 
@@ -124,10 +132,11 @@ describe('search keyword signals', () => {
         ).toBe(1)
     })
 
-    it('제목·폴더·태그·본문·임베딩 원점수를 분리한다', () => {
+    it('제목·AI 요약·폴더·태그·본문·임베딩 원점수를 분리한다', () => {
         expect(
             calculateSearchSignals('NestJS 인증', {
                 title: 'NestJS 가이드',
+                aiSummary: '인증 실무 가이드',
                 folder: '인증 자료',
                 tags: ['인증', '백엔드'],
                 content: 'JWT 인증 예제',
@@ -135,6 +144,7 @@ describe('search keyword signals', () => {
             }),
         ).toEqual({
             titleKeyword: 0.5,
+            summaryKeyword: 0.5,
             folderKeyword: 0.5,
             tagKeyword: 0.5,
             contentKeyword: 0.5,
@@ -150,6 +160,7 @@ describe('search keyword signals', () => {
             }),
         ).toEqual({
             titleKeyword: 1,
+            summaryKeyword: 0,
             folderKeyword: 0,
             tagKeyword: 0,
             contentKeyword: 0,

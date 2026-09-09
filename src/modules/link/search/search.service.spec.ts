@@ -5,7 +5,10 @@ import { EmbeddingService } from '../embedding/embedding.service'
 import { SearchLinkCandidate, SearchRepository } from './search.repository'
 import { SearchService } from './search.service'
 import { roundSearchScore, toSearchCursorPayload } from './search.util'
-import { SEARCH_RANKING_WEIGHTS } from './search-ranking.constant'
+import {
+    SEARCH_RANKING_WEIGHTS,
+    SEARCH_SCORE_RANGE_SPLIT,
+} from './search-ranking.constant'
 
 type RepositoryMock = jest.Mocked<
     Pick<
@@ -197,8 +200,9 @@ describe('SearchService', () => {
         expect(result.rows[0]).toMatchObject({ row: { id: 11 } })
         expect(result.rows[0].score).toBe(
             roundSearchScore(
-                SEARCH_RANKING_WEIGHTS.folderKeyword /
-                    (1 - SEARCH_RANKING_WEIGHTS.embedding),
+                SEARCH_SCORE_RANGE_SPLIT *
+                    (SEARCH_RANKING_WEIGHTS.folderKeyword /
+                        (1 - SEARCH_RANKING_WEIGHTS.embedding)),
             ),
         )
     })
@@ -230,8 +234,9 @@ describe('SearchService', () => {
         expect(result.rows).toHaveLength(1)
         expect(result.rows[0].score).toBe(
             roundSearchScore(
-                SEARCH_RANKING_WEIGHTS.titleKeyword /
-                    (1 - SEARCH_RANKING_WEIGHTS.embedding),
+                SEARCH_SCORE_RANGE_SPLIT *
+                    (SEARCH_RANKING_WEIGHTS.titleKeyword /
+                        (1 - SEARCH_RANKING_WEIGHTS.embedding)),
             ),
         )
     })
@@ -243,10 +248,13 @@ describe('SearchService', () => {
         repository.findFolderKeywordCandidateIds.mockResolvedValue([])
         repository.findTagKeywordCandidateIds.mockResolvedValue([])
         repository.findContentCandidateIds.mockResolvedValue([])
-        repository.findVectorCandidateIds.mockResolvedValue([1, 2])
+        repository.findVectorCandidateIds.mockResolvedValue([1, 2, 3, 4, 5])
         repository.findCandidates.mockResolvedValue([
             candidate({ id: 1, embeddingSimilarity: 0.500014 }),
             candidate({ id: 2, embeddingSimilarity: 0.500013 }),
+            candidate({ id: 3, embeddingSimilarity: 0.1 }),
+            candidate({ id: 4, embeddingSimilarity: 0.1 }),
+            candidate({ id: 5, embeddingSimilarity: 0.1 }),
         ])
 
         const firstResult = await service.search(7, input)
