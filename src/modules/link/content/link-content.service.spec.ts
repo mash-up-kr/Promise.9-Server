@@ -237,34 +237,152 @@ describe('LinkContentService', () => {
         expect(tinyFishFetchClient.fetch).not.toHaveBeenCalled()
     })
 
-    it('Instagram 저장 수집은 TinyFish 본문과 검증된 대표 이미지를 반환한다', async () => {
-        tinyFishFetchClient.isEnabled.mockReturnValueOnce(true)
-        tinyFishFetchClient.fetch.mockResolvedValueOnce({
-            status: 'SUCCESS',
+    describe('Instagram captioned 단일 요청', () => {
+        const cover =
+            'https://scontent.cdninstagram.com/v/t51.82787-15/683900142_18588123742054628_1842156675459391844_n.jpg?ig_cache_key=' +
+            Buffer.from('388986895621733439418588123736054628').toString(
+                'base64',
+            )
+        const caption = '캡션 첫 줄\n\n캡션 본문 #태그'
+        const raw = (value: string) => `author
+
+Original audio
+
+View profile
+
+291 likes
+
+author
+
+${value}
+
+View all 24 comments
+
+Add a comment...*Instagram*`
+        const outcome = (value: string | null) => ({
+            status: 'SUCCESS' as const,
             content: {
-                title: '작성자 on Instagram: "Instagram 게시물\n\n나머지 캡션"',
-                description: '게시물 설명',
-                content: '게시물 본문',
-                imageLinks: [
-                    'https://scontent.cdninstagram.com/v/t51.2885-15/image.jpg?ig_cache_key=abc',
-                ],
+                title: 'Instagram',
+                description: null,
+                content: value,
+                imageLinks: [cover],
             },
         })
 
-        const result = await service.collect(
-            'https://www.instagram.com/p/example/',
+        beforeEach(() => tinyFishFetchClient.isEnabled.mockReturnValue(true))
+
+        it.each([
+            ['p', 'preview'],
+            ['p', 'collect'],
+            ['reel', 'preview'],
+            ['reel', 'collect'],
+        ] as const)(
+            '%s %s에서 한 번의 요청으로 캡션과 이미지를 반환한다',
+            async (kind, method) => {
+                tinyFishFetchClient.fetch.mockResolvedValueOnce(
+                    outcome(raw(caption)),
+                )
+                const result = await service[method](
+                    `https://www.instagram.com/${kind}/DX7lzTOJ1p6/?igsh=test`,
+                )
+                expect(result).toMatchObject(
+                    method === 'preview'
+                        ? {
+                              title: '캡션 첫 줄',
+                              thumbnailUrl: cover,
+                              source: 'instagram.com',
+                          }
+                        : {
+                              title: '캡션 첫 줄',
+                              description: caption,
+                              content: null,
+                              image: { url: cover, source: 'tinyfish' },
+                          },
+                )
+                if (method === 'collect') {
+                    expect(result).not.toHaveProperty(
+                        'analysisUnavailableReason',
+                    )
+                }
+                expect(tinyFishFetchClient.fetch).toHaveBeenCalledTimes(1)
+                expect(tinyFishFetchClient.fetch).toHaveBeenCalledWith(
+                    new URL(
+                        `https://www.instagram.com/${kind}/DX7lzTOJ1p6/embed/captioned/`,
+                    ),
+                )
+                expect(fetchSpy).not.toHaveBeenCalled()
+            },
         )
 
-        expect(result).toEqual({
-            title: 'Instagram 게시물',
-            description: '게시물 설명',
-            content: '게시물 본문',
-            image: {
-                url: 'https://scontent.cdninstagram.com/v/t51.2885-15/image.jpg?ig_cache_key=abc',
-                source: 'tinyfish',
-            },
+        it('긴 캡션은 설명 2,000자로 반환하고 중복 본문은 비운다', async () => {
+            const longCaption = '제목\n\n' + '가'.repeat(2200)
+            tinyFishFetchClient.fetch.mockResolvedValueOnce(
+                outcome(raw(longCaption)),
+            )
+            expect(
+                await service.collect('https://instagram.com/p/DX7lzTOJ1p6/'),
+            ).toMatchObject({
+                title: '제목',
+                description: longCaption.slice(0, 2000),
+                content: null,
+            })
         })
-        expect(fetchSpy).not.toHaveBeenCalled()
+
+        it('이미지가 없더라도 원본이나 다른 embed를 추가 요청하지 않는다', async () => {
+            const result = outcome(raw(caption))
+            result.content.imageLinks = []
+            tinyFishFetchClient.fetch.mockResolvedValueOnce(result)
+            expect(
+                await service.collect(
+                    'https://instagram.com/reel/DX7lzTOJ1p6/',
+                ),
+            ).toMatchObject({ description: caption, image: null })
+            expect(tinyFishFetchClient.fetch).toHaveBeenCalledTimes(1)
+        })
+
+        it('캡션 없는 응답은 UI를 저장하지 않고 AI 분석 불가를 표시한다', async () => {
+            tinyFishFetchClient.fetch.mockResolvedValueOnce(
+                outcome('author\nView profile\nLike\nComment'),
+            )
+            const result = await service.collect(
+                'https://instagram.com/reel/DX7lzTOJ1p6/',
+            )
+            expect(result).toMatchObject({
+                title: null,
+                description: null,
+                content: null,
+                image: { url: cover },
+            })
+            expect(result?.analysisUnavailableReason).toBeTruthy()
+        })
+
+        it('프로필 수집은 기존 URL과 제목을 유지한다', async () => {
+            tinyFishFetchClient.fetch.mockResolvedValueOnce({
+                status: 'SUCCESS',
+                content: {
+                    title: 'NASA (@nasa)',
+                    description: '프로필 소개',
+                    content: '프로필 본문',
+                    imageLinks: [],
+                },
+            })
+            expect(
+                await service.preview('https://instagram.com/nasa/'),
+            ).toMatchObject({ title: 'NASA (@nasa)' })
+            expect(tinyFishFetchClient.fetch).toHaveBeenCalledWith(
+                new URL('https://instagram.com/nasa/'),
+            )
+        })
+
+        it('TinyFish 실패는 추가 조회 없이 기존 오류 처리를 따른다', async () => {
+            tinyFishFetchClient.fetch.mockRejectedValueOnce(
+                new TinyFishFetchError({ message: 'timeout', retryable: true }),
+            )
+            await expect(
+                service.preview('https://instagram.com/reel/DX7lzTOJ1p6/'),
+            ).rejects.toBeInstanceOf(BaseException)
+            expect(tinyFishFetchClient.fetch).toHaveBeenCalledTimes(1)
+        })
     })
 
     it('TinyFish 내부 예외는 공통 API 예외 형식으로 변환한다', async () => {

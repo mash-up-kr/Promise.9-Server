@@ -146,6 +146,31 @@ describe('LinkAnalysisService', () => {
         })
     })
 
+    it('캡션이 description에만 있어도 DB 저장과 공통 AI 요약·태그를 실행한다', async () => {
+        const caption = '여행지 소개\n\n주소와 방문 팁 #여행'
+        linkContentService.collect.mockResolvedValueOnce({
+            title: '여행지 소개',
+            description: caption,
+            content: null,
+            image: null,
+        })
+
+        const results = await service.run(INPUT, ['CONTENT', 'SUMMARY', 'TAGS'])
+
+        expect(findResult(results, 'CONTENT')?.status).toBe('SUCCESS')
+        expect(findResult(results, 'SUMMARY')?.status).toBe('SUCCESS')
+        expect(analysisMetadata?.description).toBe(caption)
+        const expected = {
+            userLinkId: INPUT.linkId,
+            url: INPUT.url,
+            title: '여행지 소개',
+            description: caption,
+            content: null,
+        }
+        expect(aiService.generateSummary).toHaveBeenCalledWith(expected)
+        expect(aiService.generateTags).toHaveBeenCalledWith(expected)
+    })
+
     it('EMBEDDING만 재시도하면 링크 수집과 AI 호출을 건너뛴다', async () => {
         const results = await service.run(INPUT, ['EMBEDDING'])
 

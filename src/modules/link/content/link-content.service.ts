@@ -219,30 +219,33 @@ export class LinkContentService {
                 }
             }
 
-            const content = outcome.content.content
+            const normalized = strategy.normalizeContent
+                ? strategy.normalizeContent(resourceUrl, outcome.content)
+                : outcome.content
+            const content = normalized.content
             const image = strategy.selectImage(
                 resourceUrl,
-                outcome.content.imageLinks,
+                normalized.imageLinks,
             )
-            const title = strategy.normalizeTitle
-                ? strategy.normalizeTitle(resourceUrl, outcome.content.title)
-                : outcome.content.title
+            const title = normalized.title
 
             return {
                 title:
                     purpose === 'preview'
                         ? this.limitText(title, LINK_CONTENT_TEXT_LIMIT.title)
                         : title,
-                description: outcome.content.description,
+                description: normalized.description,
                 content,
                 image,
                 imageSource: image ? 'tinyfish' : null,
                 imageBaseUrl: resourceUrl,
                 source: this.toSource(resourceUrl),
-                ...(purpose === 'analysis' && !content
+                ...(purpose === 'analysis' &&
+                !content &&
+                !normalized.description
                     ? {
                           analysisUnavailableReason:
-                              'TinyFish에서 분석할 본문을 수집하지 못했습니다.',
+                              'TinyFish에서 분석할 설명이나 본문을 수집하지 못했습니다.',
                       }
                     : {}),
             }
