@@ -146,3 +146,19 @@ it('실제 시각이 낯선 형식이면 본문 일정을 footer로 선택하지
         }).content,
     ).toBe(description)
 })
+
+it.each(['1.2B Views', '1.2b views', '1.2B', '1.2B\nViews'])(
+    'B 단위 반응 수 뒤에도 메타 설명 대신 전체 본문을 보존한다: %s',
+    (metrics) => {
+        const body =
+            '긴 게시물의 첫 문장입니다. '.repeat(20) +
+            '\n메타 설명에 없는 마지막 문장'
+        expect(
+            normalizeXPostContent({
+                ...response(body),
+                description: body.slice(0, 100) + '…',
+                content: `NASA\n@NASA\n${body}\n1:32 PM · Apr 3, 2026\n${metrics}`,
+            }).content,
+        ).toBe(body)
+    },
+)

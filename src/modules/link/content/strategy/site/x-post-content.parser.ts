@@ -39,7 +39,7 @@ export function normalizeXPostContent(
             lines
                 .slice(index + 1, blockEnd)
                 .every((tail) =>
-                    /^(?:[\d\s.,·KM만천억]*\s*(?:Views|조회수)?)?$/i.test(
+                    /^(?:[\d\s.,·KMB만천억]*\s*(?:Views|조회수)?)?$/i.test(
                         tail.trim(),
                     ),
                 ),
