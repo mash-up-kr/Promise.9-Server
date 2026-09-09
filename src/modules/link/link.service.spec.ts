@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common'
 
 import { decodeCursor } from '../../common/pagination/cursor'
 
+import { LinkAnalysisDispatcher } from './analysis/link-analysis.dispatcher'
 import { RelatedLinkService } from './related/related-link.service'
 import { LinkListRow, LinkRepository } from './link.repository'
 import { LinkRow } from './link.schema'
@@ -198,6 +199,65 @@ describe('LinkService', () => {
         expect(result.relatedLinks).toEqual([
             { linkId: 11, title: '관련 링크', thumbnailUrl: null },
         ])
+    })
+
+    it('썸네일 TTL이 만료됐으면 CONTENT 갱신을 예약하고 재조회 안내를 응답에 포함한다', async () => {
+        const link = {
+            id: 10,
+            userId: 7,
+            folderId: null,
+            originalUrl: 'https://instagram.com/p/original',
+            finalUrl: 'https://instagram.com/p/final',
+            title: '원본 링크',
+            domain: 'instagram.com',
+            metadata: {
+                version: 1,
+                images: [
+                    {
+                        url: 'https://scontent.cdninstagram.com/photo.jpg',
+                        expiresAt: '2026-01-01T00:00:00.000Z',
+                    },
+                ],
+            },
+            embedding: null,
+            createdAt: new Date('2026-08-08T00:00:00.000Z'),
+            isFavorite: false,
+            viewedAt: null,
+            aiSummaryStatus: 'SUCCESS',
+            aiSummary: null,
+            memo: null,
+        } as LinkRow
+        const linkRepository = {
+            findOwned: jest.fn().mockResolvedValue(link),
+            findTags: jest.fn().mockResolvedValue([]),
+        }
+        const linkAnalysisDispatcher = {
+            dispatch: jest.fn(),
+        }
+        const relatedLinkService = {
+            relatedLinks: jest.fn().mockResolvedValue([]),
+        }
+        const service = new LinkService(
+            linkRepository as unknown as LinkRepository,
+            {} as never,
+            linkAnalysisDispatcher as unknown as LinkAnalysisDispatcher,
+            relatedLinkService as unknown as RelatedLinkService,
+        )
+
+        const result = await service.detail(7, 10)
+
+        expect(result.thumbnailRefresh).toEqual({
+            required: true,
+            afterMs: 10_000,
+        })
+        expect(linkAnalysisDispatcher.dispatch).toHaveBeenCalledWith(
+            {
+                linkId: 10,
+                userId: 7,
+                url: 'https://instagram.com/p/final',
+            },
+            ['CONTENT'],
+        )
     })
 
     it('개발자 검토 상태는 상세 응답에서 SUCCESS로 감춘다', async () => {

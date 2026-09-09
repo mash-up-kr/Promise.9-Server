@@ -12,6 +12,21 @@ const URL_EXAMPLE = 'https://toss.tech/article/slug'
 const TITLE_EXAMPLE = '실무에서 바로 쓰는 프론트엔드 성능 최적화'
 const THUMBNAIL_EXAMPLE = 'https://static.toss.tech/thumbnail.png'
 
+export class ThumbnailRefreshResponseDto {
+    @ApiProperty({
+        example: true,
+        description: '썸네일 TTL이 만료돼 갱신이 필요한지 여부',
+    })
+    required!: boolean
+
+    @ApiProperty({
+        example: 10000,
+        description:
+            '이 시간(ms) 이후 다시 조회하면 갱신된 썸네일을 받을 수 있음',
+    })
+    afterMs!: number
+}
+
 export class LinkPreviewResponseDto {
     @ApiProperty({
         type: String,
@@ -117,6 +132,14 @@ export class LinkDetailResponseDto {
         description: '썸네일 URL',
     })
     thumbnailUrl!: string | null
+
+    @ApiProperty({
+        type: ThumbnailRefreshResponseDto,
+        nullable: true,
+        description:
+            'TTL 만료로 썸네일 갱신이 필요할 때만 내려옴. 보통은 서버가 만료 전에 미리 갱신하므로 null',
+    })
+    thumbnailRefresh!: ThumbnailRefreshResponseDto | null
 
     @ApiProperty({
         example: TITLE_EXAMPLE,
@@ -321,6 +344,14 @@ export class LinkListItemDto {
         description: '썸네일 URL',
     })
     thumbnailUrl!: string | null
+
+    @ApiProperty({
+        type: ThumbnailRefreshResponseDto,
+        nullable: true,
+        description:
+            'TTL 만료로 썸네일 갱신이 필요할 때만 내려옴. 보통은 서버가 만료 전에 미리 갱신하므로 null',
+    })
+    thumbnailRefresh!: ThumbnailRefreshResponseDto | null
 
     @ApiProperty({
         type: String,

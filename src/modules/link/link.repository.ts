@@ -12,6 +12,7 @@ import {
     isNotNull,
     isNull,
     lt,
+    lte,
     max,
     or,
     SQL,
@@ -343,6 +344,30 @@ export class LinkRepository {
                     isNull(links.deletedAt),
                 ),
             )
+    }
+
+    // CONTENT 재수집 기한이 임박한 링크를 조회한다 (content refresh 스케줄러 전용).
+    findLinksDueForContentRefresh(
+        before: Date,
+        limit: number,
+    ): Promise<Pick<LinkRow, 'id' | 'userId' | 'originalUrl' | 'finalUrl'>[]> {
+        return this.db
+            .select({
+                id: links.id,
+                userId: links.userId,
+                originalUrl: links.originalUrl,
+                finalUrl: links.finalUrl,
+            })
+            .from(links)
+            .where(
+                and(
+                    isNotNull(links.contentRefreshDueAt),
+                    lte(links.contentRefreshDueAt, before),
+                    isNull(links.deletedAt),
+                ),
+            )
+            .orderBy(asc(links.contentRefreshDueAt))
+            .limit(limit)
     }
 
     // 수집한 description을 기존 metadata와 병합하기 위해 현재 metadata만 조회한다.

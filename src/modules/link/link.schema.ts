@@ -28,6 +28,8 @@ export type LinkMetadata = {
         width?: number
         height?: number
         dominantColor?: string
+        // CDN 서명 URL의 TTL 만료 시각 (ISO 8601). TTL이 없으면 없음.
+        expiresAt?: string
     }>
 }
 
@@ -73,6 +75,10 @@ export const links = pgTable(
         embedding: vector({ dimensions: EMBEDDING_DIMENSIONS }),
         memo: text(),
         reminderAt: timestamp({ withTimezone: true }),
+        // 다음 CONTENT 재수집이 필요한 시각. Instagram 등 썸네일 TTL(oe 파라미터) 만료나
+        // YouTube API 정책상 30일 주기 갱신처럼, 다시 수집해야 하는 사유 중 가장 이른 시각을 담는다.
+        // 둘 다 해당 없으면 null — 스케줄러가 이 컬럼만으로 갱신 대상을 조회한다.
+        contentRefreshDueAt: timestamp({ withTimezone: true }),
         isFavorite: boolean().notNull().default(false),
         // 상세 화면을 5초 이상 본 뒤 POST /links/:linkId/view로 갱신한다.
         viewedAt: timestamp({ withTimezone: true }),
@@ -102,6 +108,12 @@ export const links = pgTable(
         index('links_deleted_at_idx')
             .on(table.deletedAt)
             .where(sql`${table.deletedAt} is not null`),
+        // CONTENT 재수집 대상 조회 (content refresh 스케줄러)
+        index('links_content_refresh_due_at_idx')
+            .on(table.contentRefreshDueAt)
+            .where(
+                sql`${table.deletedAt} is null and ${table.contentRefreshDueAt} is not null`,
+            ),
         // 15분 주기 리마인드 배치의 발송 대상 조회
         index('links_reminder_at_active_idx')
             .on(table.reminderAt)

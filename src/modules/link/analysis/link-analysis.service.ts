@@ -15,6 +15,7 @@ import {
 import { EmbeddingService } from '../embedding/embedding.service'
 import { LinkRepository, LinkUpdatePatch } from '../link.repository'
 import { LinkMetadata } from '../link.schema'
+import { mergeImageMetadata, pickContentRefreshDueAt } from '../link.util'
 
 import { LINK_ANALYSIS_CONTENT_DEPENDENT_TASKS } from './link-analysis.constant'
 import { classifyFailure } from './link-analysis.failure'
@@ -326,6 +327,11 @@ export class LinkAnalysisService {
             patch.metadata = this.mergeCollectedMetadata(row.metadata, content)
         }
 
+        patch.contentRefreshDueAt = pickContentRefreshDueAt(
+            input.url,
+            patch.metadata ?? row.metadata,
+        )
+
         await this.linkRepository.updateActive(
             input.userId,
             input.linkId,
@@ -401,11 +407,13 @@ export class LinkAnalysisService {
 
             if (!row) return
 
+            const metadata = mergeImageMetadata(row.metadata, image, color.hex)
+
             await this.linkRepository.updateActive(input.userId, input.linkId, {
-                metadata: this.mergeImageMetadata(
-                    row.metadata,
-                    image,
-                    color.hex,
+                metadata,
+                contentRefreshDueAt: pickContentRefreshDueAt(
+                    input.url,
+                    metadata,
                 ),
                 updatedAt: new Date(),
             })
@@ -465,41 +473,13 @@ export class LinkAnalysisService {
         }
 
         if (information.image) {
-            merged.images = this.mergeImageMetadata(
+            merged.images = mergeImageMetadata(
                 metadata,
                 information.image,
             ).images
         }
 
         return merged
-    }
-
-    private mergeImageMetadata(
-        metadata: LinkMetadata | null,
-        image: CollectedLinkImage,
-        dominantColor?: string,
-    ): LinkMetadata {
-        const existingImages = metadata?.images ?? []
-        const existingImage = existingImages.find(
-            (candidate) => candidate.url === image.url,
-        )
-        const mergedImage = {
-            ...existingImage,
-            url: image.url,
-            source: image.source,
-            ...(dominantColor ? { dominantColor } : {}),
-        }
-
-        return {
-            ...metadata,
-            version: metadata?.version ?? 1,
-            images: [
-                mergedImage,
-                ...existingImages.filter(
-                    (candidate) => candidate.url !== image.url,
-                ),
-            ],
-        }
     }
 
     private normalizeTagName(name: string): string {
