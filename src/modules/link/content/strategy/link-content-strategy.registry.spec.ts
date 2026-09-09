@@ -20,8 +20,13 @@ describe('resolveLinkContentStrategy', () => {
         ['https://www.instagram.com/instagram/', 'instagram'],
         ['https://www.instagram.com/p/example/', 'instagram'],
         ['https://www.instagram.com/reel/example/', 'instagram'],
+        [
+            'https://www.behance.net/gallery/122200727/Google-Feature-Drop',
+            'behance',
+        ],
+        ['https://be.net/gallery/32715299/Coves-Free-Font', 'behance'],
     ])(
-        '지원하는 소셜 URL에 사이트별 TinyFish 전략을 적용한다: %s',
+        '지원 URL에 사이트별 TinyFish 전략을 적용한다: %s',
         (rawUrl, expectedName) => {
             const strategy = resolveLinkContentStrategy(new URL(rawUrl))
 
@@ -36,6 +41,8 @@ describe('resolveLinkContentStrategy', () => {
         'https://brunch.co.kr.evil.example/article',
         'https://x.com.evil.example/OpenAI/status/1',
         'https://instagram.com.evil.example/p/example',
+        'https://behance.net.evil.example/gallery/123/project',
+        'https://www.behance.net/search/projects',
         'https://x.com/login',
         'https://www.instagram.com/accounts/login/',
     ])('등록되지 않은 URL에는 기본 OG 전략을 적용한다: %s', (rawUrl) => {

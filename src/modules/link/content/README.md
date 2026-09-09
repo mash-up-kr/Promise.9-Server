@@ -35,12 +35,12 @@ URL에 맞는 수집 방식 선택
 
 현재 지원하는 수집 방식은 네 가지다.
 
-| 코드의 `kind` | 동작 | 적용 사례 |
-| --- | --- | --- |
-| `html` | 페이지 HTML에서 OG와 본문을 파싱한다. | 일반 링크, Brunch |
-| `youtube` | 미리보기는 oEmbed, 저장 수집은 Data API로 시작하며 기존 경로로 폴백한다. | YouTube |
-| `oembed` | 사이트가 제공하는 구조화된 응답을 사용한다. | oEmbed를 우선하는 사이트용 공통 경로 |
-| `tinyfish` | 일반 HTML 접근이 제한된 공개 페이지를 TinyFish로 수집한다. | X, Instagram |
+| 코드의 `kind` | 동작                                                                     | 적용 사례                            |
+| ------------- | ------------------------------------------------------------------------ | ------------------------------------ |
+| `html`        | 페이지 HTML에서 OG와 본문을 파싱한다.                                    | 일반 링크, Brunch                    |
+| `youtube`     | 미리보기는 oEmbed, 저장 수집은 Data API로 시작하며 기존 경로로 폴백한다. | YouTube                              |
+| `oembed`      | 사이트가 제공하는 구조화된 응답을 사용한다.                              | oEmbed를 우선하는 사이트용 공통 경로 |
+| `tinyfish`    | 일반 HTML 접근이 제한되거나 응답이 큰 공개 페이지를 TinyFish로 수집한다. | X, Instagram, Behance                |
 
 `preview`와 `collect`는 사이트별 방식 선택을 공유하고, 기존 `purpose` 값으로 목적을 구분한다.
 
@@ -80,18 +80,22 @@ HTML까지 요청 오류로 실패하면 최종 오류를 호출부에 전달한
 
 ## 도메인별 현재 동작
 
-| 링크 | 우선 방식 | 이유 | 대체 동작 |
-| --- | --- | --- | --- |
-| 그 밖의 공개 HTTP(S) URL | HTML | OG와 본문을 직접 읽을 수 있다. | 없음 |
-| `brunch.co.kr` 및 하위 도메인 | HTML | 전용 `Promise9Bot/1.0` User-Agent에서 정상 응답한다. | 없음 |
-| `youtube.com` 및 하위 도메인, `youtu.be` | 미리보기: oEmbed / 저장: Data API | 미리보기는 제목·썸네일, 저장은 설명까지 수집한다. | 미리보기: HTML / 저장: oEmbed → HTML |
-| `x.com`, `www.x.com`, `twitter.com`, `www.twitter.com` | TinyFish | 서버 IP의 HTML/OG 수집이 불안정하다. | API key가 없을 때 HTML |
-| `instagram.com`, `www.instagram.com` | TinyFish | 서버 IP의 HTML/OG 수집이 불안정하고 콘텐츠 렌더링이 필요하다. | API key가 없을 때 HTML |
+| 링크                                                                  | 우선 방식                         | 이유                                                                                | 대체 동작                            |
+| --------------------------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------ |
+| 그 밖의 공개 HTTP(S) URL                                              | HTML                              | OG와 본문을 직접 읽을 수 있다.                                                      | 없음                                 |
+| `brunch.co.kr` 및 하위 도메인                                         | HTML                              | 전용 `Promise9Bot/1.0` User-Agent에서 정상 응답한다.                                | 없음                                 |
+| `youtube.com` 및 하위 도메인, `youtu.be`                              | 미리보기: oEmbed / 저장: Data API | 미리보기는 제목·썸네일, 저장은 설명까지 수집한다.                                   | 미리보기: HTML / 저장: oEmbed → HTML |
+| `x.com`, `www.x.com`, `twitter.com`, `www.twitter.com`                | TinyFish                          | 서버 IP의 HTML/OG 수집이 불안정하다.                                                | API key가 없을 때 HTML               |
+| `instagram.com`, `www.instagram.com`                                  | TinyFish                          | 서버 IP의 HTML/OG 수집이 불안정하고 콘텐츠 렌더링이 필요하다.                       | API key가 없을 때 HTML               |
+| `behance.net`, `www.behance.net`, `be.net`의 `/gallery/{id}` 프로젝트 | TinyFish                          | 원본 HTML이 크고 일반 요청 제한 안에 프로젝트 본문·이미지를 안정적으로 읽기 어렵다. | API key가 없을 때 HTML               |
 
 X는 프로필, `/{user}/status/{id}`, `/i/web/status/{id}`를 지원한다. Instagram은 프로필,
 `/p/{id}`, `/reel/{id}`, `/reels/{id}`, `/tv/{id}`를 지원한다. 로그인·설정·검색처럼
 콘텐츠가 아닌 경로는 TinyFish 대상에서 제외한다. `x.com.evil.example` 같은 유사
 hostname도 전용 방식으로 처리하지 않는다.
+
+Behance는 공개 프로젝트 `/gallery/{id}/{slug}`와 Behance가 제공하는 `be.net/gallery/...`
+공유 링크만 지원한다. 프로필·검색·갤러리 목록은 일반 HTML 처리를 유지한다.
 
 ## 수집 방식과 HTML 요청 설정
 
@@ -113,19 +117,19 @@ robots.txt도 다시 확인한다. User-Agent 역시 이동한 도메인에 맞�
 
 ## 파일별 역할
 
-| 경로 | 역할 |
-| --- | --- |
-| `link-content.service.ts` | URL에 맞는 방식을 선택하고 실행하며 `preview`·`collect` 결과를 만든다. |
-| `youtube/youtube-data.client.ts` | 공식 YouTube Data API 요청과 응답 검증을 담당한다. |
-| `link-content.parser.ts` | HTML에서 OG와 본문을 파싱한다. |
-| `link-content-response.reader.ts` | HTML·oEmbed 응답의 크기를 제한하고 charset에 맞춰 디코딩한다. |
-| `html/link-content-html.fetcher.ts` | HTML 요청, 리다이렉트, robots.txt, SSRF 검증을 담당한다. |
-| `html/link-content-html-request.policy.ts` | HTML 요청에 사용할 도메인별 User-Agent를 선택한다. |
-| `strategy/link-content-strategy.registry.ts` | URL을 지원하는 사이트 규칙을 찾고, 없으면 기본 HTML 방식을 반환한다. |
-| `strategy/site/` | YouTube·X·Instagram의 지원 URL과 사이트별 처리 규칙을 정의한다. |
-| `tinyfish/tinyfish-fetch.client.ts` | TinyFish API 요청, timeout, 응답 크기 제한을 담당한다. |
-| `tinyfish/tinyfish-response.parser.ts` | TinyFish 응답을 검증하고 공통 결과 또는 수집 불가 상태로 변환한다. |
-| `tinyfish/tinyfish-image.selector.ts` | 잘못된 URL을 건너뛰며 사이트 조건에 맞는 이미지 후보를 찾는다. |
+| 경로                                         | 역할                                                                   |
+| -------------------------------------------- | ---------------------------------------------------------------------- |
+| `link-content.service.ts`                    | URL에 맞는 방식을 선택하고 실행하며 `preview`·`collect` 결과를 만든다. |
+| `youtube/youtube-data.client.ts`             | 공식 YouTube Data API 요청과 응답 검증을 담당한다.                     |
+| `link-content.parser.ts`                     | HTML에서 OG와 본문을 파싱한다.                                         |
+| `link-content-response.reader.ts`            | HTML·oEmbed 응답의 크기를 제한하고 charset에 맞춰 디코딩한다.          |
+| `html/link-content-html.fetcher.ts`          | HTML 요청, 리다이렉트, robots.txt, SSRF 검증을 담당한다.               |
+| `html/link-content-html-request.policy.ts`   | HTML 요청에 사용할 도메인별 User-Agent를 선택한다.                     |
+| `strategy/link-content-strategy.registry.ts` | URL을 지원하는 사이트 규칙을 찾고, 없으면 기본 HTML 방식을 반환한다.   |
+| `strategy/site/`                             | 사이트별 지원 URL과 처리 규칙을 정의한다.                              |
+| `tinyfish/tinyfish-fetch.client.ts`          | TinyFish API 요청, timeout, 응답 크기 제한을 담당한다.                 |
+| `tinyfish/tinyfish-response.parser.ts`       | TinyFish 응답을 검증하고 공통 결과 또는 수집 불가 상태로 변환한다.     |
+| `tinyfish/tinyfish-image.selector.ts`        | 잘못된 URL을 건너뛰며 사이트 조건에 맞는 이미지 후보를 찾는다.         |
 
 `LinkContentService.resolveContent` 한 곳에서 네 수집 방식의 실행 흐름을 확인할 수 있다.
 
@@ -169,7 +173,7 @@ robots.txt도 다시 확인한다. User-Agent 역시 이동한 도메인에 맞�
 
 TinyFish client는 특정 사이트의 URL 범위나 대표 이미지 규칙을 알지 않는다. 응답을
 검증하고 공통 형태로 변환하는 일까지만 담당한다. TinyFish에 전달할 URL 정리와 대표
-이미지 선택, 제목 후처리는 X·Instagram 사이트 규칙에서 담당한다.
+이미지 선택, 제목 후처리는 각 사이트 규칙에서 담당한다.
 
 Instagram 게시물·Reel·TV는 captioned embed를 한 번 조회하고 반환된 Markdown에서
 작성자 캡션을 추출한다. 제목은 캡션 첫 줄 최대 100자다. 프로필은 원본 URL과 제목을 유지한다.
@@ -180,6 +184,19 @@ API key가 없으면 HTML로 다시 시도한다. API key가 있는데 TinyFish 
 TinyFish의 `image_links`는 대표 이미지 순서를 보장하지 않는다. 지원 사이트를 추가할
 때는 실제 URL 여러 건의 응답 이미지를 확인하고, 사이트 규칙의 `selectImage`에 검증할 수
 있는 조건을 작성한다. 배열의 첫 이미지를 그대로 사용하지 않는다.
+
+## Behance 프로젝트
+
+공개 프로젝트와 `be.net/gallery/...` 공유 링크를 canonical `www.behance.net` URL로
+정규화해 TinyFish에 한 번 요청한다. 공식 oEmbed와 embed는 저장 후 분석에 필요한
+프로젝트 본문을 제공하지 않아 원본 프로젝트를 사용한다.
+
+본문과 이미지는 `.project-content-wrap`으로 제한한다. 대표 이미지는 그 안의 Behance
+`/project_modules/` HTTPS 이미지 중 첫 후보이며, avatar·추천 카드만 있으면 null이다.
+공개 프로젝트 3건에서 575~874KB HTML, 선택자, 단일·다중 이미지 경로를 확인했다.
+
+preview와 collect는 각각 요청 1회다. TinyFish key가 없으면 기존 HTML 경로를 사용한다.
+비공개·로그인 필요·성인 콘텐츠 확인 화면과 DOM 변경은 지원을 보장하지 않는다.
 
 ## 네이버 지도·플레이스
 
@@ -229,7 +246,6 @@ ID는 게시물 ID와 다르므로 릴스 ID 규칙을 적용하지 않는다. �
 Instagram 응답 형식·언어가 바뀌면 재검증이 필요하다. API key가 없는 환경의 HTML 대체 수집
 정책은 기존과 같다.
 
-
 ## X 게시물 수집 최적화
 
 X 게시물은 기존 TinyFish 요청 한 번을 유지하면서 `include_selectors`로 요청한 게시물 ID를
@@ -258,7 +274,6 @@ X 게시물에만 적용하며 프로필·Instagram·일반 HTML 수집에는 �
 
 현재 본문 경계 파서는 관측한 영어·한국어 시각 형식을 처리한다. X DOM이나 시각 표기 변경,
 인용글의 다른 구조와 혼합 미디어는 추가 검증이 필요하다. 일반 영상 포스터는 공개 표본으로 검증했다.
-
 
 X 게시물은 자체 미디어만 썸네일로 사용한다. 자체 이미지가 없으면 null을 반환하며
 인용 사진을 추가 조회하거나 계정 avatar로 대체하지 않는다. 정상 수집은 TinyFish 요청

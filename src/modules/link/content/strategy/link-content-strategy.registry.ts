@@ -1,3 +1,4 @@
+import { BEHANCE_LINK_CONTENT_STRATEGY } from './site/behance-link-content.strategy'
 import { DEFAULT_LINK_CONTENT_STRATEGY } from './site/default-link-content.strategy'
 import { INSTAGRAM_LINK_CONTENT_STRATEGY } from './site/instagram-link-content.strategy'
 import { NAVER_PLACE_LINK_CONTENT_STRATEGY } from './site/naver-place-link-content.strategy'
@@ -9,6 +10,7 @@ import { LinkContentStrategy } from './link-content-strategy.type'
 const LINK_CONTENT_STRATEGIES: readonly LinkContentStrategy[] = [
     X_LINK_CONTENT_STRATEGY,
     INSTAGRAM_LINK_CONTENT_STRATEGY,
+    BEHANCE_LINK_CONTENT_STRATEGY,
     YOUTUBE_LINK_CONTENT_STRATEGY,
     NAVER_PLACE_LINK_CONTENT_STRATEGY,
 ]

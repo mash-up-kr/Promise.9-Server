@@ -511,6 +511,71 @@ describe('LinkContentService', () => {
         expect(tinyFishFetchClient.fetch).toHaveBeenCalledTimes(1)
     })
 
+    it('Behance 프로젝트는 각 요청에서 본문 범위를 TinyFish로 한 번 수집한다', async () => {
+        tinyFishFetchClient.isEnabled.mockReturnValue(true)
+        const image =
+            'https://mir-s3-cdn-cf.behance.net/project_modules/1400/3712d4122200727.60da38c094d9e.jpg'
+        tinyFishFetchClient.fetch.mockResolvedValue({
+            status: 'SUCCESS',
+            content: {
+                title: 'Google Feature Drop',
+                description: '프로젝트 설명',
+                content: '프로젝트 본문',
+                imageLinks: [
+                    'https://pps.services.adobe.com/api/profile/id/image/50',
+                    image,
+                ],
+            },
+        })
+        const resourceUrl =
+            'https://be.net/gallery/122200727/Google-Feature-Drop?tracking_source=search'
+
+        await expect(service.preview(resourceUrl)).resolves.toEqual({
+            title: 'Google Feature Drop',
+            thumbnailUrl: image,
+            source: 'behance.net',
+        })
+        await expect(service.collect(resourceUrl)).resolves.toEqual({
+            title: 'Google Feature Drop',
+            description: '프로젝트 설명',
+            content: '프로젝트 본문',
+            image: { url: image, source: 'tinyfish' },
+        })
+        expect(tinyFishFetchClient.fetch).toHaveBeenCalledTimes(2)
+        expect(tinyFishFetchClient.fetch).toHaveBeenNthCalledWith(
+            1,
+            new URL(
+                'https://www.behance.net/gallery/122200727/Google-Feature-Drop',
+            ),
+            { includeSelectors: ['.project-content-wrap'] },
+        )
+        expect(fetchSpy).not.toHaveBeenCalled()
+    })
+
+    it('TinyFish API key가 없으면 Behance 프로젝트도 기존 HTML 수집을 사용한다', async () => {
+        fetchSpy
+            .mockResolvedValueOnce(new Response('', { status: 404 }))
+            .mockResolvedValueOnce(
+                htmlResponse(`
+                    <meta property="og:title" content="Behance 프로젝트" />
+                    <meta property="og:image" content="https://mir-s3-cdn-cf.behance.net/project_modules/1400/project.jpg" />
+                `),
+            )
+
+        await expect(
+            service.preview(
+                'https://www.behance.net/gallery/122200727/Google-Feature-Drop',
+            ),
+        ).resolves.toEqual({
+            title: 'Behance 프로젝트',
+            thumbnailUrl:
+                'https://mir-s3-cdn-cf.behance.net/project_modules/1400/project.jpg',
+            source: 'behance.net',
+        })
+        expect(tinyFishFetchClient.fetch).not.toHaveBeenCalled()
+        expect(fetchSpy).toHaveBeenCalledTimes(2)
+    })
+
     it('X 저장 수집은 정리한 본문과 제목을 반환하며 데이터가 전부 없으면 재시도한다', async () => {
         tinyFishFetchClient.isEnabled.mockReturnValue(true)
         tinyFishFetchClient.fetch.mockResolvedValueOnce({
