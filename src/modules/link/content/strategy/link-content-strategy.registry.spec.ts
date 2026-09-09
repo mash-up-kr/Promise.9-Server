@@ -5,11 +5,11 @@ describe('resolveLinkContentStrategy', () => {
         'https://youtube.com/watch?v=video',
         'https://www.youtube.com/watch?v=video',
         'https://youtu.be/video',
-    ])('YouTube URL에 oEmbed 전략을 적용한다: %s', (rawUrl) => {
+    ])('YouTube URL에 Data API 우선 전략을 적용한다: %s', (rawUrl) => {
         const strategy = resolveLinkContentStrategy(new URL(rawUrl))
 
         expect(strategy.name).toBe('youtube')
-        expect(strategy.kind).toBe('oembed')
+        expect(strategy.kind).toBe('youtube')
         expect(strategy.source).toBe('youtube.com')
     })
 

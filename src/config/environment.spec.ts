@@ -24,6 +24,23 @@ const productionEnvironment = {
 }
 
 describe('validateEnvironment', () => {
+    it('YouTube API key는 선택 사항이며 설정 시 빈 값을 거부한다', () => {
+        expect(
+            validateEnvironment(developmentEnvironment).YOUTUBE_API_KEY,
+        ).toBeUndefined()
+        expect(
+            validateEnvironment({
+                ...developmentEnvironment,
+                YOUTUBE_API_KEY: 'youtube-api-key',
+            }).YOUTUBE_API_KEY,
+        ).toBe('youtube-api-key')
+        expect(() =>
+            validateEnvironment({
+                ...developmentEnvironment,
+                YOUTUBE_API_KEY: ' ',
+            }),
+        ).toThrow()
+    })
     it.each([
         'http://example.com',
         'https://user:pass@example.com',

@@ -11,10 +11,12 @@ import {
     LinkContentOEmbedPreview,
     LinkContentOEmbedStrategy,
     LinkContentTinyFishStrategy,
+    LinkContentYoutubeStrategy,
 } from './strategy/link-content-strategy.type'
 import { resolveNaverShortUrl } from './strategy/naver-short-url.resolver'
 import { TinyFishFetchClient } from './tinyfish/tinyfish-fetch.client'
 import { TinyFishFetchError } from './tinyfish/tinyfish-fetch.error'
+import { YoutubeDataClient } from './youtube/youtube-data.client'
 import {
     buildLinkContentRequestHeaders,
     LINK_CONTENT_BROWSER_USER_AGENT,
@@ -54,6 +56,7 @@ export class LinkContentService {
         private readonly urlSecurity: UrlSecurityService,
         private readonly htmlFetcher: LinkContentHtmlFetcher,
         private readonly tinyFishFetchClient: TinyFishFetchClient,
+        private readonly youtubeDataClient: YoutubeDataClient,
     ) {}
 
     async preview(url: string): Promise<LinkPreview> {
@@ -147,6 +150,12 @@ export class LinkContentService {
 
                 return oEmbed ?? this.resolveHtmlContent(resourceUrl, purpose)
             }
+            case 'youtube':
+                return this.resolveYoutubeContent(
+                    resourceUrl,
+                    purpose,
+                    strategy,
+                )
             case 'tinyfish':
                 return this.tinyFishFetchClient.isEnabled()
                     ? this.resolveTinyFishContent(
@@ -158,12 +167,46 @@ export class LinkContentService {
         }
     }
 
+    private async resolveYoutubeContent(
+        resourceUrl: URL,
+        purpose: LinkContentPurpose,
+        strategy: LinkContentYoutubeStrategy,
+    ): Promise<ResolvedLinkContent | null> {
+        const videoId = strategy.getVideoId(resourceUrl)
+        // 설명이 필요한 저장 후 분석에서만 Data API 할당량을 사용한다.
+        if (purpose === 'analysis' && videoId) {
+            try {
+                const video = await this.youtubeDataClient.fetchVideo(videoId)
+                if (video) {
+                    return {
+                        ...video,
+                        content: null,
+                        imageSource: video.image ? 'youtube-data-api' : null,
+                        imageBaseUrl: resourceUrl,
+                        source: strategy.source ?? this.toSource(resourceUrl),
+                    }
+                }
+            } catch {
+                // 인증·할당량·타임아웃 등 Data API 실패도 메타데이터 폴백을 계속한다.
+                this.logger.warn(
+                    'YouTube Data API 수집에 실패해 oEmbed로 폴백합니다.',
+                )
+            }
+        }
+
+        const resolved =
+            (await this.resolveOEmbedContent(resourceUrl, strategy)) ??
+            (await this.resolveHtmlContent(resourceUrl, purpose))
+        // HTML 폴백에서도 플레이어·추천 영상 텍스트를 영상 본문으로 사용하지 않는다.
+        return resolved ? { ...resolved, content: null } : null
+    }
+
     private async resolveHtmlContent(
         resourceUrl: URL,
         purpose: LinkContentPurpose,
     ): Promise<ResolvedLinkContent | null> {
         const fetched = await this.htmlFetcher.fetch(resourceUrl, {
-            respectRobots: purpose === 'analysis',
+            respectRobots: true,
         })
 
         if (!fetched) return null
@@ -189,7 +232,7 @@ export class LinkContentService {
 
     private async resolveOEmbedContent(
         resourceUrl: URL,
-        strategy: LinkContentOEmbedStrategy,
+        strategy: LinkContentOEmbedStrategy | LinkContentYoutubeStrategy,
     ): Promise<ResolvedLinkContent | null> {
         const oEmbed = await this.fetchOEmbed(resourceUrl, strategy)
 
@@ -237,9 +280,7 @@ export class LinkContentService {
                 resourceUrl,
                 normalized.imageLinks,
             )
-            const title = strategy.normalizeTitle
-                ? strategy.normalizeTitle(resourceUrl, normalized.title)
-                : normalized.title
+            const title = normalized.title
 
             return {
                 title:
@@ -252,10 +293,12 @@ export class LinkContentService {
                 imageSource: image ? 'tinyfish' : null,
                 imageBaseUrl: resourceUrl,
                 source: strategy.source ?? this.toSource(resourceUrl),
-                ...(purpose === 'analysis' && !content
+                ...(purpose === 'analysis' &&
+                !content &&
+                !normalized.description
                     ? {
                           analysisUnavailableReason:
-                              'TinyFish에서 분석할 본문을 수집하지 못했습니다.',
+                              'TinyFish에서 분석할 설명이나 본문을 수집하지 못했습니다.',
                       }
                     : {}),
             }
@@ -273,10 +316,10 @@ export class LinkContentService {
         }
     }
 
-    // 사이트 전략에 oEmbed가 등록돼 있으면 우선 조회하고, 실패하면 HTML 수집을 계속한다.
+    // oEmbed 응답이 없거나 실패하면 호출부에서 HTML 수집을 계속한다.
     private async fetchOEmbed(
         resourceUrl: URL,
-        strategy: LinkContentOEmbedStrategy,
+        strategy: LinkContentOEmbedStrategy | LinkContentYoutubeStrategy,
     ): Promise<LinkContentOEmbedPreview | null> {
         const endpoint = strategy.oEmbed.buildEndpoint(resourceUrl)
         const controller = new AbortController()
