@@ -23,6 +23,14 @@ export type LinkContentOEmbedStrategy = LinkContentStrategyBase & {
     }
 }
 
+export type LinkContentYoutubeStrategy = Omit<
+    LinkContentOEmbedStrategy,
+    'kind'
+> & {
+    kind: 'youtube'
+    getVideoId: (resourceUrl: URL) => string | null
+}
+
 export type LinkContentTinyFishStrategy = LinkContentStrategyBase & {
     kind: 'tinyfish'
     prepareUrl: (resourceUrl: URL) => URL
@@ -41,4 +49,5 @@ export type LinkContentTinyFishStrategy = LinkContentStrategyBase & {
 export type LinkContentStrategy =
     | LinkContentHtmlStrategy
     | LinkContentOEmbedStrategy
+    | LinkContentYoutubeStrategy
     | LinkContentTinyFishStrategy
