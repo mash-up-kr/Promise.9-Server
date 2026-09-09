@@ -10,7 +10,7 @@ function aiError(retryable: boolean): AiGenerationError {
     return new AiGenerationError({
         code: 'TEST_ERROR',
         message: 'ai failed',
-        taskType: AI_TASK_TYPE.SUMMARY_GENERATE,
+        taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
         retryable,
     })
 }

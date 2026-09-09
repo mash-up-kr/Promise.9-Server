@@ -20,12 +20,12 @@ export type AiLinkAnalysisInput = {
     llm?: LlmTargetOptions
 }
 
-export type AiSummaryResult = {
+/** 요약·태그와 개발자 검토 판정을 한 번의 LLM 호출로 생성한 결과. */
+export type AiLinkAnalysisResult = {
     summary: string
-}
-
-export type AiTagsResult = {
     tags: string[]
+    needsReview: boolean
+    reviewReason: string | null
 }
 
 /** AiService의 private text 생성 실행기에 전달하는 AI 작업 입력. */

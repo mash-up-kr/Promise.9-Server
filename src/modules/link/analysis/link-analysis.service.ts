@@ -5,7 +5,7 @@ import {
     describeErrorStack,
 } from '../../../common/exception/error.util'
 import { AiService } from '../../ai/ai.service'
-import { AiLinkAnalysisInput } from '../../ai/ai.type'
+import { AiLinkAnalysisInput, AiLinkAnalysisResult } from '../../ai/ai.type'
 import { ImageColorService } from '../../image-color/image-color.service'
 import { LinkContentService } from '../content/link-content.service'
 import {
@@ -19,6 +19,7 @@ import { LinkMetadata } from '../link.schema'
 import { LINK_ANALYSIS_CONTENT_DEPENDENT_TASKS } from './link-analysis.constant'
 import { classifyFailure } from './link-analysis.failure'
 import {
+    LinkAnalysisAiTask,
     LinkAnalysisFailureKind,
     LinkAnalysisInput,
     LinkAnalysisTask,
@@ -54,7 +55,7 @@ export class LinkAnalysisService {
 
     // 요청받은 작업만 실행하고 작업별 결과를 돌려준다. 예외는 호출부로 던지지 않으므로
     // 인라인 실행과 SQS 재시도가 같은 결과 목록을 보고 재발행 여부를 판단할 수 있다.
-    // CONTENT -> (SUMMARY, TAGS) -> EMBEDDING 순서로 실행해 뒤 작업이 앞 결과를 반영한다.
+    // CONTENT -> (SUMMARY, TAGS: LLM 1회 호출) -> EMBEDDING 순서로 실행해 뒤 작업이 앞 결과를 반영한다.
     async run(
         input: LinkAnalysisInput,
         tasks: readonly LinkAnalysisTask[],
@@ -90,34 +91,31 @@ export class LinkAnalysisService {
                 )
             }
 
-            const unavailableReason = content?.analysisUnavailableReason
-            const aiInput = this.buildAiInput(input, content)
-            const aiResults = await Promise.all([
-                requested.has('SUMMARY')
-                    ? unavailableReason
-                        ? this.skipUnavailableAnalysis(
-                              input,
-                              'SUMMARY',
-                              unavailableReason,
-                          )
-                        : this.runTask(input, 'SUMMARY', () =>
-                              this.generateAndSaveSummary(input, aiInput),
-                          )
-                    : undefined,
-                requested.has('TAGS')
-                    ? unavailableReason
-                        ? this.skipUnavailableAnalysis(
-                              input,
-                              'TAGS',
-                              unavailableReason,
-                          )
-                        : this.runTask(input, 'TAGS', () =>
-                              this.generateAndSaveTags(input, aiInput),
-                          )
-                    : undefined,
-            ])
+            const aiTasks = LINK_ANALYSIS_CONTENT_DEPENDENT_TASKS.filter(
+                (task) => requested.has(task),
+            )
 
-            results.push(...aiResults.filter((result) => result !== undefined))
+            if (aiTasks.length > 0) {
+                const unavailableReason = content?.analysisUnavailableReason
+
+                results.push(
+                    ...(unavailableReason
+                        ? await Promise.all(
+                              aiTasks.map((task) =>
+                                  this.skipUnavailableAnalysis(
+                                      input,
+                                      task,
+                                      unavailableReason,
+                                  ),
+                              ),
+                          )
+                        : await this.runAiAnalysis(
+                              input,
+                              aiTasks,
+                              this.buildAiInput(input, content),
+                          )),
+                )
+            }
         }
 
         // 임베딩은 제목·요약·태그가 모두 저장된 뒤 최신 행을 다시 조회해 실행한다.
@@ -148,9 +146,48 @@ export class LinkAnalysisService {
         return results
     }
 
+    // 요약과 태그는 LLM을 한 번만 호출해 함께 생성한다. 호출이 실패하면 요청된 AI 작업이
+    // 모두 같은 오류로 실패하고, 저장은 작업별로 나눠 한쪽 DB 오류가 다른 쪽 결과를 막지 않는다.
+    private async runAiAnalysis(
+        input: LinkAnalysisInput,
+        aiTasks: readonly LinkAnalysisAiTask[],
+        aiInput: AiLinkAnalysisInput,
+    ): Promise<LinkAnalysisTaskResult[]> {
+        let analysis: AiLinkAnalysisResult
+
+        try {
+            analysis = await this.aiService.generateLinkAnalysis(aiInput)
+        } catch (error) {
+            if (aiTasks.includes('SUMMARY')) {
+                await this.markSummaryFailedSafe(input)
+            }
+
+            return aiTasks.map((task) =>
+                this.toFailedTaskResult(input, task, error),
+            )
+        }
+
+        // 검토 판정은 개발자만 확인한다. 상태는 요약 저장 시 NEEDS_REVIEW로 남기고 사유는 로그와 ai_metrics에서 본다.
+        if (analysis.needsReview) {
+            this.logger.warn(
+                `링크가 개발자 검토 대상으로 표시되었습니다. linkId=${input.linkId}, reason=${analysis.reviewReason ?? '사유 없음'}`,
+            )
+        }
+
+        return Promise.all(
+            aiTasks.map((task) =>
+                this.runTask(input, task, () =>
+                    task === 'SUMMARY'
+                        ? this.saveSummary(input, analysis)
+                        : this.saveTags(input, analysis.tags),
+                ),
+            ),
+        )
+    }
+
     private async skipUnavailableAnalysis(
         input: LinkAnalysisInput,
-        task: 'SUMMARY' | 'TAGS',
+        task: LinkAnalysisAiTask,
         reason: string,
     ): Promise<LinkAnalysisTaskResult> {
         if (task === 'SUMMARY') {
@@ -297,17 +334,18 @@ export class LinkAnalysisService {
         await this.extractAndSaveImageColor(input, content.image ?? null)
     }
 
-    // 요약 실패는 상태를 FAILED로 남긴 뒤 예외를 다시 던져 재시도 판단을 runTask에 맡긴다.
-    private async generateAndSaveSummary(
+    // 요약 저장 실패는 상태를 FAILED로 남긴 뒤 예외를 다시 던져 재시도 판단을 runTask에 맡긴다.
+    // 검토 대상이면 SUCCESS 대신 NEEDS_REVIEW를 기록해 개발자가 상태로 조회할 수 있게 한다.
+    private async saveSummary(
         input: LinkAnalysisInput,
-        aiInput: AiLinkAnalysisInput,
+        analysis: AiLinkAnalysisResult,
     ): Promise<void> {
         try {
-            const result = await this.aiService.generateSummary(aiInput)
-
             await this.linkRepository.updateActive(input.userId, input.linkId, {
-                aiSummary: result.summary,
-                aiSummaryStatus: 'SUCCESS',
+                aiSummary: analysis.summary,
+                aiSummaryStatus: analysis.needsReview
+                    ? 'NEEDS_REVIEW'
+                    : 'SUCCESS',
                 updatedAt: new Date(),
             })
         } catch (error) {
@@ -316,13 +354,11 @@ export class LinkAnalysisService {
         }
     }
 
-    private async generateAndSaveTags(
+    private async saveTags(
         input: LinkAnalysisInput,
-        aiInput: AiLinkAnalysisInput,
+        generatedTags: string[],
     ): Promise<LinkAnalysisTaskResult | void> {
-        const result = await this.aiService.generateTags(aiInput)
-
-        if (result.tags.length === 0) {
+        if (generatedTags.length === 0) {
             return {
                 task: 'TAGS',
                 status: 'SKIPPED',
@@ -330,7 +366,7 @@ export class LinkAnalysisService {
             }
         }
 
-        await this.replaceAiTags(input, result.tags)
+        await this.replaceAiTags(input, generatedTags)
     }
 
     private async embedLatestRow(
