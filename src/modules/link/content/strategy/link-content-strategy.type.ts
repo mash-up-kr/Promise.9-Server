@@ -1,3 +1,4 @@
+import { TinyFishFetchOptions } from '../tinyfish/tinyfish-fetch.client'
 import { TinyFishResponseContent } from '../tinyfish/tinyfish-response.parser'
 
 export type LinkContentOEmbedPreview = {
@@ -34,6 +35,7 @@ export type LinkContentYoutubeStrategy = Omit<
 export type LinkContentTinyFishStrategy = LinkContentStrategyBase & {
     kind: 'tinyfish'
     prepareUrl: (resourceUrl: URL) => URL
+    fetchOptions?: (resourceUrl: URL) => TinyFishFetchOptions | undefined
     normalizeContent?: (
         resourceUrl: URL,
         content: TinyFishResponseContent,

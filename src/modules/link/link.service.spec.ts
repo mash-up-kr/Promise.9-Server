@@ -297,10 +297,10 @@ describe('LinkService', () => {
         ).rejects.toMatchObject({
             status: 409,
             response: {
-                error: expect.objectContaining({
+                error: {
                     errorCode: 930003,
                     linkId: 55,
-                }),
+                },
             },
         })
     })

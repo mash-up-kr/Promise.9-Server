@@ -255,9 +255,11 @@ export class LinkContentService {
         strategy: LinkContentTinyFishStrategy,
     ): Promise<ResolvedLinkContent> {
         try {
-            const outcome = await this.tinyFishFetchClient.fetch(
-                strategy.prepareUrl(resourceUrl),
-            )
+            const targetUrl = strategy.prepareUrl(resourceUrl)
+            const options = strategy.fetchOptions?.(resourceUrl)
+            const outcome = options
+                ? await this.tinyFishFetchClient.fetch(targetUrl, options)
+                : await this.tinyFishFetchClient.fetch(targetUrl)
 
             if (outcome.status === 'UNAVAILABLE') {
                 return {

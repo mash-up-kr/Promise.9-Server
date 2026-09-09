@@ -14,6 +14,11 @@ const TINYFISH_URL_TIMEOUT_MS = 20_000
 const TINYFISH_REQUEST_TIMEOUT_MS = 25_000
 const TINYFISH_RESPONSE_MAX_BYTES = 2 * 1024 * 1024
 
+export type TinyFishFetchOptions = {
+    includeSelectors?: readonly string[]
+    excludeSelectors?: readonly string[]
+}
+
 @Injectable()
 export class TinyFishFetchClient {
     private readonly apiKey: string | undefined
@@ -26,7 +31,10 @@ export class TinyFishFetchClient {
         return Boolean(this.apiKey)
     }
 
-    async fetch(resourceUrl: URL): Promise<TinyFishResponseOutcome> {
+    async fetch(
+        resourceUrl: URL,
+        options?: TinyFishFetchOptions,
+    ): Promise<TinyFishResponseOutcome> {
         if (!this.apiKey) {
             throw new TinyFishFetchError({
                 message: 'TinyFish Fetch가 비활성화됐습니다.',
@@ -50,6 +58,12 @@ export class TinyFishFetchClient {
                 },
                 body: JSON.stringify({
                     urls: [targetUrl.toString()],
+                    ...(options?.includeSelectors
+                        ? { include_selectors: options.includeSelectors }
+                        : {}),
+                    ...(options?.excludeSelectors
+                        ? { exclude_selectors: options.excludeSelectors }
+                        : {}),
                     format: 'markdown',
                     links: false,
                     image_links: true,

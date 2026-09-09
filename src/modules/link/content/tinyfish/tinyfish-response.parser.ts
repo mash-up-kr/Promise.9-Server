@@ -130,6 +130,7 @@ function isRetryableTinyFishError(
     }
 
     return [
+        'selector_not_matched',
         'timeout',
         'target_unreachable',
         'proxy_error',
