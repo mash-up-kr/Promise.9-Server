@@ -40,8 +40,7 @@ URL에 맞는 수집 방식 선택
 
 `preview`와 `collect`는 같은 방식 선택 흐름을 공유한다.
 
-- `preview`: 저장 전에 제목, 썸네일, 출처를 반환한다. 응답 속도를 위해 robots.txt는
-  조회하지 않는다.
+- `preview`: 저장 전에 제목, 썸네일, 출처를 반환한다. HTML 요청 전에 robots.txt 허용 여부를 확인한다.
 - `collect`: 저장 후 제목, 설명, 본문, 대표 이미지를 수집한다. AI 입력으로 사용할 수
   있으므로 HTML 요청 전에 robots.txt 허용 여부를 확인한다.
 
@@ -71,7 +70,7 @@ Brunch는 새로운 수집 방식이 필요한 사이트가 아니다. 수집 �
 User-Agent가 필요하므로 HTML 요청 설정에만 예외를 둔다. TinyFish로 수집하는 X와
 Instagram에는 HTML User-Agent 설정이 적용되지 않는다.
 
-HTML 리다이렉트가 발생하면 이동한 URL도 다시 공개 URL인지 검사하고, `collect`에서는
+HTML 리다이렉트가 발생하면 이동한 URL도 다시 공개 URL인지 검사하고, 미리보기와 저장 후 수집 모두
 robots.txt도 다시 확인한다. User-Agent 역시 이동한 도메인에 맞게 다시 선택한다.
 
 현재 HTML 수집을 시작한 뒤 리다이렉트된 URL에 맞춰 oEmbed나 TinyFish로 방식을 바꾸지는

@@ -153,7 +153,7 @@ export class LinkContentService {
         purpose: LinkContentPurpose,
     ): Promise<ResolvedLinkContent | null> {
         const fetched = await this.htmlFetcher.fetch(resourceUrl, {
-            respectRobots: purpose === 'analysis',
+            respectRobots: true,
         })
 
         if (!fetched) return null
