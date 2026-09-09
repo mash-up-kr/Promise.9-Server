@@ -54,7 +54,56 @@ YouTube는 preview에 oEmbed, 설명이 필요한 collect에 Data API를 쓰는 
 - **없음과 실패:** 자체 이미지가 없으면 `null`이다. 인용 원글·계정 이미지로 억지로 채우지 않는다. 프로필 링크나 장소 페이지는 그 콘텐츠 자체의 대표 이미지를 선택한다. 로딩으로 데이터가 전부 누락된 경우와 정상 무이미지 글은 구분하고, 일시 오류만 기존 제한 내에서 재시도한다.
 - **URL 안정성:** 유효한 쿼리·이미지 포맷을 임의로 제거하지 않는다. 서명 만료 이미지는 URL만 저장할 때 깨질 수 있다. 토큰 제거·재호스팅을 검증 없이 대책으로 삼지 않는다.
 
-## 4. 속도와 품질을 함께 검증
+## 4. 코드에 전략 추가
+
+아래 경로는 모두 `src/modules/link/content/` 기준이다.
+
+1. **수집 방식 결정:** 일반 OG로 충분하면 기본 HTML 전략을 유지한다. oEmbed는 `LinkContentOEmbedStrategy`의 endpoint·응답 파서를 구현하고, TinyFish는 아래처럼 `LinkContentTinyFishStrategy`를 구현한다. 새 공식 API가 필요하면 전용 client와 전략 타입·서비스 실행 경로·Nest provider 등록을 함께 검토한다. 다른 사이트에 `kind: 'youtube'`를 재사용하지 않는다.
+2. **파일 작성:** `strategy/site/{site}-link-content.strategy.ts`를 만든다. 복잡한 URL·본문·이미지 규칙은 같은 폴더의 파서로 분리한다. 다음은 TinyFish 연결 예시이며 `example`과 도메인은 대상 사이트로 바꾸고, import한 함수는 조사한 규칙으로 구현한다.
+
+```ts
+// strategy/site/example-link-content.strategy.ts
+import { LinkContentTinyFishStrategy } from '../link-content-strategy.type'
+import {
+    prepareExampleUrl,
+    normalizeExampleContent,
+    selectExampleImage,
+} from './example-content.parser'
+
+export const EXAMPLE_LINK_CONTENT_STRATEGY: LinkContentTinyFishStrategy = {
+    kind: 'tinyfish',
+    name: 'example',
+    supports: (url) =>
+        ['example.com', 'www.example.com'].includes(url.hostname) &&
+        url.pathname.startsWith('/posts/'),
+    prepareUrl: prepareExampleUrl,
+    normalizeContent: normalizeExampleContent,
+    selectImage: selectExampleImage,
+}
+```
+
+`supports`는 검증한 콘텐츠 경로만 허용한다. `prepareUrl`은 원본 URL을 수정하지 않고 확인한 embed·모바일 URL 등을 반환한다. `normalizeContent`는 `TinyFishResponseContent`를 반환하고 `selectImage`는 이미지 URL 또는 `null`을 반환한다. 범위 제한이 필요할 때만 `fetchOptions`를 추가하며, `article` 같은 선택자도 실제 DOM을 확인한 뒤 사용한다. 기존 TinyFish client를 쓰는 전략은 별도 Nest provider 등록이 필요 없다.
+
+3. **Registry 등록:** `strategy/link-content-strategy.registry.ts`에서 상수를 import하고 기존 `LINK_CONTENT_STRATEGIES` 배열에 추가한다. 먼저 매칭된 전략이 선택되므로 경로가 겹치면 구체적인 전략을 앞에 둔다. 매칭되지 않은 URL의 기본 HTML 동작은 유지한다.
+
+```ts
+import { EXAMPLE_LINK_CONTENT_STRATEGY } from './site/example-link-content.strategy'
+
+const LINK_CONTENT_STRATEGIES: readonly LinkContentStrategy[] = [
+    // 기존 전략 항목은 그대로 유지한다.
+    EXAMPLE_LINK_CONTENT_STRATEGY,
+]
+```
+
+4. **테스트·문서 연결:** 사이트 옆 `*.spec.ts`에 URL 정규화·본문·이미지 규칙을 테스트하고, `link-content-strategy.registry.spec.ts`에서 대상 URL의 선택과 유사 도메인·비대상 경로 제외를 확인한다. `link-content.service.spec.ts`에서는 preview/collect 결과와 요청 수, TinyFish 키가 없을 때 기존 HTML 경로를 검증한다. 콘텐츠 README에 지원 경로·선택 기준·미지원 케이스를 짧게 추가한다.
+
+```sh
+bun run test -- --runInBand --testPathPattern=modules/link/content
+bun run build
+bun run lint
+```
+
+## 5. 속도와 품질을 함께 검증
 
 요청 URL·응답 형식·캐시에 따라 시간과 수집 품질이 달라질 수 있다. [Fetch 개요](https://docs.tinyfish.ai/fetch-api)를 확인하되, 경로 선택은 실측과 필요한 필드의 확보 여부로 판단한다.
 
