@@ -87,6 +87,15 @@ describe('rankSearchCandidates', () => {
         expect(result.map(({ id }) => id)).toEqual([3, 2, 1])
         expect(candidates.map(({ id }) => id)).toEqual([1, 3, 2])
     })
+
+    it('폴더명만 일치한 후보보다 제목 일치 후보를 우선한다', () => {
+        const result = rankSearchCandidates([
+            { id: 1, signals: { titleKeyword: 1 } },
+            { id: 2, signals: { folderKeyword: 1 } },
+        ])
+
+        expect(result.map(({ id }) => id)).toEqual([1, 2])
+    })
 })
 describe('search keyword signals', () => {
     it('검색어 토큰 중 필드가 포함한 비율을 계산한다', () => {
@@ -124,10 +133,11 @@ describe('search keyword signals', () => {
         ).toBe(1)
     })
 
-    it('제목·폴더·태그·본문·임베딩 원점수를 분리한다', () => {
+    it('제목·AI 요약·폴더·태그·본문·임베딩 원점수를 분리한다', () => {
         expect(
             calculateSearchSignals('NestJS 인증', {
                 title: 'NestJS 가이드',
+                aiSummary: '인증 실무 가이드',
                 folder: '인증 자료',
                 tags: ['인증', '백엔드'],
                 content: 'JWT 인증 예제',
@@ -135,6 +145,7 @@ describe('search keyword signals', () => {
             }),
         ).toEqual({
             titleKeyword: 0.5,
+            summaryKeyword: 0.5,
             folderKeyword: 0.5,
             tagKeyword: 0.5,
             contentKeyword: 0.5,
@@ -150,6 +161,7 @@ describe('search keyword signals', () => {
             }),
         ).toEqual({
             titleKeyword: 1,
+            summaryKeyword: 0,
             folderKeyword: 0,
             tagKeyword: 0,
             contentKeyword: 0,

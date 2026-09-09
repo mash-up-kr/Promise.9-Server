@@ -243,10 +243,13 @@ describe('SearchService', () => {
         repository.findFolderKeywordCandidateIds.mockResolvedValue([])
         repository.findTagKeywordCandidateIds.mockResolvedValue([])
         repository.findContentCandidateIds.mockResolvedValue([])
-        repository.findVectorCandidateIds.mockResolvedValue([1, 2])
+        repository.findVectorCandidateIds.mockResolvedValue([1, 2, 3, 4, 5])
         repository.findCandidates.mockResolvedValue([
             candidate({ id: 1, embeddingSimilarity: 0.500014 }),
             candidate({ id: 2, embeddingSimilarity: 0.500013 }),
+            candidate({ id: 3, embeddingSimilarity: 0.1 }),
+            candidate({ id: 4, embeddingSimilarity: 0.1 }),
+            candidate({ id: 5, embeddingSimilarity: 0.1 }),
         ])
 
         const firstResult = await service.search(7, input)
