@@ -75,15 +75,10 @@ export function selectInstagramImage(
             }
 
             const decoded = Buffer.from(cacheKey, 'base64').toString('utf8')
-            // 관측된 embed 캐시 키는 미디어 ID + 17자리 보조 식별자다.
-            // 보조 식별자는 파일명의 ID와 다를 수 있다. 전체 길이와 숫자 형식을
-            // 함께 검사해 다른 길이의 미디어 ID가 접두사로 일치하는 것을 막는다.
-            return (
-                decoded === mediaId ||
-                (decoded.length === mediaId.length + 17 &&
-                    /^\d+$/.test(decoded) &&
-                    decoded.slice(0, mediaId.length) === mediaId)
-            )
+            // 관측된 캐시 키는 미디어 ID 또는 미디어 ID + 숫자 보조 식별자다.
+            // 보조 식별자의 길이는 고정하지 않는다. 구분자가 없어 동일한
+            // 미디어 ID 접두사를 가진 다른 키를 완전히 구별할 수는 없다.
+            return /^\d+$/.test(decoded) && decoded.startsWith(mediaId)
         })
     }
 
