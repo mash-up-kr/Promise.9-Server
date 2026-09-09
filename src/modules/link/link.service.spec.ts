@@ -200,6 +200,43 @@ describe('LinkService', () => {
         ])
     })
 
+    it('개발자 검토 상태는 상세 응답에서 SUCCESS로 감춘다', async () => {
+        const link = {
+            id: 10,
+            userId: 7,
+            folderId: null,
+            originalUrl: 'https://example.com/source',
+            title: '원본 링크',
+            domain: 'example.com',
+            metadata: null,
+            embedding: null,
+            createdAt: new Date('2026-08-08T00:00:00.000Z'),
+            isFavorite: false,
+            viewedAt: null,
+            aiSummaryStatus: 'NEEDS_REVIEW',
+            aiSummary: '로그인이 필요한 페이지예요.',
+            memo: null,
+        } as LinkRow
+        const linkRepository = {
+            findOwned: jest.fn().mockResolvedValue(link),
+            findTags: jest.fn().mockResolvedValue([]),
+        }
+        const relatedLinkService = {
+            relatedLinks: jest.fn().mockResolvedValue([]),
+        }
+        const service = new LinkService(
+            linkRepository as unknown as LinkRepository,
+            {} as never,
+            {} as never,
+            relatedLinkService as unknown as RelatedLinkService,
+        )
+
+        const result = await service.detail(7, 10)
+
+        expect(result.processingStatus).toBe('SUCCESS')
+        expect(result.aiSummary).toBe('로그인이 필요한 페이지예요.')
+    })
+
     it('관련 링크 조회가 실패해도 상세 응답을 빈 관련 링크 목록으로 반환한다', async () => {
         const link = {
             id: 10,

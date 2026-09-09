@@ -1,5 +1,5 @@
 import { LinkRow } from './link.schema'
-import { buildEmbeddingText } from './link.util'
+import { buildEmbeddingText, toProcessingStatus } from './link.util'
 
 describe('buildEmbeddingText', () => {
     const base = {
@@ -41,4 +41,17 @@ describe('buildEmbeddingText', () => {
     it('임베딩할 텍스트가 없으면 빈 문자열을 반환한다', () => {
         expect(buildEmbeddingText(base)).toBe('')
     })
+})
+
+describe('toProcessingStatus', () => {
+    it('개발자 검토 상태는 클라이언트에 SUCCESS로 내려준다', () => {
+        expect(toProcessingStatus('NEEDS_REVIEW')).toBe('SUCCESS')
+    })
+
+    it.each(['PENDING', 'SUCCESS', 'FAILED'])(
+        '%s 상태는 그대로 반환한다',
+        (status) => {
+            expect(toProcessingStatus(status)).toBe(status)
+        },
+    )
 })

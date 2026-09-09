@@ -159,11 +159,11 @@ export class LinkDetailResponseDto {
     viewedAt!: string | null
 
     @ApiProperty({
-        enum: ['PENDING', 'SUCCESS', 'NEEDS_REVIEW', 'FAILED'],
+        enum: ['PENDING', 'SUCCESS', 'FAILED'],
         example: 'PENDING',
         description: '요약·태그·임베딩 비동기 처리 상태',
     })
-    processingStatus!: 'PENDING' | 'SUCCESS' | 'NEEDS_REVIEW' | 'FAILED'
+    processingStatus!: 'PENDING' | 'SUCCESS' | 'FAILED'
 
     @ApiProperty({
         example: null,

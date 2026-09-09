@@ -32,6 +32,15 @@ export function extractDomain(raw: string): string | null {
 }
 
 // metadata의 첫 이미지 URL을 썸네일로 사용. 없으면 null.
+// 개발자 검토 상태는 내부 운영용이므로 클라이언트에는 SUCCESS로 내려준다.
+export function toProcessingStatus(
+    aiSummaryStatus: string,
+): 'PENDING' | 'SUCCESS' | 'FAILED' {
+    if (aiSummaryStatus === 'NEEDS_REVIEW') return 'SUCCESS'
+
+    return aiSummaryStatus as 'PENDING' | 'SUCCESS' | 'FAILED'
+}
+
 export function pickThumbnailUrl(metadata: LinkMetadata | null): string | null {
     return metadata?.images?.[0]?.url ?? null
 }
