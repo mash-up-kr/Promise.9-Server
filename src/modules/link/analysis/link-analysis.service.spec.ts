@@ -181,8 +181,8 @@ describe('LinkAnalysisService', () => {
             description: caption,
             content: null,
         }
-        expect(aiService.generateSummary).toHaveBeenCalledWith(expected)
-        expect(aiService.generateTags).toHaveBeenCalledWith(expected)
+        expect(aiService.generateLinkAnalysis).toHaveBeenCalledWith(expected)
+        expect(aiService.generateLinkAnalysis).toHaveBeenCalledTimes(1)
     })
 
     it('EMBEDDING만 재시도하면 링크 수집과 AI 호출을 건너뛴다', async () => {
