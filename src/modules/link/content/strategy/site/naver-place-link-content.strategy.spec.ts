@@ -1,5 +1,5 @@
-import { resolveLinkContentStrategy } from '../link-content-strategy.registry'
 import { TinyFishFetchError } from '../../tinyfish/tinyfish-fetch.error'
+import { resolveLinkContentStrategy } from '../link-content-strategy.registry'
 
 import { NAVER_PLACE_LINK_CONTENT_STRATEGY as strategy } from './naver-place-link-content.strategy'
 
@@ -81,7 +81,8 @@ describe('네이버 장소 전략', () => {
         '로딩중',
         'loading',
     ])('공통·로딩 화면은 재시도 가능한 실패로 반환한다: %s', (title) => {
-        expect(() =>
+        let thrown: unknown
+        try {
             strategy.normalizeContent!(
                 new URL('https://m.place.naver.com/place/123'),
                 {
@@ -90,13 +91,14 @@ describe('네이버 장소 전략', () => {
                     content: null,
                     imageLinks: ['logo'],
                 },
-            ),
-        ).toThrow(
-            expect.objectContaining({
-                name: TinyFishFetchError.name,
-                retryable: true,
-            }),
-        )
+            )
+        } catch (error) {
+            thrown = error
+        }
+
+        expect(thrown).toBeInstanceOf(TinyFishFetchError)
+        if (!(thrown instanceof TinyFishFetchError)) return
+        expect(thrown.retryable).toBe(true)
     })
 
     it('제목이 없으면 빈 결과로 정규화한다', () => {

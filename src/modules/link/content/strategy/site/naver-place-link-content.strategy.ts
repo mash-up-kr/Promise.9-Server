@@ -1,5 +1,5 @@
-import { LinkContentTinyFishStrategy } from '../link-content-strategy.type'
 import { TinyFishFetchError } from '../../tinyfish/tinyfish-fetch.error'
+import { LinkContentTinyFishStrategy } from '../link-content-strategy.type'
 
 export function extractNaverPlaceId(url: URL): string | null {
     if (
