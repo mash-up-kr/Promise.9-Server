@@ -1,4 +1,3 @@
-import { TinyFishFetchError } from '../../tinyfish/tinyfish-fetch.error'
 import { TinyFishResponseContent } from '../../tinyfish/tinyfish-response.parser'
 
 // 대상 article 내부에서도 작성자·시각·반응 수를 본문에 포함하지 않는다.
@@ -14,23 +13,46 @@ export function normalizeXPostContent(
     const authorIndex = lines.findIndex((line) =>
         /^@[A-Za-z0-9_]{1,15}$/.test(line.trim()),
     )
-    const footerIndex = lines.findIndex(
+    const authorName = lines
+        .slice(0, authorIndex)
+        .findLast((line) => line.trim())
+        ?.trim()
+    // TinyFish가 동일 article을 반복할 수 있으므로 첫 작성자 블록 안에서 찾는다.
+    const repeatIndex = lines.findIndex(
         (line, index) =>
             index > authorIndex &&
+            line.trim() === authorName &&
+            lines
+                .slice(index + 1)
+                .find((next) => next.trim())
+                ?.trim() === lines[authorIndex]?.trim(),
+    )
+    const blockEnd = repeatIndex < 0 ? lines.length : repeatIndex
+    const footerIndex = lines.findLastIndex(
+        (line, index) =>
+            index > authorIndex &&
+            index < blockEnd &&
             /^(?:(?:\d{1,2}:\d{2}\s*(?:AM|PM)?)|(?:(?:오전|오후)\s*\d{1,2}:\d{2}))\s*·\s*.+(?:\d{4}|\d{4}년)/i.test(
                 line.trim(),
-            ),
+            ) &&
+            // 후보 뒤에 일반 문장이나 다른 형식의 시각이 있으면 본문 일정일 수 있다.
+            lines
+                .slice(index + 1, blockEnd)
+                .every((tail) =>
+                    /^(?:[\d\s.,·KM만천억]*\s*(?:Views|조회수)?)?$/i.test(
+                        tail.trim(),
+                    ),
+                ),
     )
-    if (authorIndex < 0 || footerIndex < 0) {
-        throw new TinyFishFetchError({
-            message: 'X 게시물 본문 경계를 확인하지 못했습니다.',
-            retryable: true,
-        })
-    }
-    let body = lines
-        .slice(authorIndex + 1, footerIndex)
-        .join('\n')
-        .trim()
+    // 본문 형식이 바뀌어도 수집한 이미지를 버리지 않는다.
+    // 경계를 찾지 못하면 페이지 UI 대신 메타 설명을 사용한다.
+    let body =
+        authorIndex >= 0 && footerIndex > authorIndex
+            ? lines
+                  .slice(authorIndex + 1, footerIndex)
+                  .join('\n')
+                  .trim()
+            : (content.description?.trim() ?? '')
     // 영상 표본에서 TinyFish가 poster Markdown 뒤에 플레이어 시간을 붙인다.
     // 실제 imageLinks의 이미지 바로 뒤에 있는 시간만 지워 작성한 시각은 보존한다.
     const imageLinks = new Set(content.imageLinks)
@@ -40,7 +62,7 @@ export function normalizeXPostContent(
             (match, url: string) => (imageLinks.has(url) ? '' : match),
         )
         .trim()
-    // 메타 설명은 본문 일부일 수 있다. 시작점을 확인할 때만 사용하고 전문을 대체하지 않는다.
+    // 메타 설명이 본문과 대응하면 전문을 보존한다. 대응하지 않으면 설명으로 대체한다.
     const description = content.description?.trim()
     if (description) {
         const prefix = description
@@ -53,13 +75,8 @@ export function normalizeXPostContent(
             .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
             .join('\\s+')
         const start = prefix ? body.search(new RegExp(pattern)) : 0
-        if (prefix && start < 0) {
-            throw new TinyFishFetchError({
-                message: 'X 게시물 설명과 수집 본문이 일치하지 않습니다.',
-                retryable: true,
-            })
-        }
-        if (start > 0) body = body.slice(start)
+        if (prefix && start < 0) body = description
+        else if (start > 0) body = body.slice(start)
     }
     const title =
         Array.from(

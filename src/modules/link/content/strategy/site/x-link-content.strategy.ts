@@ -1,3 +1,4 @@
+import { TinyFishFetchError } from '../../tinyfish/tinyfish-fetch.error'
 import { findFirstTinyFishImage } from '../../tinyfish/tinyfish-image.selector'
 import { LinkContentTinyFishStrategy } from '../link-content-strategy.type'
 import { withoutSearchParams } from '../link-content-url.util'
@@ -38,16 +39,38 @@ export const X_LINK_CONTENT_STRATEGY: LinkContentTinyFishStrategy = {
     fetchOptions: (url) => {
         const post = parseXPostUrl(url)
         if (!post) return { excludeSelectors: ['article', 'aside', 'nav'] }
+        const photoLink = post.photoIndex
+            ? `a:is([href$="/status/${post.id}/photo/${post.photoIndex}"], [href*="/status/${post.id}/photo/${post.photoIndex}?"], [href*="/status/${post.id}/photo/${post.photoIndex}#"], [href*="/status/${post.id}/photo/${post.photoIndex}/"])`
+            : null
         return {
-            includeSelectors: [`article:has(a[href$="/status/${post.id}"])`],
+            // ID 뒤의 경계는 확인하되 query·fragment·미디어 경로를 허용한다.
+            includeSelectors: [
+                `article:has(a:is([href$="/status/${post.id}"], [href*="/status/${post.id}?"], [href*="/status/${post.id}#"], [href*="/status/${post.id}/"]))`,
+            ],
             excludeSelectors: [
                 'article article',
+                // 지정 링크에 이미지 요소가 있을 때만 다른 미디어 링크를 제외한다.
+                // 빈 링크·로딩 상태라면 확보된 자체 미디어를 남긴다.
+                ...(photoLink
+                    ? [
+                          `article:has(${photoLink}:has(img)) a:is([href*="/photo/"], [href*="/video/"]):not(${photoLink})`,
+                      ]
+                    : []),
                 `a[href*="/status/"][href*="/photo/"]:not([href*="/status/${post.id}/photo/"])`,
             ],
         }
     },
-    normalizeContent: (url, content) =>
-        parseXPostUrl(url) ? normalizeXPostContent(content) : content,
+    normalizeContent: (url, content) => {
+        if (!parseXPostUrl(url)) return content
+        const normalized = normalizeXPostContent(content)
+        if (!normalized.content && !selectXImage(url, normalized.imageLinks)) {
+            throw new TinyFishFetchError({
+                message: 'X 게시물의 본문과 이미지를 수집하지 못했습니다.',
+                retryable: true,
+            })
+        }
+        return normalized
+    },
     selectImage: selectXImage,
 }
 
@@ -56,7 +79,6 @@ export function selectXImage(
     imageLinks: readonly string[],
 ): string | null {
     if (!parseXPostUrl(resourceUrl)) return selectXAvatar(imageLinks)
-    const photoIndex = parseXPostUrl(resourceUrl)?.photoIndex ?? 1
     const seen = new Set<string>()
     const unique = imageLinks.filter((image) => {
         try {
@@ -69,17 +91,18 @@ export function selectXImage(
             return false
         }
     })
-    let index = 0
-    return findFirstTinyFishImage(
-        unique,
-        (url) =>
+    const candidates = unique.filter((image) => {
+        const url = new URL(image)
+        return (
             url.protocol === 'https:' &&
             url.hostname === 'pbs.twimg.com' &&
             /^\/(?:media|tweet_video_thumb|ext_tw_video_thumb|amplify_video_thumb|card_img)\//.test(
                 url.pathname,
-            ) &&
-            ++index === photoIndex,
-    )
+            )
+        )
+    })
+    // 순번은 DOM 사진 링크로 제한한다. image_links 배열 위치로 추정하지 않는다.
+    return candidates[0] ?? null
 }
 
 function selectXAvatar(imageLinks: readonly string[]): string | null {

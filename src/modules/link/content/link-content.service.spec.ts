@@ -503,7 +503,7 @@ describe('LinkContentService', () => {
             new URL('https://x.com/OpenAI/status/2041581000120267067'),
             expect.objectContaining({
                 includeSelectors: [
-                    'article:has(a[href$="/status/2041581000120267067"])',
+                    'article:has(a:is([href$="/status/2041581000120267067"], [href*="/status/2041581000120267067?"], [href*="/status/2041581000120267067#"], [href*="/status/2041581000120267067/"]))',
                 ],
             }),
         )
@@ -511,7 +511,7 @@ describe('LinkContentService', () => {
         expect(tinyFishFetchClient.fetch).toHaveBeenCalledTimes(1)
     })
 
-    it('X 저장 수집은 정리한 본문과 제목을 반환하며 파싱 실패는 재시도 가능하다', async () => {
+    it('X 저장 수집은 정리한 본문과 제목을 반환하며 데이터가 전부 없으면 재시도한다', async () => {
         tinyFishFetchClient.isEnabled.mockReturnValue(true)
         tinyFishFetchClient.fetch.mockResolvedValueOnce({
             status: 'SUCCESS',
@@ -543,6 +543,38 @@ describe('LinkContentService', () => {
             service.collect('https://x.com/NASA/status/123'),
         ).rejects.toMatchObject({ retryable: true })
     })
+
+    it.each(['preview', 'collect'] as const)(
+        '본문 파싱이 안 돼도 자체 이미지를 반환한다: %s',
+        async (method) => {
+            tinyFishFetchClient.isEnabled.mockReturnValue(true)
+            tinyFishFetchClient.fetch.mockResolvedValueOnce({
+                status: 'SUCCESS',
+                content: {
+                    title: 'X',
+                    description: null,
+                    content: '알 수 없는 본문 형식',
+                    imageLinks: ['https://pbs.twimg.com/media/own.jpg'],
+                },
+            })
+            const result = await service[method](
+                'https://x.com/NASA/status/123',
+            )
+            expect(result).toMatchObject(
+                method === 'preview'
+                    ? {
+                          title: null,
+                          thumbnailUrl: 'https://pbs.twimg.com/media/own.jpg',
+                      }
+                    : {
+                          title: null,
+                          content: null,
+                          image: { url: 'https://pbs.twimg.com/media/own.jpg' },
+                      },
+            )
+            expect(tinyFishFetchClient.fetch).toHaveBeenCalledTimes(1)
+        },
+    )
 
     it('자체 이미지가 없으면 추가 조회 없이 본문과 null 이미지를 반환한다', async () => {
         tinyFishFetchClient.isEnabled.mockReturnValue(true)

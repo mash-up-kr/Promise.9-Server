@@ -64,12 +64,11 @@ describe('X URL과 수집 범위', () => {
             ),
         ).toEqual(content)
     })
-    it('이미지 해상도 중복을 제거하고 선택된 두 번째 사진을 사용한다', () => {
+    it('DOM에서 제한된 사진 후보를 배열 순번과 무관하게 선택한다', () => {
         expect(
             selectXImage(new URL('https://x.com/NASA/status/123/photo/2'), [
-                'https://pbs.twimg.com/media/one?name=medium',
-                'https://pbs.twimg.com/media/one?name=large',
                 'https://pbs.twimg.com/media/two?name=medium',
+                'https://pbs.twimg.com/media/two?name=large',
             ]),
         ).toBe('https://pbs.twimg.com/media/two?name=medium')
     })
@@ -132,4 +131,13 @@ describe('X 케이스별 대표 이미지', () => {
             ]),
         ).toBeNull()
     })
+})
+
+it('지정 순번이 누락되어도 수집된 자체 미디어를 반환한다', () => {
+    expect(
+        selectXImage(new URL('https://x.com/NASA/status/123/photo/2'), [
+            'https://pbs.twimg.com/profile_images/123/avatar.jpg',
+            'https://pbs.twimg.com/media/available.jpg',
+        ]),
+    ).toBe('https://pbs.twimg.com/media/available.jpg')
 })
