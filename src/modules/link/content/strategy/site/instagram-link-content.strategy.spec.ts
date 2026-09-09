@@ -202,31 +202,81 @@ describe('Instagram Reel 표지 보완', () => {
         ).toBe(cover)
     })
 
+    it.each(['', '1', '9'.repeat(15), '9'.repeat(16), imageId, '9'.repeat(24)])(
+        '숫자 보조 ID의 길이에 관계없이 표지를 선택한다: %s',
+        (suffix) => {
+            const cover = image(mediaId + suffix)
+            expect(selectInstagramImage(reel, [cover])).toBe(cover)
+        },
+    )
+
     it.each([
-        '38898689562173343940' + imageId,
-        '3889868956217334394' + '9999999999999999',
+        '3981219167379804392' + imageId,
+        mediaId.slice(0, -1),
+        '1' + mediaId,
+        mediaId + '_2032281311028853',
+        mediaId + 'auxiliary-id',
         'not-a-media-id',
-    ])('접두사만 일치하거나 형식이 잘못된 캐시 키를 거부한다: %s', (key) => {
-        expect(selectInstagramImage(reel, [image(key)])).toBeNull()
-    })
+    ])(
+        '대상 ID로 시작하지 않거나 숫자가 아닌 캐시 키를 거부한다: %s',
+        (key) => {
+            expect(selectInstagramImage(reel, [image(key)])).toBeNull()
+        },
+    )
 
-    it('위장 CDN, HTTP, 프로필 이미지를 거부한다', () => {
+    it.each(['reel', 'reels'])(
+        '%s의 실제 16자리 보조 ID 표지를 선택하고 추천 이미지는 제외한다',
+        (kind) => {
+            const target = new URL(
+                `https://www.instagram.com/${kind}/DYRcEhypHUk/`,
+            )
+            const cover = image(
+                '3896018609115526436' + '2032281311028853',
+            ).replace('t51.82787-15', 't51.71878-15')
+            const recommendations = [
+                image('3981543122116535657' + '18277425097292786'),
+                image('3980790412949700312'),
+            ]
+
+            expect(selectInstagramImage(target, recommendations)).toBeNull()
+            expect(
+                selectInstagramImage(target, [...recommendations, cover]),
+            ).toBe(cover)
+        },
+    )
+
+    it('위장 CDN, HTTP, 대상 ID를 확인할 수 없는 이미지를 거부한다', () => {
         const cover = image(mediaId + imageId)
-        expect(
-            selectInstagramImage(reel, [
-                image(mediaId + imageId, 'cdninstagram.com.evil.example'),
-                cover.replace('https:', 'http:'),
-                cover.replace('-15/', '-19/'),
-                cover.replace('ig_cache_key=', 'other='),
-            ]),
-        ).toBeNull()
+        for (const candidate of [
+            image(mediaId + imageId, 'cdninstagram.com.evil.example'),
+            image(mediaId + imageId, 'fbcdn.net.evil.example'),
+            image(mediaId + imageId, 'evilfbcdn.net'),
+            image(mediaId + imageId, 'scontent-sjc6-1.xx.fbcdn.net'),
+            image(mediaId + imageId, 'fbcdn.net'),
+            cover.replace('https:', 'http:'),
+            cover.replace('-15/', '-19/'),
+            image('anonymous_profile_pic').replace('-15/', '-19/'),
+            cover.replace('ig_cache_key=', 'other='),
+        ]) {
+            expect(selectInstagramImage(reel, [candidate])).toBeNull()
+        }
     })
 
-    it('Meta CDN의 대상 표지도 선택한다', () => {
-        const cover = image(
-            mediaId + imageId,
-            'instagram.fcgk30-1.fna.fbcdn.net',
-        )
-        expect(selectInstagramImage(reel, [cover])).toBe(cover)
+    it.each(['instagram.fcgk30-1.fna.fbcdn.net'])(
+        'Meta CDN의 대상 표지도 선택한다: %s',
+        (host) => {
+            const cover = image(mediaId + imageId, host)
+            expect(selectInstagramImage(reel, [cover])).toBe(cover)
+        },
+    )
+
+    it.each([
+        '/v/t39.30808-6/cover.jpg',
+        '/t51.71878-15/cover.jpg',
+        '/new-layout/cover.webp',
+    ])('기존 이미지 경로 조건에 맞지 않는 후보는 제외한다: %s', (path) => {
+        const cover = new URL(image(mediaId + imageId))
+        cover.pathname = path
+        expect(selectInstagramImage(reel, [cover.href])).toBeNull()
     })
 })
