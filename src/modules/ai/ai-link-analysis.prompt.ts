@@ -1,3 +1,4 @@
+import { AI_LINK_ANALYSIS } from './ai.constants'
 import { AiLinkAnalysisInput } from './ai.type'
 
 const buildLinkInformationPromptV1 = (input: AiLinkAnalysisInput): string =>
@@ -21,7 +22,7 @@ const linkAnalysisPromptV1 = {
         '입력에 없는 사실, 과장된 효용, 광고 문구, 민감정보를 추정하지 않는다.',
         '',
         '[summary]',
-        '친절한 콘텐츠 큐레이터의 관점에서 이 링크의 핵심 내용을 300자 내외로 요약하되, 중복, 왜곡, 과장을 피하고 중요 정보를 최대한 포함한다.',
+        `친절한 콘텐츠 큐레이터의 관점에서 이 링크의 핵심 내용을 ${AI_LINK_ANALYSIS.summaryTargetLength}자 내외로 요약하되, 중복, 왜곡, 과장을 피하고 중요 정보를 최대한 포함한다.`,
         '핵심 주제와 중요한 내용을 처음 보는 사람도 이해하기 쉽게 정리한다.',
         '모든 문장은 자연스러운 한국어 ~요체로 작성한다.',
         '마지막 문장은 사용자가 이 링크에서 얻을 수 있는 정보나 도움을 안내하는 뉘앙스로 마무리한다.',

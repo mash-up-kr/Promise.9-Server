@@ -6,6 +6,20 @@ import { LINK_CONTENT_FETCH } from '../link-content.constants'
 
 import { LinkContentHtmlFetcher } from './link-content-html.fetcher'
 
+// jest는 advanceTimersByTimeAsync로 진행하고, 이를 지원하지 않는 bun test는 microtask를 비운 뒤 동기 API로 대신한다.
+async function advanceTimersAsync(ms: number): Promise<void> {
+    const advanceAsync = (
+        jest as { advanceTimersByTimeAsync?: (ms: number) => Promise<void> }
+    ).advanceTimersByTimeAsync
+    if (advanceAsync) {
+        await advanceAsync(ms)
+        return
+    }
+    for (let i = 0; i < 25; i++) await Promise.resolve()
+    jest.advanceTimersByTime(ms)
+    for (let i = 0; i < 25; i++) await Promise.resolve()
+}
+
 describe('LinkContentHtmlFetcher', () => {
     const security = {
         resolvePublicUrl: jest
@@ -212,7 +226,7 @@ describe('LinkContentHtmlFetcher', () => {
                 .finally(() => {
                     settled = true
                 })
-            await jest.advanceTimersByTimeAsync(5000)
+            await advanceTimersAsync(5000)
             expect(calls).toBe(redirectType === 'html' ? 3 : 2)
             expect(signals[1].aborted).toBe(true)
             expect(

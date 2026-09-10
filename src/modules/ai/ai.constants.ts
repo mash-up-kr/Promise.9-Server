@@ -27,7 +27,10 @@ export const AI_FAILURE_ERROR_CODE = {
 } as const
 
 export const AI_LINK_ANALYSIS = {
-    summaryMaxLength: 300,
+    // 프롬프트가 요구하는 요약 길이. OpenAI strict 모드는 스키마 maxLength에 닿으면 문장을 강제로 끊으므로
+    // 검증 상한(summaryMaxLength)은 목표 길이보다 넉넉히 둬 완결된 문장이 저장되게 한다.
+    summaryTargetLength: 300,
+    summaryMaxLength: 500,
     tagMaxCount: 5,
     tagMaxLength: 20,
     reviewReasonMaxLength: 200,
