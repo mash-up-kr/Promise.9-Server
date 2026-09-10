@@ -4,7 +4,6 @@ import {
     mergeImageMetadata,
     pickContentRefreshDueAt,
     pickThumbnailExpiresAt,
-    pickThumbnailRefresh,
     toProcessingStatus,
 } from './link.util'
 
@@ -176,45 +175,6 @@ describe('pickContentRefreshDueAt', () => {
 
     it('잘못된 URL이면 YouTube 정책은 적용하지 않는다', () => {
         expect(pickContentRefreshDueAt('not a url', null, now)).toBeNull()
-    })
-})
-
-describe('pickThumbnailRefresh', () => {
-    const now = new Date('2026-09-10T00:00:00.000Z')
-
-    it('만료 전이면 null을 반환한다', () => {
-        const metadata: LinkMetadata = {
-            version: 1,
-            images: [
-                {
-                    url: 'https://example.com/a.png',
-                    expiresAt: '2026-09-11T00:00:00.000Z',
-                },
-            ],
-        }
-
-        expect(pickThumbnailRefresh(metadata, now)).toBeNull()
-    })
-
-    it('TTL이 없으면 null을 반환한다', () => {
-        expect(pickThumbnailRefresh(null, now)).toBeNull()
-    })
-
-    it('이미 만료됐으면 즉시 재조회 안내를 반환한다', () => {
-        const metadata: LinkMetadata = {
-            version: 1,
-            images: [
-                {
-                    url: 'https://example.com/a.png',
-                    expiresAt: '2026-09-09T00:00:00.000Z',
-                },
-            ],
-        }
-
-        expect(pickThumbnailRefresh(metadata, now)).toEqual({
-            required: true,
-            afterMs: 10_000,
-        })
     })
 })
 

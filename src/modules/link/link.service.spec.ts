@@ -2,7 +2,6 @@ import { Logger } from '@nestjs/common'
 
 import { decodeCursor } from '../../common/pagination/cursor'
 
-import { LinkAnalysisDispatcher } from './analysis/link-analysis.dispatcher'
 import { RelatedLinkService } from './related/related-link.service'
 import { LinkListRow, LinkRepository } from './link.repository'
 import { LinkRow } from './link.schema'
@@ -199,128 +198,6 @@ describe('LinkService', () => {
         expect(result.relatedLinks).toEqual([
             { linkId: 11, title: '관련 링크', thumbnailUrl: null },
         ])
-    })
-
-    it('썸네일 TTL이 만료됐으면 CONTENT 갱신을 예약하고 재조회 안내를 응답에 포함한다', async () => {
-        const link = {
-            id: 10,
-            userId: 7,
-            folderId: null,
-            originalUrl: 'https://instagram.com/p/original',
-            finalUrl: 'https://instagram.com/p/final',
-            title: '원본 링크',
-            domain: 'instagram.com',
-            metadata: {
-                version: 1,
-                images: [
-                    {
-                        url: 'https://scontent.cdninstagram.com/photo.jpg',
-                        expiresAt: '2026-01-01T00:00:00.000Z',
-                    },
-                ],
-            },
-            embedding: null,
-            createdAt: new Date('2026-08-08T00:00:00.000Z'),
-            isFavorite: false,
-            viewedAt: null,
-            aiSummaryStatus: 'SUCCESS',
-            aiSummary: null,
-            memo: null,
-        } as LinkRow
-        const linkRepository = {
-            findOwned: jest.fn().mockResolvedValue(link),
-            findTags: jest.fn().mockResolvedValue([]),
-            postponeContentRefresh: jest.fn().mockResolvedValue(undefined),
-        }
-        const linkAnalysisDispatcher = {
-            dispatch: jest.fn(),
-        }
-        const relatedLinkService = {
-            relatedLinks: jest.fn().mockResolvedValue([]),
-        }
-        const service = new LinkService(
-            linkRepository as unknown as LinkRepository,
-            {} as never,
-            linkAnalysisDispatcher as unknown as LinkAnalysisDispatcher,
-            relatedLinkService as unknown as RelatedLinkService,
-        )
-
-        const result = await service.detail(7, 10)
-
-        expect(result.thumbnailRefresh).toEqual({
-            required: true,
-            afterMs: 10_000,
-        })
-        expect(linkAnalysisDispatcher.dispatch).toHaveBeenCalledWith(
-            {
-                linkId: 10,
-                userId: 7,
-                url: 'https://instagram.com/p/final',
-            },
-            ['CONTENT'],
-        )
-        // 예약과 동시에 쿨다운을 걸어 조회할 때마다 재수집이 나가지 않게 한다.
-        expect(linkRepository.postponeContentRefresh).toHaveBeenCalledWith(
-            [10],
-            expect.any(Date),
-        )
-    })
-
-    it('이미 예약된 갱신 기한이 남아 있으면 상세 조회에서 재수집을 다시 던지지 않는다', async () => {
-        const link = {
-            id: 10,
-            userId: 7,
-            folderId: null,
-            originalUrl: 'https://instagram.com/p/original',
-            finalUrl: 'https://instagram.com/p/final',
-            title: '원본 링크',
-            domain: 'instagram.com',
-            metadata: {
-                version: 1,
-                images: [
-                    {
-                        url: 'https://scontent.cdninstagram.com/photo.jpg',
-                        expiresAt: '2026-01-01T00:00:00.000Z',
-                    },
-                ],
-            },
-            // 스케줄러나 직전 조회가 이미 쿨다운을 걸어둔 상태.
-            contentRefreshDueAt: new Date('2099-01-01T00:00:00.000Z'),
-            embedding: null,
-            createdAt: new Date('2026-08-08T00:00:00.000Z'),
-            isFavorite: false,
-            viewedAt: null,
-            aiSummaryStatus: 'SUCCESS',
-            aiSummary: null,
-            memo: null,
-        } as LinkRow
-        const linkRepository = {
-            findOwned: jest.fn().mockResolvedValue(link),
-            findTags: jest.fn().mockResolvedValue([]),
-            postponeContentRefresh: jest.fn().mockResolvedValue(undefined),
-        }
-        const linkAnalysisDispatcher = {
-            dispatch: jest.fn(),
-        }
-        const relatedLinkService = {
-            relatedLinks: jest.fn().mockResolvedValue([]),
-        }
-        const service = new LinkService(
-            linkRepository as unknown as LinkRepository,
-            {} as never,
-            linkAnalysisDispatcher as unknown as LinkAnalysisDispatcher,
-            relatedLinkService as unknown as RelatedLinkService,
-        )
-
-        const result = await service.detail(7, 10)
-
-        // 프론트 재조회 안내는 그대로 내려주되, 재수집은 던지지 않는다.
-        expect(result.thumbnailRefresh).toEqual({
-            required: true,
-            afterMs: 10_000,
-        })
-        expect(linkAnalysisDispatcher.dispatch).not.toHaveBeenCalled()
-        expect(linkRepository.postponeContentRefresh).not.toHaveBeenCalled()
     })
 
     it('개발자 검토 상태는 상세 응답에서 SUCCESS로 감춘다', async () => {

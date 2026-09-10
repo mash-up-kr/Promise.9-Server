@@ -18,10 +18,8 @@ import { toSearchCursorPayload } from './search/search.util'
 import { LinkRepository, LinkUpdatePatch } from './link.repository'
 import { LinkRow } from './link.schema'
 import {
-    CONTENT_REFRESH_COOLDOWN_MS,
     extractDomain,
     normalizeUrl,
-    pickThumbnailRefresh,
     pickThumbnailUrl,
     toProcessingStatus,
 } from './link.util'
@@ -85,37 +83,12 @@ export class LinkService {
             link,
             tagRows.map((tag) => tag.normalizedName),
         )
-        const now = new Date()
-        const thumbnailRefresh = pickThumbnailRefresh(link.metadata, now)
-
-        // 스케줄러가 놓친 만료된 썸네일은 조회 시점에 바로 갱신을 예약한다.
-        // 응답은 기다리지 않고, 프론트는 thumbnailRefresh.afterMs 뒤 재조회로 새 URL을 받는다.
-        // 갱신이 계속 실패하는 링크가 조회할 때마다 재수집을 트리거하지 않도록, 예약과 동시에
-        // 다음 기한을 미뤄 쿨다운을 둔다. 이미 예약된 기한이 남아 있으면 다시 던지지 않는다.
-        if (
-            thumbnailRefresh &&
-            (!link.contentRefreshDueAt || link.contentRefreshDueAt <= now)
-        ) {
-            await this.linkRepository.postponeContentRefresh(
-                [link.id],
-                new Date(now.getTime() + CONTENT_REFRESH_COOLDOWN_MS),
-            )
-            this.linkAnalysisDispatcher.dispatch(
-                {
-                    linkId: link.id,
-                    userId,
-                    url: link.finalUrl ?? link.originalUrl,
-                },
-                ['CONTENT'],
-            )
-        }
 
         return {
             linkId: link.id,
             url: link.originalUrl,
             folder,
             thumbnailUrl: pickThumbnailUrl(link.metadata),
-            thumbnailRefresh,
             title: link.title,
             source: link.domain,
             // 발행 시각은 별도 컬럼 없이 메타데이터에서 다룰 예정 — 현재는 null
@@ -317,7 +290,6 @@ export class LinkService {
             // TODO: 태그 선정 정책에 따라 목록 카드용 대표 태그를 연결한다.
             representativeTag: null,
             thumbnailUrl: pickThumbnailUrl(row.metadata),
-            thumbnailRefresh: pickThumbnailRefresh(row.metadata),
             savedAt: row.createdAt,
             reminderAt: row.reminderAt,
             // 점수 반올림은 커서 비교와 값을 맞추기 위해 search/search.util이 담당한다.

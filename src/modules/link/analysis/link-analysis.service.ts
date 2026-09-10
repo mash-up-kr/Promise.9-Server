@@ -409,12 +409,9 @@ export class LinkAnalysisService {
 
             const metadata = mergeImageMetadata(row.metadata, image, color.hex)
 
+            // contentRefreshDueAt은 방금 saveCollectedContent가 같은 이미지로 이미 저장했다.
             await this.linkRepository.updateActive(input.userId, input.linkId, {
                 metadata,
-                contentRefreshDueAt: pickContentRefreshDueAt(
-                    input.url,
-                    metadata,
-                ),
                 updatedAt: new Date(),
             })
         } catch (error) {

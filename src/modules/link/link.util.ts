@@ -139,23 +139,6 @@ function isYoutubeUrl(rawUrl: string): boolean {
 // 덮어쓴다. 스케줄러 조회 창(CONTENT_REFRESH_LEAD_TIME_MS)보다 길어야 다음 실행에서 빠진다.
 export const CONTENT_REFRESH_COOLDOWN_MS = 48 * 60 * 60 * 1000
 
-export type ThumbnailRefreshHint = { required: boolean; afterMs: number } | null
-
-// 스케줄러가 만료 전에 갱신하므로 보통은 null. 갱신이 늦어 이미 만료된 경우에만
-// 프론트가 잠시 후 다시 조회하도록 안내한다.
-const THUMBNAIL_REFRESH_RETRY_AFTER_MS = 10_000
-
-export function pickThumbnailRefresh(
-    metadata: LinkMetadata | null,
-    now: Date = new Date(),
-): ThumbnailRefreshHint {
-    const expiresAt = pickThumbnailExpiresAt(metadata)
-
-    if (!expiresAt || expiresAt > now) return null
-
-    return { required: true, afterMs: THUMBNAIL_REFRESH_RETRY_AFTER_MS }
-}
-
 // 임베딩 대상 텍스트를 조립한다. 의미가 담긴 필드를 우선 결합하며, 빈 값은 제외한다.
 export function buildEmbeddingText(
     link: Pick<LinkRow, 'title' | 'aiSummary'> & {
