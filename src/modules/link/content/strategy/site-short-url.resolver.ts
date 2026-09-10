@@ -11,8 +11,21 @@ import {
 } from '../link-content.constants'
 import { cancelLinkContentResponse } from '../link-content-response.reader'
 
-// naver.me는 다른 네이버 서비스도 공유한다. 단축 URL만 해석하고 최종 전략은 다시 결정한다.
-export async function resolveNaverShortUrl(
+const SHORT_URLS = [
+    { hostname: 'naver.me', pathname: /^\// },
+    { hostname: 'link.coupang.com', pathname: /^\/(?:a\/|re\/AFFSDP)/ },
+] as const
+
+export function isSupportedShortUrl(url: URL): boolean {
+    return SHORT_URLS.some(
+        (shortUrl) =>
+            url.hostname === shortUrl.hostname &&
+            shortUrl.pathname.test(url.pathname),
+    )
+}
+
+// 지원 사이트의 단축 URL만 해석하고 최종 URL로 수집 전략을 다시 결정한다.
+export async function resolveSiteShortUrl(
     url: URL,
     security: UrlSecurityService,
 ): Promise<URL> {
@@ -25,7 +38,7 @@ export async function resolveNaverShortUrl(
         let current = url
         for (let count = 0; count <= LINK_CONTENT_FETCH.maxRedirects; count++) {
             await security.resolvePublicUrl(current)
-            if (current.hostname !== 'naver.me') return current
+            if (!isSupportedShortUrl(current)) return current
             const response = await fetch(current, {
                 headers: buildLinkContentRequestHeaders(
                     LINK_CONTENT_BROWSER_USER_AGENT,

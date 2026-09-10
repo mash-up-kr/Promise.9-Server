@@ -576,6 +576,99 @@ describe('LinkContentService', () => {
         expect(fetchSpy).toHaveBeenCalledTimes(2)
     })
 
+    it('무신사 상품은 canonical 상세 영역을 요청하고 대상 상품 이미지만 사용한다', async () => {
+        tinyFishFetchClient.isEnabled.mockReturnValue(true)
+        const image =
+            'https://image.msscdn.net/thumbnails/images/goods_img/20240913/4438679/4438679_big.jpg?w=1200'
+        tinyFishFetchClient.fetch.mockResolvedValue({
+            status: 'SUCCESS',
+            content: {
+                title: '윈터 퍼그 숏부츠 [블랙]',
+                description: '무신사 상품 설명',
+                content: '상품 정보',
+                imageLinks: [
+                    'https://image.msscdn.net/images/goods_img/20240913/4438681/other.jpg',
+                    image,
+                ],
+            },
+        })
+
+        await expect(
+            service.preview(
+                'https://store.musinsa.com/app/goods/4438679?utm_source=share',
+            ),
+        ).resolves.toEqual({
+            title: '윈터 퍼그 숏부츠 [블랙]',
+            thumbnailUrl: image,
+            source: 'musinsa.com',
+        })
+        expect(tinyFishFetchClient.fetch).toHaveBeenCalledWith(
+            new URL('https://www.musinsa.com/products/4438679'),
+            { includeSelectors: ['#commonLayoutContents'] },
+        )
+        expect(fetchSpy).not.toHaveBeenCalled()
+    })
+
+    it('쿠팡 공유 링크를 안전하게 해석해 상품 옵션만 유지하고 한 번 수집한다', async () => {
+        tinyFishFetchClient.isEnabled.mockReturnValue(true)
+        fetchSpy.mockResolvedValueOnce(
+            new Response(null, {
+                status: 302,
+                headers: {
+                    location:
+                        'https://www.coupang.com/vp/products/9332072213?itemId=27669136218&vendorItemId=94631318376&sourceType=share',
+                },
+            }),
+        )
+        const image =
+            'https://thumbnail7.coupangcdn.com/thumbnails/remote/657x657q90trim/image/retail/images/product.jpg.webp'
+        tinyFishFetchClient.fetch.mockResolvedValueOnce({
+            status: 'SUCCESS',
+            content: {
+                title: 'AEROGLASS 강화유리 게이밍 마우스패드',
+                description: '쿠팡 상품 설명',
+                content: '상품 정보',
+                imageLinks: [
+                    'https://image7.coupangcdn.com/image/coupang/rds/logo/rocket.png',
+                    image,
+                ],
+            },
+        })
+
+        await expect(
+            service.collect('https://link.coupang.com/a/dQoJQa'),
+        ).resolves.toEqual({
+            title: 'AEROGLASS 강화유리 게이밍 마우스패드',
+            description: '쿠팡 상품 설명',
+            content: '상품 정보',
+            image: { url: image, source: 'tinyfish' },
+        })
+        expect(tinyFishFetchClient.fetch).toHaveBeenCalledWith(
+            new URL(
+                'https://www.coupang.com/vp/products/9332072213?itemId=27669136218&vendorItemId=94631318376',
+            ),
+        )
+        expect(fetchSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('쿠팡 공유 링크가 내부망으로 연결되면 TinyFish에 전달하지 않는다', async () => {
+        tinyFishFetchClient.isEnabled.mockReturnValue(true)
+        fetchSpy.mockResolvedValueOnce(
+            new Response(null, {
+                status: 302,
+                headers: { location: 'http://127.0.0.1/private' },
+            }),
+        )
+        urlSecurity.resolvePublicUrl
+            .mockResolvedValueOnce({ address: '93.184.216.34' })
+            .mockRejectedValueOnce(new HttpException('blocked', 400))
+
+        await expect(
+            service.preview('https://link.coupang.com/a/example'),
+        ).rejects.toThrow('blocked')
+        expect(tinyFishFetchClient.fetch).not.toHaveBeenCalled()
+    })
+
     it('X 저장 수집은 정리한 본문과 제목을 반환하며 데이터가 전부 없으면 재시도한다', async () => {
         tinyFishFetchClient.isEnabled.mockReturnValue(true)
         tinyFishFetchClient.fetch.mockResolvedValueOnce({

@@ -25,6 +25,10 @@ describe('resolveLinkContentStrategy', () => {
             'behance',
         ],
         ['https://be.net/gallery/32715299/Coves-Free-Font', 'behance'],
+        ['https://www.musinsa.com/products/4438679', 'musinsa'],
+        ['https://store.musinsa.com/app/goods/4438679', 'musinsa'],
+        ['https://www.coupang.com/vp/products/9332072213', 'coupang'],
+        ['https://m.coupang.com/vm/products/9332072213', 'coupang'],
     ])(
         '지원 URL에 사이트별 TinyFish 전략을 적용한다: %s',
         (rawUrl, expectedName) => {
@@ -43,6 +47,10 @@ describe('resolveLinkContentStrategy', () => {
         'https://instagram.com.evil.example/p/example',
         'https://behance.net.evil.example/gallery/123/project',
         'https://www.behance.net/search/projects',
+        'https://musinsa.com.evil.example/products/4438679',
+        'https://www.musinsa.com/search/goods?keyword=boots',
+        'https://coupang.com.evil.example/vp/products/9332072213',
+        'https://www.coupang.com/np/search?q=mouse',
         'https://x.com/login',
         'https://www.instagram.com/accounts/login/',
     ])('등록되지 않은 URL에는 기본 OG 전략을 적용한다: %s', (rawUrl) => {
