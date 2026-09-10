@@ -40,7 +40,7 @@ URL에 맞는 수집 방식 선택
 | `html`        | 페이지 HTML에서 OG와 본문을 파싱한다.                                    | 일반 링크, Brunch                    |
 | `youtube`     | 미리보기는 oEmbed, 저장 수집은 Data API로 시작하며 기존 경로로 폴백한다. | YouTube                              |
 | `oembed`      | 사이트가 제공하는 구조화된 응답을 사용한다.                              | oEmbed를 우선하는 사이트용 공통 경로 |
-| `tinyfish`    | 일반 HTML 접근이 제한되거나 응답이 큰 공개 페이지를 TinyFish로 수집한다. | X, Instagram, Behance                |
+| `tinyfish`    | 일반 HTML 접근이 제한되거나 응답이 큰 공개 페이지를 TinyFish로 수집한다. | X, Instagram, Behance, 무신사, 쿠팡  |
 
 `preview`와 `collect`는 사이트별 방식 선택을 공유하고, 기존 `purpose` 값으로 목적을 구분한다.
 
@@ -88,6 +88,8 @@ HTML까지 요청 오류로 실패하면 최종 오류를 호출부에 전달한
 | `x.com`, `www.x.com`, `twitter.com`, `www.twitter.com`                | TinyFish                          | 서버 IP의 HTML/OG 수집이 불안정하다.                                                | API key가 없을 때 HTML               |
 | `instagram.com`, `www.instagram.com`                                  | TinyFish                          | 서버 IP의 HTML/OG 수집이 불안정하고 콘텐츠 렌더링이 필요하다.                       | API key가 없을 때 HTML               |
 | `behance.net`, `www.behance.net`, `be.net`의 `/gallery/{id}` 프로젝트 | TinyFish                          | 원본 HTML이 크고 일반 요청 제한 안에 프로젝트 본문·이미지를 안정적으로 읽기 어렵다. | API key가 없을 때 HTML               |
+| `musinsa.com`의 `/products/{id}`, 기존 `/app/goods/{id}` 상품         | TinyFish                          | 일반 봇의 상품 경로 접근을 robots.txt가 차단한다.                                   | API key가 없을 때 HTML               |
+| `coupang.com`의 `/vp/products/{id}`, `/vm/products/{id}` 상품         | TinyFish                          | 서버 요청이 403으로 차단되고 일반 봇의 상품 경로 접근도 허용되지 않는다.            | API key가 없을 때 HTML               |
 
 X는 프로필, `/{user}/status/{id}`, `/i/web/status/{id}`를 지원한다. Instagram은 프로필,
 `/p/{id}`, `/reel/{id}`, `/reels/{id}`, `/tv/{id}`를 지원한다. 로그인·설정·검색처럼
@@ -96,6 +98,10 @@ hostname도 전용 방식으로 처리하지 않는다.
 
 Behance는 공개 프로젝트 `/gallery/{id}/{slug}`와 Behance가 제공하는 `be.net/gallery/...`
 공유 링크만 지원한다. 프로필·검색·갤러리 목록은 일반 HTML 처리를 유지한다.
+
+무신사와 쿠팡은 공개 상품 상세만 지원한다. 검색·카테고리·마이페이지는 일반 HTML 처리를
+유지한다. 쿠팡의 `link.coupang.com/a/...`와 `/re/AFFSDP` 공유 링크는 공개 URL 검증과
+리다이렉트 제한을 적용해 상품 URL로 해석한다.
 
 ## 수집 방식과 HTML 요청 설정
 
@@ -197,6 +203,21 @@ TinyFish의 `image_links`는 대표 이미지 순서를 보장하지 않는다. 
 
 preview와 collect는 각각 요청 1회다. TinyFish key가 없으면 기존 HTML 경로를 사용한다.
 비공개·로그인 필요·성인 콘텐츠 확인 화면과 DOM 변경은 지원을 보장하지 않는다.
+
+## 무신사·쿠팡 상품
+
+무신사 상품은 기존 `/app/goods/{id}`를 canonical `/products/{id}`로 바꾸고
+`#commonLayoutContents`를 TinyFish로 한 번 수집한다. 대표 이미지는 정확한
+`image.msscdn.net` 호스트에서 대상 상품 ID를 경로에 포함한 `goods_img` 후보만 사용한다.
+
+쿠팡 상품은 데스크톱·모바일 경로를 canonical `/vp/products/{id}`로 바꾼다. 선택 상품을
+유지하는 숫자형 `itemId`와 `vendorItemId`만 남기고 추적 쿼리는 제거한다. `.prod-atf`를
+한 번 수집하고 쿠팡 CDN의 `retail` 또는 `vendor_inventory` 상품 이미지 후보를 사용한다.
+공유 링크는 최종 URL까지 각 리다이렉트의 공개 주소를 검증한 뒤 같은 전략에 전달한다.
+
+두 사이트 모두 preview와 collect는 각각 TinyFish 요청 1회다. 상품 삭제·성인 인증·로그인
+필요 화면, 쿠팡의 접근 차단 강화와 DOM 변경은 지원을 보장하지 않는다. TinyFish key가
+없으면 기존 HTML 경로를 사용하며 robots.txt 또는 403 응답에 따라 결과가 없을 수 있다.
 
 ## 네이버 지도·플레이스
 

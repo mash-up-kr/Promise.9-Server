@@ -13,7 +13,10 @@ import {
     LinkContentTinyFishStrategy,
     LinkContentYoutubeStrategy,
 } from './strategy/link-content-strategy.type'
-import { resolveNaverShortUrl } from './strategy/naver-short-url.resolver'
+import {
+    isSupportedShortUrl,
+    resolveSiteShortUrl,
+} from './strategy/site-short-url.resolver'
 import { TinyFishFetchClient } from './tinyfish/tinyfish-fetch.client'
 import { TinyFishFetchError } from './tinyfish/tinyfish-fetch.error'
 import { YoutubeDataClient } from './youtube/youtube-data.client'
@@ -129,10 +132,10 @@ export class LinkContentService {
         purpose: LinkContentPurpose,
     ): Promise<ResolvedLinkContent | null> {
         if (
-            resourceUrl.hostname === 'naver.me' &&
+            isSupportedShortUrl(resourceUrl) &&
             this.tinyFishFetchClient.isEnabled()
         ) {
-            resourceUrl = await resolveNaverShortUrl(
+            resourceUrl = await resolveSiteShortUrl(
                 resourceUrl,
                 this.urlSecurity,
             )
