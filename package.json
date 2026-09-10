@@ -31,6 +31,7 @@
         "db:seed:list": "bun run script/seed-links-folders.ts",
         "db:seed:master": "bun run script/seed-master-user.ts",
         "db:backfill:embeddings": "bun run script/backfill-link-embeddings.ts",
+        "db:backfill:content-refresh": "bun run script/backfill-content-refresh.ts",
         "db:visualize_mermaid": "bun run script/visualize-db-mermaid.ts",
         "infra:bootstrap": "bun run --cwd infra bootstrap",
         "infra:synth": "bun run --cwd infra synth",
