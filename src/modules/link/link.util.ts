@@ -48,6 +48,10 @@ export function pickThumbnailUrl(metadata: LinkMetadata | null): string | null {
     return metadata?.images?.[0]?.url ?? null
 }
 
+// metadata.images에 보관할 최대 개수. Instagram CDN URL은 갱신할 때마다 서명이 바뀌어
+// 매번 새 항목이 되므로, 상한이 없으면 만료된 URL이 무한히 쌓인다.
+const MAX_STORED_IMAGES = 5
+
 // 대표 이미지(images[0])를 새 이미지로 교체하고 TTL을 다시 계산한다.
 // 링크 분석과 썸네일 갱신 스케줄러가 같은 병합 규칙을 쓰도록 공유한다.
 export function mergeImageMetadata(
@@ -76,7 +80,7 @@ export function mergeImageMetadata(
             ...existingImages.filter(
                 (candidate) => candidate.url !== image.url,
             ),
-        ],
+        ].slice(0, MAX_STORED_IMAGES),
     }
 }
 
@@ -105,11 +109,21 @@ export function pickContentRefreshDueAt(
         ? new Date(now.getTime() + YOUTUBE_CONTENT_REFRESH_INTERVAL_MS)
         : null
 
-    if (imageExpiresAt && policyDueAt) {
-        return imageExpiresAt < policyDueAt ? imageExpiresAt : policyDueAt
-    }
+    if (!imageExpiresAt && !policyDueAt) return null
 
-    return imageExpiresAt ?? policyDueAt
+    const dueAt = new Date(
+        Math.min(
+            imageExpiresAt?.getTime() ?? Infinity,
+            policyDueAt?.getTime() ?? Infinity,
+        ),
+    )
+
+    // 이미 지난 기한을 그대로 저장하면 스케줄러가 매 실행마다 같은 링크를 다시 집어
+    // 정상 링크의 순번을 밀어낸다. 방금 재수집했는데도 만료된 이미지뿐이라면
+    // (새 이미지를 못 얻었거나 제목만 수집된 경우) 쿨다운 뒤에 다시 시도한다.
+    return dueAt > now
+        ? dueAt
+        : new Date(now.getTime() + CONTENT_REFRESH_COOLDOWN_MS)
 }
 
 function isYoutubeUrl(rawUrl: string): boolean {
@@ -119,6 +133,11 @@ function isYoutubeUrl(rawUrl: string): boolean {
         return false
     }
 }
+
+// 재수집을 예약할 때 다음 기한을 이만큼 미뤄둔다. 수집이 실패해도 같은 링크가 매 스케줄러
+// 실행·매 상세 조회마다 다시 잡히지 않게 하는 쿨다운이며, 성공하면 분석이 실제 만료 시각으로
+// 덮어쓴다. 스케줄러 조회 창(CONTENT_REFRESH_LEAD_TIME_MS)보다 길어야 다음 실행에서 빠진다.
+export const CONTENT_REFRESH_COOLDOWN_MS = 48 * 60 * 60 * 1000
 
 export type ThumbnailRefreshHint = { required: boolean; afterMs: number } | null
 

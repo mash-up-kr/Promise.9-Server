@@ -74,6 +74,21 @@ describe('mergeImageMetadata', () => {
 
         expect(metadata.images?.[0].expiresAt).toBeUndefined()
     })
+
+    // 갱신마다 서명이 바뀌는 CDN URL이 무한히 쌓이지 않아야 한다.
+    it('보관하는 이미지 수를 상한으로 제한한다', () => {
+        let metadata: LinkMetadata | null = null
+
+        for (let index = 0; index < 8; index += 1) {
+            metadata = mergeImageMetadata(metadata, {
+                url: `https://example.com/${index}.png`,
+                source: 'og:image',
+            })
+        }
+
+        expect(metadata?.images).toHaveLength(5)
+        expect(metadata?.images?.[0].url).toBe('https://example.com/7.png')
+    })
 })
 
 describe('pickThumbnailExpiresAt', () => {
@@ -135,6 +150,28 @@ describe('pickContentRefreshDueAt', () => {
                 now,
             ),
         ).toBeNull()
+    })
+
+    // 과거 기한을 그대로 저장하면 스케줄러가 매 실행마다 같은 링크를 다시 집는다.
+    it('이미 만료된 썸네일뿐이면 쿨다운 뒤로 기한을 미룬다', () => {
+        const metadata: LinkMetadata = {
+            version: 1,
+            images: [
+                {
+                    url: 'https://example.com/a.png',
+                    source: 'og:image',
+                    expiresAt: '2026-01-01T00:00:00.000Z',
+                },
+            ],
+        }
+
+        const dueAt = pickContentRefreshDueAt(
+            'https://example.com/post',
+            metadata,
+            now,
+        )
+
+        expect(dueAt).toEqual(new Date('2026-09-12T00:00:00.000Z'))
     })
 
     it('잘못된 URL이면 YouTube 정책은 적용하지 않는다', () => {
