@@ -647,7 +647,6 @@ describe('LinkContentService', () => {
             new URL(
                 'https://www.coupang.com/vp/products/9332072213?itemId=27669136218&vendorItemId=94631318376',
             ),
-            { includeSelectors: ['.prod-atf'] },
         )
         expect(fetchSpy).toHaveBeenCalledTimes(1)
     })

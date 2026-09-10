@@ -3,12 +3,12 @@ import { resolveLinkContentStrategy } from '../link-content-strategy.registry'
 import { COUPANG_LINK_CONTENT_STRATEGY as strategy } from './coupang-link-content.strategy'
 
 const COUPANG_PRODUCT_URL = new URL(
-    'https://www.coupang.com/vp/products/9332072213?itemId=27669136218&vendorItemId=94631318376',
+    'https://www.coupang.com/vp/products/9140395869?itemId=26906982583&vendorItemId=93876393316&q=%EC%9D%B4%EC%A7%81%20%EB%B6%80%EC%A0%81&searchId=0367d81f749348&sourceType=search&itemsCount=60&searchRank=8&rank=8&traceId=mtvm3ysq',
 )
 
 describe('쿠팡 상품 전략', () => {
     it.each([
-        'https://www.coupang.com/vp/products/9332072213',
+        COUPANG_PRODUCT_URL.toString(),
         'https://coupang.com/vp/products/9332072213/',
         'https://m.coupang.com/vm/products/9332072213',
     ])('상품 상세 URL을 TinyFish로 수집한다: %s', (raw) => {
@@ -33,10 +33,8 @@ describe('쿠팡 상품 전략', () => {
         )
     })
 
-    it('상품 상단 영역만 TinyFish에 요청한다', () => {
-        expect(strategy.fetchOptions!(COUPANG_PRODUCT_URL)).toEqual({
-            includeSelectors: ['.prod-atf'],
-        })
+    it('검증되지 않은 DOM 선택자로 수집 범위를 제한하지 않는다', () => {
+        expect(strategy.fetchOptions).toBeUndefined()
     })
 
     it('쿠팡 상품 이미지 경로의 첫 후보를 선택한다', () => {

@@ -31,7 +31,6 @@ export const COUPANG_LINK_CONTENT_STRATEGY: LinkContentTinyFishStrategy = {
 
         return prepared
     },
-    fetchOptions: () => ({ includeSelectors: ['.prod-atf'] }),
     selectImage: (_resourceUrl, imageLinks) =>
         findFirstTinyFishImage(
             imageLinks,

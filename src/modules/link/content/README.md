@@ -211,8 +211,9 @@ preview와 collect는 각각 요청 1회다. TinyFish key가 없으면 기존 HT
 `image.msscdn.net` 호스트에서 대상 상품 ID를 경로에 포함한 `goods_img` 후보만 사용한다.
 
 쿠팡 상품은 데스크톱·모바일 경로를 canonical `/vp/products/{id}`로 바꾼다. 선택 상품을
-유지하는 숫자형 `itemId`와 `vendorItemId`만 남기고 추적 쿼리는 제거한다. `.prod-atf`를
-한 번 수집하고 쿠팡 CDN의 `retail` 또는 `vendor_inventory` 상품 이미지 후보를 사용한다.
+유지하는 숫자형 `itemId`와 `vendorItemId`만 남기고 추적 쿼리는 제거한다. 검증되지 않은
+DOM 선택자로 범위를 제한하지 않고, 쿠팡 CDN의 `retail` 또는 `vendor_inventory` 상품
+이미지 후보를 사용한다.
 공유 링크는 최종 URL까지 각 리다이렉트의 공개 주소를 검증한 뒤 같은 전략에 전달한다.
 
 두 사이트 모두 preview와 collect는 각각 TinyFish 요청 1회다. 상품 삭제·성인 인증·로그인
