@@ -5,11 +5,6 @@ export function parseInstagramCaption(text: string | null): string | null {
 
     const normalized = text.replace(/\r\n?/g, '\n').trim()
     const lines = normalized.split('\n').map((line) => line.trim())
-    const author = lines[0]
-        .replace(/\\_/g, '_')
-        .match(/^([A-Za-z0-9_.]{1,30})(?:\*?Verified\*?)?$/)?.[1]
-    if (!author) return null
-
     const profileIndex = lines.indexOf('View profile')
     if (profileIndex < 1 || profileIndex > 12) return null
 
@@ -24,7 +19,12 @@ export function parseInstagramCaption(text: string | null): string | null {
     let cursor = profileIndex + 2 + likesOffset
     while (lines[cursor] === '') cursor++
     const captionAuthor = lines[cursor]?.replace(/\\_/g, '_')
-    if (captionAuthor !== author && captionAuthor !== `${author}*Verified*`) {
+    // 상단에는 공동 작성자나 표시 이름이 합쳐질 수 있으므로 비교하지 않는다.
+    // 좋아요 바로 다음 줄이 계정명인지만 확인해 캡션 시작을 식별한다.
+    if (
+        !captionAuthor ||
+        !/^[A-Za-z0-9_.]{1,30}(?:\*?Verified\*?)?$/.test(captionAuthor)
+    ) {
         return null
     }
 
