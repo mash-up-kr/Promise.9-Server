@@ -1,6 +1,9 @@
 import { CollectedLinkImage } from './content/link-content.type'
 import { extractImageExpiry } from './content/link-content-image-expiry.util'
-import { YOUTUBE_LINK_CONTENT_STRATEGY } from './content/strategy/site/youtube-link-content.strategy'
+import {
+    extractYoutubeVideoId,
+    YOUTUBE_LINK_CONTENT_STRATEGY,
+} from './content/strategy/site/youtube-link-content.strategy'
 import { LinkMetadata, LinkRow } from './link.schema'
 
 // 사용자별 중복 저장 판단 키로 쓸 URL 정규화. 처음에는 단순하게:
@@ -111,7 +114,7 @@ export function pickContentRefreshDueAt(
     now: Date = new Date(),
 ): Date | null {
     const imageExpiresAt = pickThumbnailExpiresAt(metadata)
-    const policyDueAt = isYoutubeUrl(url)
+    const policyDueAt = hasYoutubeVideoId(url)
         ? new Date(now.getTime() + YOUTUBE_CONTENT_REFRESH_INTERVAL_MS)
         : null
 
@@ -132,9 +135,17 @@ export function pickContentRefreshDueAt(
         : new Date(now.getTime() + CONTENT_REFRESH_COOLDOWN_MS)
 }
 
-function isYoutubeUrl(rawUrl: string): boolean {
+// 영상 ID를 뽑을 수 있는 URL만 30일 정책 대상이다. 채널·재생목록·검색 결과처럼 ID가 없는
+// URL은 Data API를 타지 않아 저장된 정책 대상 데이터도 없다. 수집 경로가 Data API 호출 여부를
+// 정할 때 쓰는 getVideoId를 같이 사용해, 두 판정이 어긋나지 않게 한다.
+function hasYoutubeVideoId(rawUrl: string): boolean {
     try {
-        return YOUTUBE_LINK_CONTENT_STRATEGY.supports(new URL(rawUrl))
+        const url = new URL(rawUrl)
+
+        return (
+            YOUTUBE_LINK_CONTENT_STRATEGY.supports(url) &&
+            Boolean(extractYoutubeVideoId(url))
+        )
     } catch {
         return false
     }

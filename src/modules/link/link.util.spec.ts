@@ -180,6 +180,28 @@ describe('pickContentRefreshDueAt', () => {
         expect(dueAt).toEqual(new Date('2026-09-15T00:00:00.000Z'))
     })
 
+    // 영상 ID가 없는 URL은 Data API를 타지 않아 저장된 정책 대상 데이터도 없다.
+    it.each([
+        'https://www.youtube.com/@RickAstleyYT',
+        'https://www.youtube.com/channel/UCuAXFkgsw1L7xaCfnd5JJOw',
+        'https://www.youtube.com/playlist?list=PLabc',
+        'https://www.youtube.com/',
+        'https://www.youtube.com/results?search_query=x',
+    ])('영상 ID가 없는 YouTube URL에는 정책 기한을 주지 않는다: %s', (url) => {
+        expect(pickContentRefreshDueAt(url, null, now)).toBeNull()
+    })
+
+    it.each([
+        'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        'https://youtu.be/dQw4w9WgXcQ',
+        'https://www.youtube.com/shorts/dQw4w9WgXcQ',
+        'https://www.youtube.com/embed/dQw4w9WgXcQ',
+    ])('영상 ID가 있는 URL에는 정책 기한을 준다: %s', (url) => {
+        expect(pickContentRefreshDueAt(url, null, now)).toEqual(
+            new Date('2026-10-10T00:00:00.000Z'),
+        )
+    })
+
     it('YouTube가 아니고 TTL도 없으면 null을 반환한다', () => {
         expect(
             pickContentRefreshDueAt(
