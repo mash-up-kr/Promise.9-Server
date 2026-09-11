@@ -31,6 +31,7 @@ const candidate = (
     metadata: null,
     createdAt: new Date('2026-08-08T00:00:00.000Z'),
     reminderAt: null,
+    aiSummaryStatus: 'SUCCESS',
     description: null,
     folderName: null,
     tags: [],

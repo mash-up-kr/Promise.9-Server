@@ -62,13 +62,6 @@ export class CreateLinkResponseDto {
         description: '리마인드 시각. 설정하지 않았으면 null',
     })
     reminderAt!: string | null
-
-    @ApiProperty({
-        example: 0.87342,
-        nullable: true,
-        description: '검색 결과 점수. 검색하지 않은 일반 목록에서는 null',
-    })
-    score!: number | null
 }
 
 export class LinkFolderRefDto {
@@ -338,6 +331,21 @@ export class LinkListItemDto {
         description: '리마인드 시각. 설정하지 않았으면 null',
     })
     reminderAt!: string | null
+
+    @ApiProperty({
+        enum: ['PENDING', 'SUCCESS', 'FAILED'],
+        example: 'SUCCESS',
+        description:
+            '요약·태그·임베딩 비동기 처리 상태. 상세 응답과 같은 값이며 PENDING이면 아직 처리 중',
+    })
+    processingStatus!: 'PENDING' | 'SUCCESS' | 'FAILED'
+
+    @ApiProperty({
+        example: 0.87342,
+        nullable: true,
+        description: '검색 결과 점수. 검색하지 않은 일반 목록에서는 null',
+    })
+    score!: number | null
 }
 
 export class ListLinksResponseDto {

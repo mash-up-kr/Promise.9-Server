@@ -2,6 +2,7 @@ import { LinkMetadata, LinkRow } from './link.schema'
 import {
     buildEmbeddingText,
     mergeImageMetadata,
+    normalizeUrl,
     pickContentRefreshDueAt,
     pickThumbnailExpiresAt,
     toProcessingStatus,
@@ -269,4 +270,91 @@ describe('toProcessingStatus', () => {
             expect(toProcessingStatus(status)).toBe(status)
         },
     )
+})
+
+describe('normalizeUrl', () => {
+    it('fragment를 제거하고 프로토콜과 호스트를 소문자로 만든다', () => {
+        expect(normalizeUrl('HTTPS://Example.COM/Path#section')).toBe(
+            'https://example.com/Path',
+        )
+    })
+
+    it('쿼리가 있어도 경로 끝의 슬래시를 제거한다', () => {
+        expect(normalizeUrl('https://example.com/a/b/?page=2')).toBe(
+            'https://example.com/a/b?page=2',
+        )
+        expect(normalizeUrl('https://example.com/a/b/')).toBe(
+            'https://example.com/a/b',
+        )
+    })
+
+    it('루트 경로의 슬래시는 유지한다', () => {
+        expect(normalizeUrl('https://example.com')).toBe('https://example.com/')
+        expect(normalizeUrl('https://example.com/?q=1')).toBe(
+            'https://example.com/?q=1',
+        )
+    })
+
+    it('utm 계열과 광고 클릭 ID 같은 추적 파라미터를 제거한다', () => {
+        expect(
+            normalizeUrl(
+                'https://example.com/post?utm_source=x&UTM_Medium=share&fbclid=abc&id=7',
+            ),
+        ).toBe('https://example.com/post?id=7')
+    })
+
+    it('Instagram 공유 파라미터와 YouTube 공유 파라미터를 제거한다', () => {
+        expect(
+            normalizeUrl(
+                'https://www.instagram.com/p/DW04l9PES8g/?img_index=1&igsi=eHl5azNkenhueDh5',
+            ),
+        ).toBe('https://www.instagram.com/p/DW04l9PES8g')
+        expect(
+            normalizeUrl(
+                'https://youtu.be/dQw4w9WgXcQ?si=abcdef&feature=shared',
+            ),
+        ).toBe('https://youtu.be/dQw4w9WgXcQ')
+    })
+
+    it('추적 파라미터를 모두 제거하면 물음표도 남기지 않는다', () => {
+        expect(normalizeUrl('https://example.com/post?utm_source=x')).toBe(
+            'https://example.com/post',
+        )
+    })
+
+    it('의미 있는 파라미터는 유지하고 이름순으로 정렬한다', () => {
+        expect(
+            normalizeUrl('https://www.youtube.com/watch?t=42&v=dQw4w9WgXcQ'),
+        ).toBe('https://www.youtube.com/watch?t=42&v=dQw4w9WgXcQ')
+        expect(
+            normalizeUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42'),
+        ).toBe('https://www.youtube.com/watch?t=42&v=dQw4w9WgXcQ')
+    })
+
+    it.each([
+        'https://www.instagram.com/p/DW04l9PES8g',
+        'https://www.instagram.com/p/DW04l9PES8g/',
+        'https://instagram.com/p/DW04l9PES8g/?img_index=1&igsi=eHl5azNkenhueDh5',
+        'https://www.instagram.com/vgp.seoul/p/DW04l9PES8g/?igsh=abc',
+    ])('Instagram 게시물 %s은 shortcode만 남긴 형태로 통일한다', (url) => {
+        expect(normalizeUrl(url)).toBe(
+            'https://www.instagram.com/p/DW04l9PES8g',
+        )
+    })
+
+    it('Instagram reels 표기는 reel로 통일한다', () => {
+        expect(
+            normalizeUrl('https://www.instagram.com/reels/DW04l9PES8g/?igsh=x'),
+        ).toBe('https://www.instagram.com/reel/DW04l9PES8g')
+    })
+
+    it('Instagram 게시물이 아닌 경로는 일반 규칙만 적용한다', () => {
+        expect(
+            normalizeUrl('https://www.instagram.com/vgp.seoul/?igsh=abc&hl=ko'),
+        ).toBe('https://www.instagram.com/vgp.seoul?hl=ko')
+    })
+
+    it('URL로 해석할 수 없으면 원본을 그대로 반환한다', () => {
+        expect(normalizeUrl('not a url')).toBe('not a url')
+    })
 })

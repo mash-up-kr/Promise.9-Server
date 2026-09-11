@@ -39,6 +39,7 @@ describe('LinkService', () => {
             metadata: null,
             createdAt: new Date('2026-08-08T08:10:14.443Z'),
             reminderAt: new Date('2026-08-20T12:00:00.000Z'),
+            aiSummaryStatus: 'PENDING',
             cursorValue: '2026-08-08T08:10:14.443365Z',
         } as LinkListRow
         const second = {
@@ -77,6 +78,48 @@ describe('LinkService', () => {
             id: first.id,
         })
         expect(result.links[0].reminderAt).toEqual(first.reminderAt)
+        expect(result.links[0].processingStatus).toBe('PENDING')
+    })
+
+    it('목록 응답의 processingStatus는 상세와 같이 개발자 검토 상태를 SUCCESS로 감춘다', async () => {
+        const rows = ['NEEDS_REVIEW', 'SUCCESS', 'FAILED'].map(
+            (aiSummaryStatus, index) =>
+                ({
+                    id: 90 - index,
+                    title: null,
+                    domain: 'example.com',
+                    metadata: null,
+                    createdAt: new Date('2026-08-08T00:00:00.000Z'),
+                    reminderAt: null,
+                    aiSummaryStatus,
+                    cursorValue: `2026-08-08T00:00:00.00000${index}Z`,
+                }) as LinkListRow,
+        )
+        const linkRepository = {
+            list: jest.fn().mockResolvedValue({ rows, totalCount: 3 }),
+        }
+        const service = new LinkService(
+            linkRepository as unknown as LinkRepository,
+            {} as never,
+            {} as never,
+            {} as never,
+        )
+
+        const result = await service.list(1, {
+            unassigned: false,
+            favorite: false,
+            reminder: false,
+            deleted: false,
+            sortBy: 'savedAt',
+            order: 'desc',
+            limit: 9,
+        })
+
+        expect(result.links.map((link) => link.processingStatus)).toEqual([
+            'SUCCESS',
+            'SUCCESS',
+            'FAILED',
+        ])
     })
 
     it('최근 삭제 링크 페이지 cursor에 삭제 시각의 DB microsecond 값을 그대로 사용한다', async () => {

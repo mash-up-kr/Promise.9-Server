@@ -6,10 +6,43 @@ import {
 } from './content/strategy/site/youtube-link-content.strategy'
 import { LinkMetadata, LinkRow } from './link.schema'
 
-// 사용자별 중복 저장 판단 키로 쓸 URL 정규화. 처음에는 단순하게:
-// - 프로토콜/호스트 소문자, fragment(#) 제거, 끝의 '/' 제거
+// 문서를 식별하지 않고 유입 경로만 남기는 쿼리 파라미터. 중복 판단 키에서 제거한다.
+const TRACKING_QUERY_PARAMS = new Set([
+    'fbclid',
+    'gclid',
+    'dclid',
+    'gbraid',
+    'wbraid',
+    'msclkid',
+    'twclid',
+    'ttclid',
+    'yclid',
+    'mc_cid',
+    'mc_eid',
+    'igsh',
+    'igshid',
+    'igsi',
+    'img_index',
+    'si',
+    'feature',
+    'ref_src',
+    'ref_url',
+    'share_id',
+    '_ga',
+    '_gl',
+])
+const TRACKING_QUERY_PARAM_PREFIXES = ['utm_', 'mtm_', 'pk_', 'hsa_']
+
+const INSTAGRAM_HOSTNAMES = new Set(['instagram.com', 'www.instagram.com'])
+// 사용자명 접두 경로(/{user}/p/{code})와 reels 표기까지 하나의 게시물 경로로 본다.
+const INSTAGRAM_POST_PATH_PATTERN =
+    /^\/(?:[A-Za-z0-9._]+\/)?(p|reel|reels|tv)\/([A-Za-z0-9_-]{1,11})\/?$/
+
+// 사용자별 중복 저장 판단 키로 쓸 URL 정규화.
+// - 프로토콜/호스트 소문자, fragment(#) 제거, 경로 끝의 '/' 제거
+// - 추적용 쿼리 파라미터 제거, 남은 파라미터는 이름순 정렬
+// - Instagram 게시물은 shortcode만 남긴 고정 형태로 통일
 // - 파싱 실패 시 원본을 그대로 반환
-// (redirect 추적 기반 정규화는 메타데이터 수집 도입 시 확장)
 export function normalizeUrl(raw: string): string {
     try {
         const url = new URL(raw)
@@ -17,18 +50,55 @@ export function normalizeUrl(raw: string): string {
         url.protocol = url.protocol.toLowerCase()
         url.hostname = url.hostname.toLowerCase()
 
-        let normalized = url.toString()
-        if (url.pathname !== '/' && normalized.endsWith('/')) {
-            normalized = normalized.slice(0, -1)
+        const instagramPost = normalizeInstagramPostUrl(url)
+        if (instagramPost) return instagramPost
+
+        // 쿼리가 있어도 경로 끝 '/'는 같은 문서를 가리키므로 경로 기준으로 제거한다.
+        if (url.pathname !== '/' && url.pathname.endsWith('/')) {
+            url.pathname = url.pathname.replace(/\/+$/, '')
         }
 
-        return normalized
+        url.search = normalizeSearchParams(url.searchParams)
+
+        return url.toString()
     } catch {
         return raw
     }
 }
 
-// 출처 표시·검색용 도메인 추출. 파싱 실패 시 null.
+// Instagram 게시물 쿼리는 전부 공유·캐러셀 위치 정보라 shortcode만 남긴다.
+function normalizeInstagramPostUrl(url: URL): string | null {
+    if (!INSTAGRAM_HOSTNAMES.has(url.hostname)) return null
+
+    const match = url.pathname.match(INSTAGRAM_POST_PATH_PATTERN)
+    if (!match) return null
+
+    const kind = match[1] === 'reels' ? 'reel' : match[1]
+
+    return `https://www.instagram.com/${kind}/${match[2]}`
+}
+
+// 추적 파라미터를 걷어내고 나머지를 이름순으로 정렬해 순서만 다른 URL을 같은 키로 만든다.
+function normalizeSearchParams(params: URLSearchParams): string {
+    const kept = [...params.entries()].filter(
+        ([name]) => !isTrackingQueryParam(name),
+    )
+    kept.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+
+    return new URLSearchParams(kept).toString()
+}
+
+function isTrackingQueryParam(name: string): boolean {
+    const lowered = name.toLowerCase()
+
+    return (
+        TRACKING_QUERY_PARAMS.has(lowered) ||
+        TRACKING_QUERY_PARAM_PREFIXES.some((prefix) =>
+            lowered.startsWith(prefix),
+        )
+    )
+}
+
 export function extractDomain(raw: string): string | null {
     try {
         return new URL(raw).hostname

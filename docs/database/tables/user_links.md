@@ -36,7 +36,7 @@ erDiagram
 | user_id           | bigint      | Y    | 링크를 저장한 회원 ID                                                                                         |
 | folder_id         | bigint      | N    | 저장된 커스텀 폴더 ID. `NULL`이면 미분류                                                                      |
 | original_url      | text        | Y    | 사용자가 저장을 요청한 원본 URL                                                                               |
-| normalized_url    | text        | Y    | 사용자별 중복 저장 판단 키. redirect 추적 성공 시 `final_url`, 실패 시 `original_url`을 정규화                |
+| normalized_url    | text        | Y    | 사용자별 중복 저장 판단 키. `original_url`을 정규화(호스트 소문자, fragment·추적 파라미터·끝 슬래시 제거)      |
 | final_url         | text        | N    | redirect 이후 최종 도착 URL. 추적 실패 시 `NULL` 가능                                                         |
 | domain            | varchar     | N    | 출처 표시와 검색에 사용하는 도메인. `final_url` 우선, 없으면 `original_url` 기준                              |
 | title             | varchar     | N    | 수집된 제목. 수집 실패 시 `NULL` 가능                                                                         |
@@ -56,7 +56,7 @@ erDiagram
 - 동일 URL 중복 저장 방지는 사용자 단위로 처리한다.
 - 활성 링크는 `user_id + normalized_url` 기준으로 중복 저장을 막는다.
 - `id + user_id` 유니크 제약을 둔다. `tags`의 `(link_id, user_id)` 복합 FK가 참조하는 대상으로, 태그·링크의 소유자 정합성을 보장하기 위함이다.
-- `normalized_url`은 redirect 추적에 성공하면 `final_url`을 정규화하고, 실패하면 `original_url`을 정규화해 저장한다.
+- `normalized_url`은 `original_url`을 정규화해 저장한다. 규칙은 [링크 저장 정책](../../policy/link.md)의 중복 URL 정책을 따르며, 규칙이 바뀌면 `bun run db:backfill:normalized-urls`로 기존 키를 다시 계산한다. redirect 기반 `final_url` 정규화는 아직 구현하지 않았다.
 - 같은 URL이 최근 삭제된 항목에 있을 때 새 저장을 막을지, 새 저장을 허용할지, 복원으로 유도할지는 기획 논의가 필요하다.
 - 폴더 미선택 상태와 복원 후 미분류 상태는 `folder_id IS NULL`로 표현한다.
 - 링크 저장 최신순 정렬은 `created_at`을 기준으로 한다.

@@ -6,7 +6,13 @@
 
 ## 2. 중복 URL 정책
 
-- 동일 URL은 중복 저장할 수 없다.
+- 동일 URL은 중복 저장할 수 없다. 같은 사용자가 이미 저장한 활성 링크와 정규화 키가 같으면 `409`로 거부한다.
+- 정규화 키는 다음 규칙으로 만든다.
+    - 프로토콜과 호스트를 소문자로 바꾸고 fragment(`#...`)를 제거한다.
+    - 경로 끝의 `/`는 쿼리 유무와 관계없이 제거한다. 루트 경로(`/`)는 유지한다.
+    - `utm_*`, `fbclid`, `gclid`, `igsh`, `igsi`, `img_index`, YouTube `si`·`feature` 같은 추적·공유 파라미터를 제거하고, 남은 파라미터는 이름순으로 정렬한다.
+    - Instagram 게시물(`/p`, `/reel`, `/reels`, `/tv`)은 사용자명 접두 경로와 쿼리를 모두 버리고 `https://www.instagram.com/{p|reel|tv}/{shortcode}`로 통일한다.
+- 정규화 규칙을 바꾸면 기존 링크의 키도 `bun run db:backfill:normalized-urls -- --dry-run`으로 충돌을 확인한 뒤 다시 계산한다.
 
 ## 3. 폴더 지정 정책
 
