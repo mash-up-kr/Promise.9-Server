@@ -4,7 +4,7 @@ import { LinkAnalysisDispatcher } from './link-analysis.dispatcher'
 import { LinkContentRefreshService } from './link-content-refresh.service'
 
 describe('LinkContentRefreshService', () => {
-    it('갱신 기한이 임박한 링크마다 CONTENT 작업만 재실행한다', async () => {
+    it('갱신 기한이 임박한 링크마다 CONTENT와 EMBEDDING을 재실행한다', async () => {
         const now = new Date('2026-09-10T00:00:00.000Z')
         const targets = [
             {
@@ -45,7 +45,7 @@ describe('LinkContentRefreshService', () => {
                 userId: 10,
                 url: 'https://instagram.com/p/final',
             },
-            ['CONTENT'],
+            ['CONTENT', 'EMBEDDING'],
         )
         expect(linkAnalysisDispatcher.dispatchAwaited).toHaveBeenNthCalledWith(
             2,
@@ -54,7 +54,7 @@ describe('LinkContentRefreshService', () => {
                 userId: 20,
                 url: 'https://youtube.com/watch?v=abcdefghijk',
             },
-            ['CONTENT'],
+            ['CONTENT', 'EMBEDDING'],
         )
         expect(targetCount).toBe(2)
     })

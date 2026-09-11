@@ -21,7 +21,11 @@ export class LinkContentRefreshService {
         private readonly linkAnalysisDispatcher: LinkAnalysisDispatcher,
     ) {}
 
-    // CONTENT 작업만 재실행해 썸네일(TTL 만료 전)과 YouTube 메타데이터(30일 정책)를 새로 수집한다.
+    // CONTENT를 재실행해 썸네일(TTL 만료 전)과 YouTube 메타데이터(30일 정책)를 새로 수집하고,
+    // 이어서 EMBEDDING을 돌린다. 제목이 임베딩 입력이라 CONTENT만 돌리면 벡터가 옛 제목에
+    // 묶여 검색 순위가 화면과 어긋난다. run()이 CONTENT 실패 시 EMBEDDING을 막아준다.
+    // ponytail: 제목이 그대로여도 매번 임베딩을 다시 만든다. 호출당 비용이 미미해 변경 감지를
+    // 넣지 않았고, 임베딩 호출량이 문제가 되면 제목 변경 시에만 실행하도록 좁힌다.
     // 기존 링크 분석 dispatcher를 그대로 태워 재시도·실패 처리를 중복 구현하지 않는다.
     async refreshDueLinks(now: Date = new Date()): Promise<number> {
         const before = new Date(now.getTime() + CONTENT_REFRESH_LEAD_TIME_MS)
@@ -53,7 +57,7 @@ export class LinkContentRefreshService {
                                 userId: link.userId,
                                 url: link.finalUrl ?? link.originalUrl,
                             },
-                            ['CONTENT'],
+                            ['CONTENT', 'EMBEDDING'],
                         ),
                     ),
             )

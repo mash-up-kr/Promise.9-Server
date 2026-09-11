@@ -516,6 +516,27 @@ describe('LinkAnalysisService', () => {
         )
     })
 
+    // 갱신으로 제목이 바뀌면 임베딩도 새 제목 기준으로 다시 만들어야 검색 순위가 어긋나지 않는다.
+    it('갱신이 제목을 바꾸면 저장을 마친 뒤 임베딩을 다시 만든다', async () => {
+        linkContentService.collect.mockResolvedValueOnce({
+            title: '바뀐 제목',
+            description: null,
+            content: null,
+            image: null,
+        })
+
+        const results = await service.run(INPUT, ['CONTENT', 'EMBEDDING'])
+
+        expect(findResult(results, 'CONTENT')?.status).toBe('SUCCESS')
+        expect(findResult(results, 'EMBEDDING')?.status).toBe('SUCCESS')
+        expect(updatePatches[0].title).toBe('바뀐 제목')
+        // 제목이 저장된 뒤에 임베딩이 돌아야 새 제목이 벡터에 반영된다.
+        expect(embeddingService.embedLink).toHaveBeenCalledWith(
+            INPUT.userId,
+            INPUT.linkId,
+        )
+    })
+
     // YouTube 30일 정책: 사라진 영상의 저장 데이터는 갱신이 아니라 삭제로 반영해야 한다.
     it('공식 API가 영상 부재를 확인하면 저장된 제목·설명·썸네일을 지운다', async () => {
         analysisMetadata = {
