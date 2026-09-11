@@ -132,7 +132,7 @@ describe('LinkContentRefreshService', () => {
 
         const targetCount = await service.refreshDueLinks()
 
-        expect(maxRunning).toBeLessThanOrEqual(5)
+        expect(maxRunning).toBeLessThanOrEqual(2)
         expect(targetCount).toBe(12)
     })
 

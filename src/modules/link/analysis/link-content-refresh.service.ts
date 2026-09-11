@@ -10,9 +10,11 @@ import { LinkAnalysisDispatcher } from './link-analysis.dispatcher'
 const CONTENT_REFRESH_LEAD_TIME_MS = 24 * 60 * 60 * 1000
 // 한 번에 조회할 상한. 상한을 넘긴 나머지는 다음 스케줄러 실행에서 이어서 처리한다.
 const CONTENT_REFRESH_QUERY_LIMIT = 500
-// 동시에 실행할 재수집 수. 재수집은 외부 스크래핑 API와 이미지 다운로드를 부르므로
-// 한꺼번에 던지지 않고 이 폭으로 나눠 rate limit과 메모리 사용을 억제한다.
-const CONTENT_REFRESH_CONCURRENCY = 5
+// 동시에 실행할 재수집 수. 재수집 1건이 약 2.5초(TinyFish 수집 + 이미지 색상 추출)이므로
+// 2건이면 분당 약 48회다. TinyFish 키의 분당 예산(135)에서 배경 갱신이 절반 이하만 쓰고
+// 나머지를 사용자 요청(링크 저장·미리보기) 몫으로 남기기 위한 값이다.
+// 500건을 처리해도 약 10분이라 12시간 주기 안에서는 여유가 있다.
+const CONTENT_REFRESH_CONCURRENCY = 2
 
 @Injectable()
 export class LinkContentRefreshService {

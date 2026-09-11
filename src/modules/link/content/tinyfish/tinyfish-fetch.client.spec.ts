@@ -142,6 +142,59 @@ describe('TinyFishFetchClient', () => {
         ).rejects.toMatchObject({ retryable: false })
         expect(canceled).toBe(true)
     })
+    // TinyFish 키는 분당 150 URL이 상한이다. 상한에 붙으면 사용자 요청도 429를 받으므로
+    // 여유를 남긴 135에서 우리가 먼저 끊는다.
+    describe('분당 호출 상한', () => {
+        const okResponse = () =>
+            new Response(JSON.stringify({ results: [] }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            })
+
+        it('135회까지는 요청을 보내고 136번째는 보내지 않고 차단한다', async () => {
+            const client = createClient('tinyfish-api-key')
+            fetchSpy.mockImplementation(() => Promise.resolve(okResponse()))
+
+            for (let i = 0; i < 135; i += 1) {
+                await client
+                    .fetch(new URL('https://example.com/a'))
+                    .catch(() => undefined)
+            }
+            expect(fetchSpy).toHaveBeenCalledTimes(135)
+
+            await expect(
+                client.fetch(new URL('https://example.com/a')),
+            ).rejects.toMatchObject({
+                name: 'TinyFishFetchError',
+                // 배경 갱신은 재시도로 회복하고, 원격에 부하를 더 주지 않는다.
+                retryable: true,
+            })
+            expect(fetchSpy).toHaveBeenCalledTimes(135)
+        })
+
+        it('1분이 지나면 예산이 다시 찬다', async () => {
+            const client = createClient('tinyfish-api-key')
+            fetchSpy.mockImplementation(() => Promise.resolve(okResponse()))
+            const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_000_000)
+
+            for (let i = 0; i < 135; i += 1) {
+                await client
+                    .fetch(new URL('https://example.com/a'))
+                    .catch(() => undefined)
+            }
+            await expect(
+                client.fetch(new URL('https://example.com/a')),
+            ).rejects.toThrow()
+
+            nowSpy.mockReturnValue(1_000_000 + 60_000)
+            await client
+                .fetch(new URL('https://example.com/a'))
+                .catch(() => undefined)
+            expect(fetchSpy).toHaveBeenCalledTimes(136)
+
+            nowSpy.mockRestore()
+        })
+    })
 })
 
 function createClient(apiKey: string | undefined): TinyFishFetchClient {
