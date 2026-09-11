@@ -108,6 +108,45 @@ describe('pickThumbnailExpiresAt', () => {
     })
 })
 
+describe('pickThumbnailExpiresAt — URL 폴백', () => {
+    // 컬럼 도입 전에 저장된 행에는 expiresAt이 없고 URL의 oe만 있다.
+    it('expiresAt이 없으면 URL의 oe에서 만료 시각을 파싱한다', () => {
+        const metadata: LinkMetadata = {
+            version: 1,
+            images: [{ url: INSTAGRAM_IMAGE_URL, source: 'tinyfish' }],
+        }
+
+        expect(pickThumbnailExpiresAt(metadata)).toEqual(
+            new Date(parseInt('68d1a000', 16) * 1000),
+        )
+    })
+
+    it('저장된 expiresAt이 있으면 그 값을 우선한다', () => {
+        const metadata: LinkMetadata = {
+            version: 1,
+            images: [
+                {
+                    url: INSTAGRAM_IMAGE_URL,
+                    expiresAt: '2030-01-01T00:00:00.000Z',
+                },
+            ],
+        }
+
+        expect(pickThumbnailExpiresAt(metadata)).toEqual(
+            new Date('2030-01-01T00:00:00.000Z'),
+        )
+    })
+
+    it('TTL 없는 URL이면 null을 반환한다', () => {
+        const metadata: LinkMetadata = {
+            version: 1,
+            images: [{ url: 'https://static.toss.tech/thumbnail.png' }],
+        }
+
+        expect(pickThumbnailExpiresAt(metadata)).toBeNull()
+    })
+})
+
 describe('pickContentRefreshDueAt', () => {
     const now = new Date('2026-09-10T00:00:00.000Z')
 
@@ -170,6 +209,25 @@ describe('pickContentRefreshDueAt', () => {
             now,
         )
 
+        expect(dueAt).toEqual(new Date('2026-09-12T00:00:00.000Z'))
+    })
+
+    // 백필 대상인 기존 Instagram 행(expiresAt 없음)이 갱신 기한을 받아야 한다.
+    it('expiresAt이 없는 기존 Instagram 행도 URL에서 기한을 계산한다', () => {
+        const metadata: LinkMetadata = {
+            version: 1,
+            images: [{ url: INSTAGRAM_IMAGE_URL, source: 'tinyfish' }],
+        }
+
+        const dueAt = pickContentRefreshDueAt(
+            'https://www.instagram.com/p/ABC/',
+            metadata,
+            now,
+        )
+
+        // 폴백이 없으면 null이라 스케줄러에 영영 안 잡힌다.
+        // 이 픽스처의 oe는 이미 지난 시각이라 쿨다운으로 클램프된다.
+        expect(dueAt).not.toBeNull()
         expect(dueAt).toEqual(new Date('2026-09-12T00:00:00.000Z'))
     })
 

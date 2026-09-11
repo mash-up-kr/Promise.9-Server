@@ -85,12 +85,18 @@ export function mergeImageMetadata(
 }
 
 // 대표 이미지의 TTL 만료 시각. 없으면 null.
+// expiresAt이 없으면 URL에서 직접 파싱한다. 이 필드가 생기기 전에 저장된 행에는
+// 값이 없고 URL의 oe 파라미터만 있으므로, 폴백이 없으면 그 링크들이 갱신 대상에서 빠진다.
 export function pickThumbnailExpiresAt(
     metadata: LinkMetadata | null,
 ): Date | null {
-    const expiresAt = metadata?.images?.[0]?.expiresAt
+    const image = metadata?.images?.[0]
 
-    return expiresAt ? new Date(expiresAt) : null
+    if (!image) return null
+
+    return image.expiresAt
+        ? new Date(image.expiresAt)
+        : extractImageExpiry(image.url)
 }
 
 // YouTube Data API 이용정책상 수집한 데이터는 최소 30일마다 다시 가져와야 한다.
