@@ -11,6 +11,7 @@ import { LlmService } from '../../infrastructure/llm/llm.service'
 import { AiMetricService } from './metrics/ai-metric.service'
 import {
     AI_EMBEDDING_TASK_TYPE,
+    AI_FAILURE_ERROR_CODE,
     AI_METRIC_STATUS,
     AI_TASK_RESPONSE_SCHEMA_NAME,
     AI_TASK_TYPE,
@@ -156,6 +157,9 @@ describe('AiService', () => {
         expect(request?.prompt).toContain('CONTENT:\n링크 본문')
         expect(request?.system).toContain('자연스러운 한국어 ~요체로 작성한다.')
         expect(request?.system).toContain(
+            '한국어가 아닌 문자 체계를 섞지 않는다.',
+        )
+        expect(request?.system).toContain(
             '태그 값에는 # 문자를 포함하지 않는다.',
         )
         expect(request?.system).toContain(
@@ -202,6 +206,93 @@ describe('AiService', () => {
             llmService.generateObjectWithResolvedTarget.mock.calls[0]?.[0]
 
         expect(request?.prompt).toContain('수집된 페이지 정보가 없으므로')
+    })
+
+    it('요약에 깨진 한글 자모가 섞이면 재시도 가능한 오류로 던진다', async () => {
+        const loggerWarnSpy = jest
+            .spyOn(Logger.prototype, 'warn')
+            .mockImplementation()
+        llmService.generateObjectWithResolvedTarget.mockResolvedValueOnce({
+            model: 'gpt-test',
+            data: {
+                summary: '이 딲ᄌᄂ은 디자이너를 위한 글이에요.',
+                tags: ['디자인'],
+                needsReview: false,
+                reviewReason: null,
+            },
+            ttlbMs: 120,
+        })
+
+        const promise = service.generateLinkAnalysis({
+            userLinkId: 1,
+            url: 'https://example.com/article',
+            title: null,
+            description: null,
+            content: null,
+        })
+
+        await expect(promise).rejects.toBeInstanceOf(AiGenerationError)
+        await expect(promise).rejects.toMatchObject({
+            code: AI_FAILURE_ERROR_CODE.GENERATED_TEXT_NOT_KOREAN,
+            retryable: true,
+        })
+        expect(loggerWarnSpy).toHaveBeenCalledWith(
+            expect.stringContaining('issue=BROKEN_HANGUL'),
+        )
+        loggerWarnSpy.mockRestore()
+    })
+
+    it('태그에 다른 문자 체계가 섞이면 재시도 가능한 오류로 던진다', async () => {
+        jest.spyOn(Logger.prototype, 'warn').mockImplementation()
+        llmService.generateObjectWithResolvedTarget.mockResolvedValueOnce({
+            model: 'gpt-test',
+            data: {
+                summary: '도쿄 여행 팁을 소개해요.',
+                tags: ['여행', '東京'],
+                needsReview: false,
+                reviewReason: null,
+            },
+            ttlbMs: 120,
+        })
+
+        await expect(
+            service.generateLinkAnalysis({
+                userLinkId: 1,
+                url: 'https://example.com/article',
+                title: null,
+                description: null,
+                content: null,
+            }),
+        ).rejects.toMatchObject({
+            code: AI_FAILURE_ERROR_CODE.GENERATED_TEXT_NOT_KOREAN,
+            retryable: true,
+        })
+    })
+
+    it('분해된 자모로 온 요약은 NFC로 합쳐서 반환한다', async () => {
+        llmService.generateObjectWithResolvedTarget.mockResolvedValueOnce({
+            model: 'gpt-test',
+            data: {
+                summary: '게시물 요약이에요.'.normalize('NFD'),
+                tags: ['태그'.normalize('NFD')],
+                needsReview: false,
+                reviewReason: null,
+            },
+            ttlbMs: 120,
+        })
+
+        const result = await service.generateLinkAnalysis({
+            userLinkId: 1,
+            url: 'https://example.com/article',
+            title: null,
+            description: null,
+            content: null,
+        })
+
+        expect(result).toMatchObject({
+            summary: '게시물 요약이에요.',
+            tags: ['태그'],
+        })
     })
 
     it('검토 대상인데 사유가 비어 있으면 null로 정리한다', async () => {

@@ -30,6 +30,7 @@ import {
     AiRecordMetricInput,
     AiResolveTargetInput,
 } from './ai.type'
+import { checkKoreanText } from './ai-link-analysis.language'
 import { AI_LINK_ANALYSIS_PROMPT } from './ai-link-analysis.prompt'
 import { aiLinkAnalysisResultSchema } from './ai-link-analysis.schema'
 
@@ -77,7 +78,17 @@ export class AiService {
             prompt: prompt.buildPrompt(input),
             schema: aiLinkAnalysisResultSchema,
         })
-        const { summary, tags, needsReview, reviewReason } = result.data
+        const { needsReview, reviewReason } = result.data
+        // 사용자에게 보이는 요약과 태그는 한국어로만 저장한다. 깨진 자모나 다른 문자 체계가
+        // 섞이면 재시도 가능한 실패로 던져 분석 재시도에서 다시 생성한다.
+        const summary = this.ensureKoreanText(
+            input.userLinkId,
+            'summary',
+            result.data.summary,
+        )
+        const tags = result.data.tags.map((tag) =>
+            this.ensureKoreanText(input.userLinkId, 'tag', tag),
+        )
 
         // 검토 대상이 아니면 모델이 남긴 사유를 버려 needsReview와 reviewReason이 항상 함께 움직이게 한다.
         return {
@@ -86,6 +97,25 @@ export class AiService {
             needsReview,
             reviewReason: needsReview ? reviewReason?.trim() || null : null,
         }
+    }
+
+    private ensureKoreanText(
+        userLinkId: number,
+        field: 'summary' | 'tag',
+        raw: string,
+    ): string {
+        const checked = checkKoreanText(raw)
+        if (checked.ok) return checked.text
+
+        const message = `AI ${field}에 한국어가 아닌 문자가 섞였습니다. issue=${checked.issue}, sample=${checked.sample}`
+        this.logger.warn(`${message}, userLinkId=${userLinkId}`)
+
+        throw new AiGenerationError({
+            code: AI_FAILURE_ERROR_CODE.GENERATED_TEXT_NOT_KOREAN,
+            message,
+            taskType: AI_TASK_TYPE.LINK_ANALYSIS_GENERATE,
+            retryable: true,
+        })
     }
 
     private async generateText(

@@ -56,7 +56,7 @@ sequenceDiagram
     LAS->>AI: generateLinkAnalysis(aiInput)
     AI->>LLM: generateObject(link_analysis_v1)
     LLM-->>AI: { summary, tags, needsReview, reviewReason }
-    Note over AI: summary trim<br/>needsReview=false면 reviewReason=null
+    Note over AI: summary·tags NFC 정규화와 한국어 문자 검사<br/>summary trim<br/>needsReview=false면 reviewReason=null
     AI-->>LAS: AiLinkAnalysisResult
 
     opt needsReview = true
