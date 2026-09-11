@@ -81,6 +81,30 @@ describe('validateEnvironment', () => {
         })
     })
 
+    it('TinyFish 멀티 키 설정을 허용한다', () => {
+        expect(
+            validateEnvironment({
+                ...developmentEnvironment,
+                TINY_FISH_API_KEYS: 'key-a, key-b,key-a',
+            }).TINY_FISH_API_KEYS,
+        ).toBe('key-a, key-b,key-a')
+        expect(
+            validateEnvironment(developmentEnvironment).TINY_FISH_API_KEYS,
+        ).toBeUndefined()
+    })
+
+    it.each(['', ' ', ',', 'key-a,', ',key-a', 'key-a,,key-b', 'key a,key-b'])(
+        '잘못된 TinyFish 키 목록을 거부한다: %s',
+        (keys) => {
+            expect(() =>
+                validateEnvironment({
+                    ...developmentEnvironment,
+                    TINY_FISH_API_KEYS: keys,
+                }),
+            ).toThrow()
+        },
+    )
+
     it('development에서 production 링크 분석 큐 consumer 활성화를 거부한다', () => {
         expect(() =>
             validateEnvironment({

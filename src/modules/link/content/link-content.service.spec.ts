@@ -1,4 +1,4 @@
-import { HttpException } from '@nestjs/common'
+import { HttpException, Logger } from '@nestjs/common'
 
 import { BaseException } from '../../../common/exception/base.exception'
 import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
@@ -963,18 +963,43 @@ Add a comment...*Instagram*`
         })
     })
 
-    it('TinyFish 내부 예외는 공통 API 예외 형식으로 변환한다', async () => {
+    it('TinyFish 401의 키 인덱스는 로그에만 남기고 공통 API 예외로 변환한다', async () => {
+        const warn = jest
+            .spyOn(Logger.prototype, 'warn')
+            .mockImplementation(() => undefined)
+        const message =
+            'TinyFish Fetch API 키 인증에 실패했습니다. status=401, keyIndex=3'
         tinyFishFetchClient.isEnabled.mockReturnValueOnce(true)
         tinyFishFetchClient.fetch.mockRejectedValueOnce(
             new TinyFishFetchError({
-                message: 'TinyFish 요청 실패',
+                message,
                 retryable: false,
             }),
         )
 
-        await expect(
-            service.preview('https://x.com/OpenAI/status/1'),
-        ).rejects.toBeInstanceOf(BaseException)
+        try {
+            const error: unknown = await service
+                .preview('https://x.com/OpenAI/status/1')
+                .catch((error: unknown) => error)
+            expect(error).toBeInstanceOf(BaseException)
+            if (!(error instanceof BaseException))
+                throw new Error('공통 API 예외가 필요합니다.')
+            expect(error.getResponse()).toEqual({
+                success: false,
+                error: {
+                    code: 502,
+                    errorCode: 930006,
+                    message:
+                        '링크 미리보기 대상 페이지가 정상적으로 응답하지 않았습니다.',
+                    timestamp: expect.any(String) as unknown,
+                },
+            })
+            expect(warn).toHaveBeenCalledWith(
+                `TinyFish 링크 미리보기 수집에 실패했습니다: ${message}`,
+            )
+        } finally {
+            warn.mockRestore()
+        }
     })
 
     it('YouTube 저장 수집은 oEmbed 제목과 썸네일만 반환한다', async () => {

@@ -10,11 +10,8 @@ import {
 } from './tinyfish-response.parser'
 
 const TINYFISH_FETCH_ENDPOINT = 'https://api.fetch.tinyfish.ai'
-// TinyFish 계정 기본 상한은 분당 150 URL이고 초과하면 HTTP 429다. 상한에 바로 붙으면
-// 사용자 요청까지 함께 429를 받으므로, 여유 15를 남긴 135에서 우리가 먼저 차단한다.
-// 키 단위 상한이라 이 클라이언트(= 키 하나)의 호출을 전부 한 창에서 센다.
-const TINYFISH_RATE_LIMIT_PER_MINUTE = 135
-const TINYFISH_RATE_WINDOW_MS = 60_000
+// 공식 대기 시간은 Retry-After를 따른다. 헤더가 없거나 잘못된 경우의 운영 기본값이다.
+const TINYFISH_DEFAULT_COOLDOWN_MS = 60_000
 const TINYFISH_URL_TIMEOUT_MS = 20_000
 const TINYFISH_REQUEST_TIMEOUT_MS = 25_000
 const TINYFISH_RESPONSE_MAX_BYTES = 2 * 1024 * 1024
@@ -24,56 +21,79 @@ export type TinyFishFetchOptions = {
     excludeSelectors?: readonly string[]
 }
 
+type TinyFishKeyState = {
+    apiKey: string
+    configIndex: number
+    cooldownUntil: number
+}
+
 @Injectable()
 export class TinyFishFetchClient {
-    private readonly apiKey: string | undefined
-    // ponytail: 프로세스 메모리의 고정 창 카운터. 단일 인스턴스 기준이라 인스턴스를 늘리면
-    // 인스턴스 수만큼 상한이 곱해진다. 그때는 Redis나 DB 테이블로 키 단위 창을 공유한다.
-    private rateWindowStartedAt = 0
-    private rateWindowCount = 0
+    // 단일 프로세스에서 공유한다. 여러 프로세스에서는 순번과 cooldown이 공유되지 않는다.
+    private readonly keys: TinyFishKeyState[]
+    private nextKeyIndex = 0
 
     constructor(config: ConfigService<ValidatedEnvironment, true>) {
-        this.apiKey = config.get('TINY_FISH_API_KEY', { infer: true })
+        const configuredKeys =
+            config.get('TINY_FISH_API_KEYS', { infer: true }) ??
+            config.get('TINY_FISH_API_KEY', { infer: true })
+        const keys = new Map<string, TinyFishKeyState>()
+        for (const [index, value] of (
+            configuredKeys?.split(',') ?? []
+        ).entries()) {
+            const apiKey = value.trim()
+            if (!apiKey || keys.has(apiKey)) continue
+
+            // 중복 제거 후에도 환경변수 목록의 원래 위치(1부터)를 로그에서 찾을 수 있다.
+            keys.set(apiKey, {
+                apiKey,
+                configIndex: index + 1,
+                cooldownUntil: 0,
+            })
+        }
+        this.keys = [...keys.values()]
     }
 
     isEnabled(): boolean {
-        return Boolean(this.apiKey)
+        return this.keys.length > 0
     }
 
-    // 분당 예산을 한 칸 쓴다. 남아 있지 않으면 요청을 보내지 않고 재시도 가능한 오류를 던진다.
-    // 배경 갱신은 dispatcher가 재시도하고, 사용자 요청은 그대로 실패를 전달받는다.
-    private consumeRateBudget(): void {
+    // 첫 await 전에 순번을 이동해 동시 호출도 분산한다. 같은 URL은 키마다 한 번만 시도한다.
+    private selectKey(attempted: Set<TinyFishKeyState>): TinyFishKeyState {
         const now = Date.now()
 
-        if (now - this.rateWindowStartedAt >= TINYFISH_RATE_WINDOW_MS) {
-            this.rateWindowStartedAt = now
-            this.rateWindowCount = 0
+        for (let offset = 0; offset < this.keys.length; offset += 1) {
+            const index = (this.nextKeyIndex + offset) % this.keys.length
+            const key = this.keys[index]
+
+            if (key.cooldownUntil > now || attempted.has(key)) continue
+
+            this.nextKeyIndex = (index + 1) % this.keys.length
+            attempted.add(key)
+            return key
         }
 
-        if (this.rateWindowCount >= TINYFISH_RATE_LIMIT_PER_MINUTE) {
-            throw new TinyFishFetchError({
-                message: `TinyFish 분당 호출 상한(${TINYFISH_RATE_LIMIT_PER_MINUTE})에 도달해 요청을 보내지 않았습니다.`,
-                retryable: true,
-            })
-        }
-
-        this.rateWindowCount += 1
+        // 미리보기는 기존 오류로 반환하고 분석은 dispatcher의 SQS 재시도를 따른다.
+        throw new TinyFishFetchError({
+            message:
+                'TinyFish에서 현재 요청에 사용할 수 있는 API 키가 없습니다.',
+            retryable: true,
+        })
     }
 
     async fetch(
         resourceUrl: URL,
         options?: TinyFishFetchOptions,
     ): Promise<TinyFishResponseOutcome> {
-        if (!this.apiKey) {
+        if (!this.isEnabled()) {
             throw new TinyFishFetchError({
                 message: 'TinyFish Fetch가 비활성화됐습니다.',
                 retryable: false,
             })
         }
 
-        this.consumeRateBudget()
-
         const targetUrl = sanitizeTinyFishUrl(resourceUrl)
+        const attempted = new Set<TinyFishKeyState>()
         const controller = new AbortController()
         const timeout = setTimeout(
             () => controller.abort(),
@@ -81,47 +101,71 @@ export class TinyFishFetchClient {
         )
 
         try {
-            const response = await fetch(TINYFISH_FETCH_ENDPOINT, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-API-Key': this.apiKey,
-                },
-                body: JSON.stringify({
-                    urls: [targetUrl.toString()],
-                    ...(options?.includeSelectors
-                        ? { include_selectors: options.includeSelectors }
-                        : {}),
-                    ...(options?.excludeSelectors
-                        ? { exclude_selectors: options.excludeSelectors }
-                        : {}),
-                    format: 'markdown',
-                    links: false,
-                    image_links: true,
-                    ttl: 3600,
-                    per_url_timeout_ms: TINYFISH_URL_TIMEOUT_MS,
-                }),
-                signal: controller.signal,
-            })
-
-            if (!response.ok) {
-                await cancelResponseBody(response)
-                throw new TinyFishFetchError({
-                    message: `TinyFish Fetch가 ${response.status} 상태로 응답했습니다.`,
-                    retryable:
-                        response.status === 429 || response.status >= 500,
+            // 키 전환을 포함한 전체 요청에 기존 25초 timeout을 적용한다.
+            while (true) {
+                controller.signal.throwIfAborted()
+                const key = this.selectKey(attempted)
+                const response = await fetch(TINYFISH_FETCH_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': key.apiKey,
+                    },
+                    body: JSON.stringify({
+                        urls: [targetUrl.toString()],
+                        ...(options?.includeSelectors
+                            ? { include_selectors: options.includeSelectors }
+                            : {}),
+                        ...(options?.excludeSelectors
+                            ? { exclude_selectors: options.excludeSelectors }
+                            : {}),
+                        format: 'markdown',
+                        links: false,
+                        image_links: true,
+                        ttl: 3600,
+                        per_url_timeout_ms: TINYFISH_URL_TIMEOUT_MS,
+                    }),
+                    signal: controller.signal,
                 })
-            }
 
-            return parseTinyFishResponse(
-                JSON.parse(await readLimitedResponseText(response)) as unknown,
-            )
+                if (response.status === 429) {
+                    // body 정리를 기다리기 전에 다른 호출에서도 이 키를 제외한다.
+                    key.cooldownUntil = Math.max(
+                        key.cooldownUntil,
+                        Date.now() +
+                            resolveCooldownMs(
+                                response.headers.get('retry-after'),
+                            ),
+                    )
+                    await cancelResponseBody(response)
+                    continue
+                }
+
+                if (!response.ok) {
+                    await cancelResponseBody(response)
+                    throw new TinyFishFetchError({
+                        // 호출부의 기존 오류 로그로 남기며, API 응답은 공통 예외로 변환한다.
+                        message:
+                            response.status === 401
+                                ? `TinyFish Fetch API 키 인증에 실패했습니다. status=401, keyIndex=${key.configIndex}`
+                                : `TinyFish Fetch가 ${response.status} 상태로 응답했습니다.`,
+                        retryable: response.status >= 500,
+                    })
+                }
+
+                return parseTinyFishResponse(
+                    JSON.parse(
+                        await readLimitedResponseText(response),
+                    ) as unknown,
+                )
+            }
         } catch (error) {
             if (error instanceof TinyFishFetchError) throw error
 
             throw new TinyFishFetchError({
                 message:
-                    error instanceof Error && error.name === 'AbortError'
+                    controller.signal.aborted ||
+                    (error instanceof Error && error.name === 'AbortError')
                         ? 'TinyFish Fetch 요청 시간이 초과됐습니다.'
                         : 'TinyFish Fetch 요청에 실패했습니다.',
                 retryable: true,
@@ -131,6 +175,16 @@ export class TinyFishFetchClient {
             clearTimeout(timeout)
         }
     }
+}
+
+function resolveCooldownMs(retryAfter: string | null): number {
+    // TinyFish 공식 오류 문서의 Retry-After는 초 단위다.
+    if (retryAfter !== null && /^\d+$/.test(retryAfter.trim())) {
+        const delay = Number(retryAfter) * 1000
+        if (Number.isSafeInteger(delay)) return delay
+    }
+
+    return TINYFISH_DEFAULT_COOLDOWN_MS
 }
 
 export function sanitizeTinyFishUrl(url: URL): URL {

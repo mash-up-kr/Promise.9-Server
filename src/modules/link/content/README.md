@@ -177,6 +177,29 @@ robots.txt도 다시 확인한다. User-Agent 역시 이동한 도메인에 맞�
 
 ## TinyFish 세부 정책
 
+`TINY_FISH_API_KEYS=key-a,key-b,key-c`로 여러 키를 등록한다. 목록이 없으면 기존
+`TINY_FISH_API_KEY`를 사용한다. 키 앞뒤 공백과 중복을 제거하고, 요청마다 라운드 로빈으로
+선택한다. 한 번에 URL 하나를 전송하며 로컬 사용량 카운터나 별도 대기 큐는 두지 않는다.
+
+TinyFish HTTP 429를 받으면 해당 키만 cooldown에 넣고 같은 URL·옵션으로 다음 키를
+시도한다. cooldown 중인 키는 건너뛰고 만료되면 자동 복귀한다. 한 URL에서는 각 키를
+최대 한 번 시도하며, 키 전환을 포함한 전체 요청 timeout은 기존 25초다.
+`Retry-After`의 초 단위 대기 시간을 우선 사용한다. 헤더가 없거나 잘못된 경우 60초를
+사용하는 것은 서버의 fallback 정책이며 공식 고정 대기 시간이 아니다.
+근거: [공식 오류 문서](https://docs.tinyfish.ai/error-codes#rate_limit_exceeded),
+[Fetch 한도](https://docs.tinyfish.ai/fetch-api/reference#rate-limits).
+
+사용 가능한 키가 없으면 기존 재시도 가능한 `TinyFishFetchError`를 반환한다.
+미리보기는 기존 API 오류로 반환하고 분석은 기존 SQS 재시도 정책을 따른다.
+429 이외의 오류와 대상 사이트의 오류(`errors[]`)는 기존 정책을 유지한다.
+특히 HTTP 401은 다른 키로 전환하거나 해당 키를 자동 제외하지 않고 재시도 불가능한
+오류로 반환한다. 기존 오류 로그의 `status=401, keyIndex=N`으로 문제 키를 식별한다.
+`keyIndex`는 사용 중인 환경변수 목록의 원래 위치(1부터)이며, 중복 키는 처음 등장한
+위치를 사용한다. 키 원문과 TinyFish 오류 응답 body는 기록하지 않고 API 응답에는
+공통 오류만 반환한다.
+순번과 cooldown은 Nest singleton의 프로세스 메모리에만 유지되므로 재시작 시 초기화되며,
+여러 프로세스·컨테이너에서는 공유되지 않는다.
+
 TinyFish client는 특정 사이트의 URL 범위나 대표 이미지 규칙을 알지 않는다. 응답을
 검증하고 공통 형태로 변환하는 일까지만 담당한다. TinyFish에 전달할 URL 정리와 대표
 이미지 선택, 제목 후처리는 각 사이트 규칙에서 담당한다.

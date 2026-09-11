@@ -80,6 +80,7 @@ jobs:
           APPLE_CLIENT_ID: ${{ secrets.APPLE_CLIENT_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TINY_FISH_API_KEY: ${{ secrets.TINY_FISH_API_KEY }}
+          TINY_FISH_API_KEYS: ${{ secrets.TINY_FISH_API_KEYS }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           MASTER_ACCESS_TOKEN: ${{ secrets.MASTER_ACCESS_TOKEN }}
           MASTER_USER_ID: ${{ secrets.MASTER_USER_ID }}
@@ -103,7 +104,10 @@ jobs:
           : "${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY is required}"
           : "${SQS_LINK_ANALYSIS_QUEUE_URL:?SQS_LINK_ANALYSIS_QUEUE_URL is required}"
           : "${EMAIL_FROM_ADDRESS:?EMAIL_FROM_ADDRESS is required}"
-          : "${TINY_FISH_API_KEY:?TINY_FISH_API_KEY is required}"
+          if [ -z "$TINY_FISH_API_KEYS" ] && [ -z "$TINY_FISH_API_KEY" ]; then
+            echo "TINY_FISH_API_KEYS or TINY_FISH_API_KEY is required" >&2
+            exit 1
+          fi
 
           {
             printf 'APP_ENV=production\n'
@@ -115,7 +119,11 @@ jobs:
             printf 'KAKAO_NATIVE_APP_KEY=%s\n' "$KAKAO_NATIVE_APP_KEY"
             printf 'APPLE_CLIENT_ID=%s\n' "$APPLE_CLIENT_ID"
             printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
-            printf 'TINY_FISH_API_KEY=%s\n' "$TINY_FISH_API_KEY"
+            if [ -n "$TINY_FISH_API_KEYS" ]; then
+              printf 'TINY_FISH_API_KEYS=%s\n' "$TINY_FISH_API_KEYS"
+            else
+              printf 'TINY_FISH_API_KEY=%s\n' "$TINY_FISH_API_KEY"
+            fi
 
             if [ -n "$YOUTUBE_API_KEY" ]; then
               printf 'YOUTUBE_API_KEY=%s\n' "$YOUTUBE_API_KEY"
