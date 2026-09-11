@@ -17,6 +17,51 @@ View all 48 comments
 Add a comment...*Instagram*`
 
 describe('parseInstagramCaption', () => {
+    it.each([
+        'travel\\_bonyoandlif\\_e\\_scape',
+        'travel\\_bonyo and lif\\_e\\_scape',
+        '서로 다른 표시 이름',
+        'a'.repeat(61),
+    ])('상단 표시 %s와 캡션 계정명이 달라도 본문을 추출한다', (header) => {
+        // DdEfm89GVKh의 실제 응답 구조. 본문은 회귀 검증용으로 축약한다.
+        const text = [
+            header,
+            '3,971 followers',
+            'View profile',
+            '3,877 likes',
+            'travel\\_bonyo',
+            '스케일 큰 방탈출 찾고있다면 저장해두세요‼️🔐',
+            '@travel\\_bonyo #방탈출',
+            'View all 1,795 comments',
+            'Add a comment...*Instagram*',
+        ].join('\n\n')
+        expect(parseInstagramCaption(text)).toBe(
+            '스케일 큰 방탈출 찾고있다면 저장해두세요‼️🔐\n\n@travel_bonyo #방탈출',
+        )
+    })
+
+    it('캡션 작성자에 인증 배지가 있어도 상단 이름과 비교하지 않는다', () => {
+        expect(
+            parseInstagramCaption(
+                page('캡션').replace(
+                    '\nvgp.seoul\n',
+                    '\nother_author*Verified*\n',
+                ),
+            ),
+        ).toBe('캡션')
+    })
+
+    it('좋아요 다음에 계정명 없이 UI 문구가 나오면 거부한다', () => {
+        expect(
+            parseInstagramCaption(
+                page('캡션').replace(
+                    '\nvgp.seoul\n',
+                    '\nView more on Instagram\n',
+                ),
+            ),
+        ).toBeNull()
+    })
+
     it('일반 게시물의 좋아요·버튼·작성자 문구를 제외한다', () => {
         expect(parseInstagramCaption(page('카페 소개\n\n주소와 #태그'))).toBe(
             '카페 소개\n\n주소와 #태그',
