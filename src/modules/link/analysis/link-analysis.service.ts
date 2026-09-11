@@ -15,6 +15,7 @@ import {
 import { EmbeddingService } from '../embedding/embedding.service'
 import { LinkRepository, LinkUpdatePatch } from '../link.repository'
 import { LinkMetadata } from '../link.schema'
+import { mergeImageMetadata, pickContentRefreshDueAt } from '../link.util'
 
 import { LINK_ANALYSIS_CONTENT_DEPENDENT_TASKS } from './link-analysis.constant'
 import { classifyFailure } from './link-analysis.failure'
@@ -295,13 +296,21 @@ export class LinkAnalysisService {
         input: LinkAnalysisInput,
         content: CollectedLinkContent | null,
     ): Promise<LinkAnalysisTaskResult | void> {
-        if (!content?.title && !content?.description && !content?.image) {
+        const hasContent = Boolean(
+            content?.title || content?.description || content?.image,
+        )
+
+        // 권위 있는 API가 부재를 확인한 경우는 저장값을 지워야 하므로 건너뛰지 않는다.
+        if (!content || (!hasContent && !content.authoritative)) {
             return {
                 task: 'CONTENT',
                 status: 'SKIPPED',
                 reason: '수집한 링크 정보가 없습니다.',
             }
         }
+
+        // 영상이 삭제·비공개돼 공식 API가 더 이상 내려주지 않는 상태.
+        const removed = !hasContent
 
         const row = await this.linkRepository.findAnalysisMetadata(
             input.userId,
@@ -320,11 +329,19 @@ export class LinkAnalysisService {
 
         if (content.title) {
             patch.title = content.title
+        } else if (content.authoritative) {
+            patch.title = null
         }
 
-        if (content.description || content.image) {
+        if (content.description || content.image || content.authoritative) {
             patch.metadata = this.mergeCollectedMetadata(row.metadata, content)
         }
+
+        // 사라진 영상은 지울 저장 데이터도, 갱신할 원본도 없다. 기한을 비워 48시간마다
+        // 재수집을 반복하지 않게 한다.
+        patch.contentRefreshDueAt = removed
+            ? null
+            : pickContentRefreshDueAt(input.url, patch.metadata ?? row.metadata)
 
         await this.linkRepository.updateActive(
             input.userId,
@@ -401,12 +418,11 @@ export class LinkAnalysisService {
 
             if (!row) return
 
+            const metadata = mergeImageMetadata(row.metadata, image, color.hex)
+
+            // contentRefreshDueAt은 방금 saveCollectedContent가 같은 이미지로 이미 저장했다.
             await this.linkRepository.updateActive(input.userId, input.linkId, {
-                metadata: this.mergeImageMetadata(
-                    row.metadata,
-                    image,
-                    color.hex,
-                ),
+                metadata,
                 updatedAt: new Date(),
             })
         } catch (error) {
@@ -462,44 +478,21 @@ export class LinkAnalysisService {
 
         if (information.description) {
             merged.description = information.description
+        } else if (information.authoritative) {
+            // 업로더가 설명을 비웠으면 저장값도 지운다.
+            delete merged.description
         }
 
         if (information.image) {
-            merged.images = this.mergeImageMetadata(
+            merged.images = mergeImageMetadata(
                 metadata,
                 information.image,
             ).images
+        } else if (information.authoritative) {
+            delete merged.images
         }
 
         return merged
-    }
-
-    private mergeImageMetadata(
-        metadata: LinkMetadata | null,
-        image: CollectedLinkImage,
-        dominantColor?: string,
-    ): LinkMetadata {
-        const existingImages = metadata?.images ?? []
-        const existingImage = existingImages.find(
-            (candidate) => candidate.url === image.url,
-        )
-        const mergedImage = {
-            ...existingImage,
-            url: image.url,
-            source: image.source,
-            ...(dominantColor ? { dominantColor } : {}),
-        }
-
-        return {
-            ...metadata,
-            version: metadata?.version ?? 1,
-            images: [
-                mergedImage,
-                ...existingImages.filter(
-                    (candidate) => candidate.url !== image.url,
-                ),
-            ],
-        }
     }
 
     private normalizeTagName(name: string): string {

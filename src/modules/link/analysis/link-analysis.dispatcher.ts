@@ -42,10 +42,19 @@ export class LinkAnalysisDispatcher implements OnModuleDestroy {
         input: LinkAnalysisInput,
         tasks: readonly LinkAnalysisTask[] = LINK_ANALYSIS_TASKS,
     ): void {
+        void this.dispatchAwaited(input, tasks)
+    }
+
+    // 배치 처리처럼 동시 실행 수를 제한해야 하는 호출부를 위해 완료를 기다릴 수 있게 노출한다.
+    // runInline이 예외를 흡수하므로 이 Promise도 거부되지 않는다.
+    async dispatchAwaited(
+        input: LinkAnalysisInput,
+        tasks: readonly LinkAnalysisTask[] = LINK_ANALYSIS_TASKS,
+    ): Promise<void> {
         const task = this.runInline(input, tasks)
 
         this.inFlight.add(task)
-        void task.finally(() => this.inFlight.delete(task))
+        await task.finally(() => this.inFlight.delete(task))
     }
 
     // consumer 진입점. 메시지에 담긴 작업만 실행한다.

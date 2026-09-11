@@ -22,7 +22,9 @@ describe('LinkContentService', () => {
     let tinyFishFetchClient: jest.Mocked<
         Pick<TinyFishFetchClient, 'isEnabled' | 'fetch'>
     >
-    let youtubeDataClient: jest.Mocked<Pick<YoutubeDataClient, 'fetchVideo'>>
+    let youtubeDataClient: jest.Mocked<
+        Pick<YoutubeDataClient, 'fetchVideo' | 'isEnabled'>
+    >
 
     beforeEach(() => {
         urlSecurity = {
@@ -45,6 +47,7 @@ describe('LinkContentService', () => {
             fetch: jest.fn(),
         }
         youtubeDataClient = {
+            isEnabled: jest.fn().mockReturnValue(true),
             fetchVideo: jest.fn().mockResolvedValue(null),
         }
         service = new LinkContentService(
@@ -204,6 +207,8 @@ describe('LinkContentService', () => {
                     url: 'https://i.ytimg.com/vi/8Pbt-Aum5Q4/high.jpg',
                     source: 'youtube-data-api',
                 },
+                // 공식 API 응답이므로 필드 부재를 삭제로 해석할 수 있다.
+                authoritative: true,
             })
             expect(youtubeDataClient.fetchVideo).toHaveBeenCalledWith(
                 '8Pbt-Aum5Q4',
@@ -213,9 +218,45 @@ describe('LinkContentService', () => {
         },
     )
 
+    // 삭제·비공개 영상은 폴백으로 옛 메타데이터를 되살리면 안 된다.
+    it('Data API가 영상을 찾지 못하면 폴백 없이 부재를 그대로 반환한다', async () => {
+        youtubeDataClient.fetchVideo.mockResolvedValueOnce(null)
+
+        await expect(
+            service.collect('https://youtu.be/8Pbt-Aum5Q4'),
+        ).resolves.toEqual({
+            title: null,
+            description: null,
+            content: null,
+            image: null,
+            authoritative: true,
+        })
+        expect(fetchSpy).not.toHaveBeenCalled()
+    })
+
+    it('Data API 키가 없으면 영상 부재로 보지 않고 oEmbed로 폴백한다', async () => {
+        youtubeDataClient.isEnabled.mockReturnValue(false)
+        fetchSpy.mockResolvedValueOnce(
+            jsonResponse({
+                title: 'oEmbed 제목',
+                thumbnail_url: 'https://i.ytimg.com/vi/8Pbt-Aum5Q4/high.jpg',
+            }),
+        )
+
+        const result = await service.collect('https://youtu.be/8Pbt-Aum5Q4')
+
+        expect(result?.title).toBe('oEmbed 제목')
+        expect(result?.authoritative).toBeUndefined()
+        expect(youtubeDataClient.fetchVideo).not.toHaveBeenCalled()
+    })
+
     it.each(['preview', 'collect'] as const)(
         'oEmbed 사용 시 목적에 따라 Data API 호출 여부를 구분한다: %s',
         async (method) => {
+            // Data API 실패는 폴백 경로다. 영상 부재(null)는 삭제로 해석하므로 폴백하지 않는다.
+            youtubeDataClient.fetchVideo.mockRejectedValueOnce(
+                new Error('Data API 실패'),
+            )
             fetchSpy.mockResolvedValueOnce(
                 jsonResponse({
                     title: 'oEmbed 제목',

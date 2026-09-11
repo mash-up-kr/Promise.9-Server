@@ -1,0 +1,2 @@
+ALTER TABLE "links" ADD COLUMN "content_refresh_due_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "links_content_refresh_due_at_idx" ON "links" USING btree ("content_refresh_due_at") WHERE "links"."deleted_at" is null and "links"."content_refresh_due_at" is not null;

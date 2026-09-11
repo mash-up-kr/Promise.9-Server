@@ -11,6 +11,8 @@ import { LinkAnalysisQueueConsumer } from './analysis/link-analysis.consumer'
 import { LinkAnalysisDispatcher } from './analysis/link-analysis.dispatcher'
 import { LinkAnalysisQueuePublisher } from './analysis/link-analysis.publisher'
 import { LinkAnalysisService } from './analysis/link-analysis.service'
+import { LinkContentRefreshScheduler } from './analysis/link-content-refresh.scheduler'
+import { LinkContentRefreshService } from './analysis/link-content-refresh.service'
 import { LinkContentHtmlFetcher } from './content/html/link-content-html.fetcher'
 import { LinkContentService } from './content/link-content.service'
 import { TinyFishFetchClient } from './content/tinyfish/tinyfish-fetch.client'
@@ -47,6 +49,8 @@ import { LinkService } from './link.service'
         LinkAnalysisDispatcher,
         LinkAnalysisQueuePublisher,
         LinkAnalysisQueueConsumer,
+        LinkContentRefreshService,
+        LinkContentRefreshScheduler,
         LinkContentService,
         LinkContentHtmlFetcher,
         TinyFishFetchClient,

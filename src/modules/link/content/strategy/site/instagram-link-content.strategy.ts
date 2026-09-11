@@ -138,7 +138,7 @@ function isInstagramContentUrl(url: URL): boolean {
     )
 }
 
-function isInstagramImageUrl(url: URL): boolean {
+export function isInstagramImageUrl(url: URL): boolean {
     if (url.protocol !== 'https:') return false
 
     const hostname = url.hostname.toLowerCase()
