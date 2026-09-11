@@ -331,6 +331,29 @@ describe('normalizeUrl', () => {
         ).toBe('https://www.youtube.com/watch?t=42&v=dQw4w9WgXcQ')
     })
 
+    it.each([
+        'https://www.instagram.com/p/DW04l9PES8g',
+        'https://www.instagram.com/p/DW04l9PES8g/',
+        'https://instagram.com/p/DW04l9PES8g/?img_index=1&igsi=eHl5azNkenhueDh5',
+        'https://www.instagram.com/vgp.seoul/p/DW04l9PES8g/?igsh=abc',
+    ])('Instagram 게시물 %s은 shortcode만 남긴 형태로 통일한다', (url) => {
+        expect(normalizeUrl(url)).toBe(
+            'https://www.instagram.com/p/DW04l9PES8g',
+        )
+    })
+
+    it('Instagram reels 표기는 reel로 통일한다', () => {
+        expect(
+            normalizeUrl('https://www.instagram.com/reels/DW04l9PES8g/?igsh=x'),
+        ).toBe('https://www.instagram.com/reel/DW04l9PES8g')
+    })
+
+    it('Instagram 게시물이 아닌 경로는 일반 규칙만 적용한다', () => {
+        expect(
+            normalizeUrl('https://www.instagram.com/vgp.seoul/?igsh=abc&hl=ko'),
+        ).toBe('https://www.instagram.com/vgp.seoul?hl=ko')
+    })
+
     it('URL로 해석할 수 없으면 원본을 그대로 반환한다', () => {
         expect(normalizeUrl('not a url')).toBe('not a url')
     })
