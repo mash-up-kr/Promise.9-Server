@@ -157,6 +157,9 @@ describe('AiService', () => {
         expect(request?.prompt).toContain('CONTENT:\n링크 본문')
         expect(request?.system).toContain('자연스러운 한국어 ~요체로 작성한다.')
         expect(request?.system).toContain(
+            '한국어가 아닌 문자 체계를 섞지 않는다.',
+        )
+        expect(request?.system).toContain(
             '태그 값에는 # 문자를 포함하지 않는다.',
         )
         expect(request?.system).toContain(
