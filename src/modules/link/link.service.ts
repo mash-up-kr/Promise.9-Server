@@ -292,6 +292,8 @@ export class LinkService {
             thumbnailUrl: pickThumbnailUrl(row.metadata),
             savedAt: row.createdAt,
             reminderAt: row.reminderAt,
+            // 목록 polling은 제목 유무가 아니라 이 상태의 PENDING 여부로 판단한다.
+            processingStatus: toProcessingStatus(row.aiSummaryStatus),
             // 점수 반올림은 커서 비교와 값을 맞추기 위해 search/search.util이 담당한다.
             score,
         }))

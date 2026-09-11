@@ -52,6 +52,8 @@ const LIST_LINKS_DESCRIPTION = `
 - \`deleted=true\`: soft delete된 링크만 조회합니다.
 - \`q\`: 다른 필터를 적용한 범위 안에서 검색합니다.
 
+각 항목의 \`processingStatus\`는 상세 응답과 같은 요약·태그·임베딩 처리 상태입니다. 저장 직후 목록을 다시 조회할 때는 제목 유무가 아니라 \`PENDING\` 여부로 처리 중인지 판단하세요.
+
 \`folderId\`, \`favorite\`, \`q\`처럼 서로 다른 축의 조건은 함께 사용할 수 있습니다. \`folderId\`와 \`unassigned=true\`처럼 동시에 성립할 수 없는 조건은 \`400 Bad Request\`로 처리합니다. 홈 전용 리마인드 조회는 검색과 결합하지 않으므로 \`q\`와 \`reminder=true\` 또는 \`sortBy=reminderAt\` 조합도 거부합니다.
 
 ### 화면별 링크 목록 요청 예시
@@ -204,6 +206,7 @@ const LIST_LINKS_RESPONSE_EXAMPLE = {
             thumbnailUrl: THUMBNAIL_EXAMPLE,
             savedAt: TIMESTAMP_EXAMPLE,
             reminderAt: '2026-08-20T12:00:00.000Z',
+            processingStatus: 'SUCCESS',
             score: 0.87342,
         },
         {
@@ -214,6 +217,7 @@ const LIST_LINKS_RESPONSE_EXAMPLE = {
             thumbnailUrl: null,
             savedAt: '2026-07-12T03:20:00.000Z',
             reminderAt: null,
+            processingStatus: 'PENDING',
             score: 0.64125,
         },
     ],

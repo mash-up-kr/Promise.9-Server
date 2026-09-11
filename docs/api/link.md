@@ -70,6 +70,7 @@ GET /links?folderId=3&favorite=true&q=피그마&limit=9
                 "thumbnailUrl": "https://static.example.com/thumbnail.png",
                 "savedAt": "2026-07-13T00:00:00.000Z",
                 "reminderAt": "2026-08-20T12:00:00.000Z",
+                "processingStatus": "SUCCESS",
                 "score": null
             }
         ],
@@ -82,6 +83,8 @@ GET /links?folderId=3&favorite=true&q=피그마&limit=9
     }
 }
 ```
+
+`processingStatus`는 상세 응답과 같은 요약·태그·임베딩 처리 상태(`PENDING`, `SUCCESS`, `FAILED`)다. 저장 직후 목록을 다시 조회하는 polling은 제목이 비어 있는지가 아니라 `PENDING` 여부로 판단한다. 제목만 먼저 채워져도 요약·태그가 끝나기 전이면 `PENDING`이고, 처리에 실패해 제목이 비어 있으면 `FAILED`로 끝난다.
 
 `representativeTag`는 목록 카드에 표시할 대표 태그다. 현재는 대표 태그 선정 정책과 조회 로직이 구현되지 않아 항상 `null`을 반환하며, 추후 `LinkTagResponseDto` 형식의 태그 객체를 반환한다.
 
