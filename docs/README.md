@@ -15,6 +15,7 @@ Promise.9 서버 레포에서 쓰는 문서의 시작점입니다.
 | [Deploy](./deploy/README.md)         | 서버 배포와 운영 설정                                    |
 | [Search](./search/README.md)         | 링크 검색 구조, pgvector 벡터 검색, 검색 점수 산정       |
 | [Skills](./skills/README.md) | 사이트별 링크 수집 등 팀 공유 작업 스킬 |
+| [Feedback](./feedback/README.md) | UT·QA 피드백의 서버 항목 정리와 처리 결과 |
 
 ## 문서 추가 규칙
 
