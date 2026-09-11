@@ -46,6 +46,7 @@ type ResolvedLinkContent = {
     imageBaseUrl: URL
     source: string
     analysisUnavailableReason?: string
+    authoritative?: boolean
 }
 
 @Injectable()
@@ -116,9 +117,11 @@ export class LinkContentService {
                           resolved.analysisUnavailableReason,
                   }
                 : {}),
+            ...(resolved.authoritative ? { authoritative: true } : {}),
         }
 
         return collected.analysisUnavailableReason ||
+            collected.authoritative ||
             this.hasCollectedContent(collected)
             ? collected
             : null
@@ -174,17 +177,37 @@ export class LinkContentService {
     ): Promise<ResolvedLinkContent | null> {
         const videoId = strategy.getVideoId(resourceUrl)
         // 설명이 필요한 저장 후 분석에서만 Data API 할당량을 사용한다.
-        if (purpose === 'analysis' && videoId) {
+        if (
+            purpose === 'analysis' &&
+            videoId &&
+            this.youtubeDataClient.isEnabled()
+        ) {
             try {
                 const video = await this.youtubeDataClient.fetchVideo(videoId)
+                const source = strategy.source ?? this.toSource(resourceUrl)
+
                 if (video) {
                     return {
                         ...video,
                         content: null,
                         imageSource: video.image ? 'youtube-data-api' : null,
                         imageBaseUrl: resourceUrl,
-                        source: strategy.source ?? this.toSource(resourceUrl),
+                        source,
+                        authoritative: true,
                     }
+                }
+
+                // 키가 있는데 영상을 못 찾았으면 삭제·비공개다. oEmbed·HTML로 폴백하면
+                // 옛 메타데이터가 남으므로, 부재를 그대로 올려보내 저장값을 지우게 한다.
+                return {
+                    title: null,
+                    description: null,
+                    content: null,
+                    image: null,
+                    imageSource: null,
+                    imageBaseUrl: resourceUrl,
+                    source,
+                    authoritative: true,
                 }
             } catch {
                 // 인증·할당량·타임아웃 등 Data API 실패도 메타데이터 폴백을 계속한다.

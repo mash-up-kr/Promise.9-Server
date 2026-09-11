@@ -516,6 +516,63 @@ describe('LinkAnalysisService', () => {
         )
     })
 
+    // YouTube 30일 정책: 사라진 영상의 저장 데이터는 갱신이 아니라 삭제로 반영해야 한다.
+    it('공식 API가 영상 부재를 확인하면 저장된 제목·설명·썸네일을 지운다', async () => {
+        analysisMetadata = {
+            version: 1,
+            description: '옛 설명',
+            images: [{ url: 'https://i.ytimg.com/vi/abc/high.jpg' }],
+        }
+        linkContentService.collect.mockResolvedValueOnce({
+            title: null,
+            description: null,
+            content: null,
+            image: null,
+            authoritative: true,
+        })
+
+        const results = await service.run(INPUT, ['CONTENT'])
+
+        expect(findResult(results, 'CONTENT')?.status).toBe('SUCCESS')
+        const patch = updatePatches[0]
+        expect(patch.title).toBeNull()
+        expect(patch.metadata).toEqual({ version: 1 })
+        // 지울 데이터도 갱신할 원본도 없으니 48시간마다 재수집하지 않는다.
+        expect(patch.contentRefreshDueAt).toBeNull()
+    })
+
+    it('공식 API가 설명을 비우면 저장된 설명도 지운다', async () => {
+        analysisMetadata = { version: 1, description: '옛 설명' }
+        linkContentService.collect.mockResolvedValueOnce({
+            title: '남아 있는 제목',
+            description: null,
+            content: null,
+            image: null,
+            authoritative: true,
+        })
+
+        await service.run(INPUT, ['CONTENT'])
+
+        const patch = updatePatches[0]
+        expect(patch.title).toBe('남아 있는 제목')
+        expect(patch.metadata).toEqual({ version: 1 })
+    })
+
+    // 스크래핑 경로는 부재와 수집 실패를 구분할 수 없으므로 기존 값을 지키던 동작 유지.
+    it('권위 없는 수집에서 설명이 비면 기존 설명을 유지한다', async () => {
+        analysisMetadata = { version: 1, description: '옛 설명' }
+        linkContentService.collect.mockResolvedValueOnce({
+            title: '새 제목',
+            description: null,
+            content: null,
+            image: null,
+        })
+
+        await service.run(INPUT, ['CONTENT'])
+
+        expect(updatePatches[0].metadata).toBeUndefined()
+    })
+
     it('이미지 색상 추출 실패는 CONTENT 작업 실패로 전파하지 않는다', async () => {
         imageColorService.extractFromUrl.mockRejectedValueOnce(
             new Error('color failed'),

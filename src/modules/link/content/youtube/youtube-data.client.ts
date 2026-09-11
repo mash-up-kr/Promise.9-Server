@@ -51,6 +51,12 @@ export class YoutubeDataClient {
         }
     }
 
+    // 키가 있을 때만 fetchVideo의 null을 "영상 부재"로 해석할 수 있다.
+    isEnabled(): boolean {
+        return Boolean(this.apiKey)
+    }
+
+    // 키가 없으면 null, 키가 있는데 null이면 삭제·비공개로 영상이 사라진 것이다.
     async fetchVideo(videoId: string): Promise<YoutubeVideo | null> {
         if (!this.apiKey) return null
 

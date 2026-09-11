@@ -296,13 +296,21 @@ export class LinkAnalysisService {
         input: LinkAnalysisInput,
         content: CollectedLinkContent | null,
     ): Promise<LinkAnalysisTaskResult | void> {
-        if (!content?.title && !content?.description && !content?.image) {
+        const hasContent = Boolean(
+            content?.title || content?.description || content?.image,
+        )
+
+        // 권위 있는 API가 부재를 확인한 경우는 저장값을 지워야 하므로 건너뛰지 않는다.
+        if (!content || (!hasContent && !content.authoritative)) {
             return {
                 task: 'CONTENT',
                 status: 'SKIPPED',
                 reason: '수집한 링크 정보가 없습니다.',
             }
         }
+
+        // 영상이 삭제·비공개돼 공식 API가 더 이상 내려주지 않는 상태.
+        const removed = !hasContent
 
         const row = await this.linkRepository.findAnalysisMetadata(
             input.userId,
@@ -321,16 +329,19 @@ export class LinkAnalysisService {
 
         if (content.title) {
             patch.title = content.title
+        } else if (content.authoritative) {
+            patch.title = null
         }
 
-        if (content.description || content.image) {
+        if (content.description || content.image || content.authoritative) {
             patch.metadata = this.mergeCollectedMetadata(row.metadata, content)
         }
 
-        patch.contentRefreshDueAt = pickContentRefreshDueAt(
-            input.url,
-            patch.metadata ?? row.metadata,
-        )
+        // 사라진 영상은 지울 저장 데이터도, 갱신할 원본도 없다. 기한을 비워 48시간마다
+        // 재수집을 반복하지 않게 한다.
+        patch.contentRefreshDueAt = removed
+            ? null
+            : pickContentRefreshDueAt(input.url, patch.metadata ?? row.metadata)
 
         await this.linkRepository.updateActive(
             input.userId,
@@ -467,6 +478,9 @@ export class LinkAnalysisService {
 
         if (information.description) {
             merged.description = information.description
+        } else if (information.authoritative) {
+            // 업로더가 설명을 비웠으면 저장값도 지운다.
+            delete merged.description
         }
 
         if (information.image) {
@@ -474,6 +488,8 @@ export class LinkAnalysisService {
                 metadata,
                 information.image,
             ).images
+        } else if (information.authoritative) {
+            delete merged.images
         }
 
         return merged

@@ -23,7 +23,7 @@ type LinkRefreshRow = {
     id: number
     url: string
     metadata: LinkMetadata | null
-    updated_at: Date
+    created_at: Date
 }
 
 type CliOptions = {
@@ -67,7 +67,7 @@ export async function runBackfillCli(args: string[]): Promise<void> {
                     l.id,
                     coalesce(l.final_url, l.original_url) as url,
                     l.metadata,
-                    l.updated_at
+                    l.created_at
                 from links l
                 where l.deleted_at is null
                   and l.content_refresh_due_at is null
@@ -81,12 +81,14 @@ export async function runBackfillCli(args: string[]): Promise<void> {
             for (const row of rows) {
                 scanned += 1
 
-                // 마지막 수집 시각(updated_at)을 기준으로 계산해야 6개월 전에 저장된 YouTube
-                // 링크가 "지금부터 30일 뒤"가 아니라 이미 지난 기한을 받는다.
+                // 기준 시각은 created_at이다. 대상이 content_refresh_due_at IS NULL인 링크,
+                // 즉 새 갱신 로직을 한 번도 거치지 않은 링크뿐이라 콘텐츠 수집 시각은 생성 시각과
+                // 같다. updated_at은 메모·즐겨찾기·폴더 이동으로도 갱신되므로, 그걸 쓰면 최근에
+                // 메모만 고친 오래된 영상이 "지금부터 30일 뒤"를 받아 30일 정책을 더 어기게 된다.
                 const dueAt = pickContentRefreshDueAt(
                     row.url,
                     row.metadata,
-                    row.updated_at,
+                    row.created_at,
                 )
 
                 if (!dueAt) {
