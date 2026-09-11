@@ -31,6 +31,7 @@ export type SearchLinkCandidate = Pick<
     | 'metadata'
     | 'createdAt'
     | 'reminderAt'
+    | 'aiSummaryStatus'
 > & {
     description: string | null
     folderName: string | null
@@ -243,6 +244,7 @@ export class SearchRepository {
                 createdAt: links.createdAt,
                 folderName: folders.name,
                 reminderAt: links.reminderAt,
+                aiSummaryStatus: links.aiSummaryStatus,
                 description,
                 embeddingSimilarity,
             })
