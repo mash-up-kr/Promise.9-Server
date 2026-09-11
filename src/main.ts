@@ -17,6 +17,7 @@ async function bootstrap() {
         origin: [
             'http://localhost:8090',
             'https://link-ding-dong.com',
+            'https://dev-promise9-web.2026promise-9.workers.dev',
             'https://promise9-ranking-lab.dltmdcks.chatgpt.site',
         ],
         credentials: true,
