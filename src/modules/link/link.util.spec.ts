@@ -2,6 +2,7 @@ import { LinkMetadata, LinkRow } from './link.schema'
 import {
     buildEmbeddingText,
     mergeImageMetadata,
+    normalizeUrl,
     pickContentRefreshDueAt,
     pickThumbnailExpiresAt,
     toProcessingStatus,
@@ -269,4 +270,32 @@ describe('toProcessingStatus', () => {
             expect(toProcessingStatus(status)).toBe(status)
         },
     )
+})
+
+describe('normalizeUrl', () => {
+    it('fragment를 제거하고 프로토콜과 호스트를 소문자로 만든다', () => {
+        expect(normalizeUrl('HTTPS://Example.COM/Path#section')).toBe(
+            'https://example.com/Path',
+        )
+    })
+
+    it('쿼리가 있어도 경로 끝의 슬래시를 제거한다', () => {
+        expect(normalizeUrl('https://example.com/a/b/?page=2')).toBe(
+            'https://example.com/a/b?page=2',
+        )
+        expect(normalizeUrl('https://example.com/a/b/')).toBe(
+            'https://example.com/a/b',
+        )
+    })
+
+    it('루트 경로의 슬래시는 유지한다', () => {
+        expect(normalizeUrl('https://example.com')).toBe('https://example.com/')
+        expect(normalizeUrl('https://example.com/?q=1')).toBe(
+            'https://example.com/?q=1',
+        )
+    })
+
+    it('URL로 해석할 수 없으면 원본을 그대로 반환한다', () => {
+        expect(normalizeUrl('not a url')).toBe('not a url')
+    })
 })
