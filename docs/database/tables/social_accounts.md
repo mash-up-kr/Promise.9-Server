@@ -1,6 +1,6 @@
 # social_accounts
 
-Google, Kakao 소셜 로그인 계정을 회원과 연결하는 테이블이다.
+Google, Kakao, Apple 소셜 로그인 계정을 회원과 연결하는 테이블이다.
 
 ## ERD
 
@@ -30,7 +30,7 @@ erDiagram
 | --- | --- | --- | --- |
 | id | bigint | Y | 소셜 계정 연결 식별자 |
 | user_id | bigint | Y | 연결된 회원 ID |
-| provider | varchar | Y | 소셜 로그인 제공자. 예: `google`, `kakao` |
+| provider | varchar | Y | 소셜 로그인 제공자. 예: `google`, `kakao`, `apple` |
 | provider_user_id | varchar | Y | 제공자 내 사용자 고유 ID |
 | provider_email | varchar | N | 제공자가 내려준 이메일 |
 | created_at | timestamptz | Y | 레코드 생성 일시 |
