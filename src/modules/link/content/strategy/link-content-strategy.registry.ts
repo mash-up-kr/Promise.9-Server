@@ -4,6 +4,7 @@ import { DEFAULT_LINK_CONTENT_STRATEGY } from './site/default-link-content.strat
 import { INSTAGRAM_LINK_CONTENT_STRATEGY } from './site/instagram-link-content.strategy'
 import { MUSINSA_LINK_CONTENT_STRATEGY } from './site/musinsa-link-content.strategy'
 import { NAVER_PLACE_LINK_CONTENT_STRATEGY } from './site/naver-place-link-content.strategy'
+import { WANTED_LINK_CONTENT_STRATEGY } from './site/wanted-link-content.strategy'
 import { X_LINK_CONTENT_STRATEGY } from './site/x-link-content.strategy'
 import { YOUTUBE_LINK_CONTENT_STRATEGY } from './site/youtube-link-content.strategy'
 import { LinkContentStrategy } from './link-content-strategy.type'
@@ -15,6 +16,7 @@ const LINK_CONTENT_STRATEGIES: readonly LinkContentStrategy[] = [
     BEHANCE_LINK_CONTENT_STRATEGY,
     MUSINSA_LINK_CONTENT_STRATEGY,
     COUPANG_LINK_CONTENT_STRATEGY,
+    WANTED_LINK_CONTENT_STRATEGY,
     YOUTUBE_LINK_CONTENT_STRATEGY,
     NAVER_PLACE_LINK_CONTENT_STRATEGY,
 ]

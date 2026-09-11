@@ -40,7 +40,7 @@ URL에 맞는 수집 방식 선택
 | `html`        | 페이지 HTML에서 OG와 본문을 파싱한다.                                    | 일반 링크, Brunch                    |
 | `youtube`     | 미리보기는 oEmbed, 저장 수집은 Data API로 시작하며 기존 경로로 폴백한다. | YouTube                              |
 | `oembed`      | 사이트가 제공하는 구조화된 응답을 사용한다.                              | oEmbed를 우선하는 사이트용 공통 경로 |
-| `tinyfish`    | 일반 HTML 접근이 제한되거나 응답이 큰 공개 페이지를 TinyFish로 수집한다. | X, Instagram, Behance, 무신사, 쿠팡  |
+| `tinyfish`    | 일반 HTML 접근이 제한되거나 응답이 큰 공개 페이지를 TinyFish로 수집한다. | X, Instagram, Behance, 무신사, 쿠팡, 원티드 |
 
 `preview`와 `collect`는 사이트별 방식 선택을 공유하고, 기존 `purpose` 값으로 목적을 구분한다.
 
@@ -102,6 +102,9 @@ Behance는 공개 프로젝트 `/gallery/{id}/{slug}`와 Behance가 제공하는
 무신사와 쿠팡은 공개 상품 상세만 지원한다. 검색·카테고리·마이페이지는 일반 HTML 처리를
 유지한다. 쿠팡의 `link.coupang.com/a/...`와 `/re/AFFSDP` 공유 링크는 공개 URL 검증과
 리다이렉트 제한을 적용해 상품 URL로 해석한다.
+
+원티드는 공개 채용 공고 `/wd/{id}`만 지원한다. 공고 목록·회사 페이지·지원 화면은 일반
+HTML 처리를 유지한다.
 
 ## 수집 방식과 HTML 요청 설정
 
@@ -219,6 +222,30 @@ DOM 선택자로 범위를 제한하지 않고, 쿠팡 CDN의 `retail` 또는 `v
 두 사이트 모두 preview와 collect는 각각 TinyFish 요청 1회다. 상품 삭제·성인 인증·로그인
 필요 화면, 쿠팡의 접근 차단 강화와 DOM 변경은 지원을 보장하지 않는다. TinyFish key가
 없으면 기존 HTML 경로를 사용하며 robots.txt 또는 403 응답에 따라 결과가 없을 수 있다.
+
+## 원티드 채용 공고
+
+원티드는 직접 HTML 요청이 CloudFront에서 403으로 차단돼 robots.txt조차 읽을 수 없다.
+그래서 공개 공고 `/wd/{id}`를 TinyFish로 한 번 수집한다.
+
+`country_code` 같은 추적 쿼리는 제거하고 canonical `https://www.wanted.co.kr/wd/{id}`로
+요청한다. 쿼리 유무에 관계없이 같은 응답을 주는 것을 확인했다.
+
+제목은 `[회사] 포지션 채용 공고 | 원티드`에서 사이트명 접미사만 뗀다. 메타 설명은
+`{회사}의 {포지션} 포지션을 확인해 보세요. … 합격보상금 50만원을 드립니다.` 형태로 회사와
+포지션만 갈아끼운 정형 홍보 문구라 공고 정보가 없다. 저장·AI 입력을 오염시키지 않도록
+설명은 사용하지 않고 본문만 남긴다.
+
+본문 끝에는 원티드랩 저작권 고지와 "더 많은 포지션을 찾아 볼까요?" 추천 블록이 붙을 수
+있어 그 지점부터 잘라낸다. 고지가 없는 공고도 있으므로 찾지 못하면 본문을 그대로 둔다.
+근무지역은 공고 정보로 보고 남긴다.
+
+대표 이미지는 `image.wanted.co.kr/optimize?src=<static.wanted.co.kr 원본>` 형태에서
+`images/company/{회사 ID}/` 경로의 회사 이미지만 사용한다. 기본 대체 이미지
+(`images/proposal/company-default`)와 SNS 아이콘(`images/brand_new/*`)은 제외한다.
+
+preview와 collect는 각각 TinyFish 요청 1회다. 마감·삭제된 공고와 DOM 변경은 지원을
+보장하지 않는다. 직접 HTML 접근이 차단돼 있어 TinyFish key가 없으면 수집할 수 없다.
 
 ## 네이버 지도·플레이스
 
