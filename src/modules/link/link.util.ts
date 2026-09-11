@@ -6,8 +6,36 @@ import {
 } from './content/strategy/site/youtube-link-content.strategy'
 import { LinkMetadata, LinkRow } from './link.schema'
 
+// 문서를 식별하지 않고 유입 경로만 남기는 쿼리 파라미터. 중복 판단 키에서 제거한다.
+const TRACKING_QUERY_PARAMS = new Set([
+    'fbclid',
+    'gclid',
+    'dclid',
+    'gbraid',
+    'wbraid',
+    'msclkid',
+    'twclid',
+    'ttclid',
+    'yclid',
+    'mc_cid',
+    'mc_eid',
+    'igsh',
+    'igshid',
+    'igsi',
+    'img_index',
+    'si',
+    'feature',
+    'ref_src',
+    'ref_url',
+    'share_id',
+    '_ga',
+    '_gl',
+])
+const TRACKING_QUERY_PARAM_PREFIXES = ['utm_', 'mtm_', 'pk_', 'hsa_']
+
 // 사용자별 중복 저장 판단 키로 쓸 URL 정규화.
 // - 프로토콜/호스트 소문자, fragment(#) 제거, 경로 끝의 '/' 제거
+// - 추적용 쿼리 파라미터 제거, 남은 파라미터는 이름순 정렬
 // - 파싱 실패 시 원본을 그대로 반환
 export function normalizeUrl(raw: string): string {
     try {
@@ -21,10 +49,33 @@ export function normalizeUrl(raw: string): string {
             url.pathname = url.pathname.replace(/\/+$/, '')
         }
 
+        url.search = normalizeSearchParams(url.searchParams)
+
         return url.toString()
     } catch {
         return raw
     }
+}
+
+// 추적 파라미터를 걷어내고 나머지를 이름순으로 정렬해 순서만 다른 URL을 같은 키로 만든다.
+function normalizeSearchParams(params: URLSearchParams): string {
+    const kept = [...params.entries()].filter(
+        ([name]) => !isTrackingQueryParam(name),
+    )
+    kept.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+
+    return new URLSearchParams(kept).toString()
+}
+
+function isTrackingQueryParam(name: string): boolean {
+    const lowered = name.toLowerCase()
+
+    return (
+        TRACKING_QUERY_PARAMS.has(lowered) ||
+        TRACKING_QUERY_PARAM_PREFIXES.some((prefix) =>
+            lowered.startsWith(prefix),
+        )
+    )
 }
 
 export function extractDomain(raw: string): string | null {

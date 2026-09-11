@@ -295,6 +295,42 @@ describe('normalizeUrl', () => {
         )
     })
 
+    it('utm 계열과 광고 클릭 ID 같은 추적 파라미터를 제거한다', () => {
+        expect(
+            normalizeUrl(
+                'https://example.com/post?utm_source=x&UTM_Medium=share&fbclid=abc&id=7',
+            ),
+        ).toBe('https://example.com/post?id=7')
+    })
+
+    it('Instagram 공유 파라미터와 YouTube 공유 파라미터를 제거한다', () => {
+        expect(
+            normalizeUrl(
+                'https://www.instagram.com/p/DW04l9PES8g/?img_index=1&igsi=eHl5azNkenhueDh5',
+            ),
+        ).toBe('https://www.instagram.com/p/DW04l9PES8g')
+        expect(
+            normalizeUrl(
+                'https://youtu.be/dQw4w9WgXcQ?si=abcdef&feature=shared',
+            ),
+        ).toBe('https://youtu.be/dQw4w9WgXcQ')
+    })
+
+    it('추적 파라미터를 모두 제거하면 물음표도 남기지 않는다', () => {
+        expect(normalizeUrl('https://example.com/post?utm_source=x')).toBe(
+            'https://example.com/post',
+        )
+    })
+
+    it('의미 있는 파라미터는 유지하고 이름순으로 정렬한다', () => {
+        expect(
+            normalizeUrl('https://www.youtube.com/watch?t=42&v=dQw4w9WgXcQ'),
+        ).toBe('https://www.youtube.com/watch?t=42&v=dQw4w9WgXcQ')
+        expect(
+            normalizeUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42'),
+        ).toBe('https://www.youtube.com/watch?t=42&v=dQw4w9WgXcQ')
+    })
+
     it('URL로 해석할 수 없으면 원본을 그대로 반환한다', () => {
         expect(normalizeUrl('not a url')).toBe('not a url')
     })
