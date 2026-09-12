@@ -90,6 +90,7 @@ HTML까지 요청 오류로 실패하면 최종 오류를 호출부에 전달한
 | `behance.net`, `www.behance.net`, `be.net`의 `/gallery/{id}` 프로젝트 | TinyFish                          | 원본 HTML이 크고 일반 요청 제한 안에 프로젝트 본문·이미지를 안정적으로 읽기 어렵다. | API key가 없을 때 HTML               |
 | `musinsa.com`의 `/products/{id}`, 기존 `/app/goods/{id}` 상품         | TinyFish                          | 일반 봇의 상품 경로 접근을 robots.txt가 차단한다.                                   | API key가 없을 때 HTML               |
 | `coupang.com`의 `/vp/products/{id}`, `/vm/products/{id}` 상품         | TinyFish                          | 서버 요청이 403으로 차단되고 일반 봇의 상품 경로 접근도 허용되지 않는다.            | API key가 없을 때 HTML               |
+| `blog.naver.com`, `m.blog.naver.com`의 `/{blogId}/{logNo}` 게시물      | TinyFish                          | PC 경로가 본문을 `mainFrame` iframe으로만 제공해 OG·본문을 직접 읽을 수 없다.       | API key가 없을 때 HTML               |
 
 X는 프로필, `/{user}/status/{id}`, `/i/web/status/{id}`를 지원한다. Instagram은 프로필,
 `/p/{id}`, `/reel/{id}`, `/reels/{id}`, `/tv/{id}`를 지원한다. 로그인·설정·검색처럼
@@ -239,6 +240,29 @@ URL 규칙이며 모든 장소에서 네이버 첫 사진과 일치한다는 보
 TinyFish 키가 없을 때는 기존 HTML 경로를 사용한다. 공통 TinyFish 경로와 동일하게
 대상 robots.txt를 별도로 조회하지 않는다. 로딩·공통 화면은 빈 결과로 처리되며,
 일시적인 로딩 실패의 자동 재시도 구분은 아직 보완이 필요하다.
+
+## 네이버 블로그 게시물
+
+`blog.naver.com/{blogId}/{logNo}`와 모바일·`PostView` 구버전 링크를
+`m.blog.naver.com/{blogId}/{logNo}`로 정규화해 TinyFish로 한 번 수집한다. PC 경로는
+본문을 `mainFrame` iframe으로만 제공해 OG 태그도 없지만, 모바일 경로는 같은 게시물의
+제목·OG·본문을 문서에 포함한다. `naver.me` 공유 링크는 기존 단축 URL 해석을 거쳐 이
+전략으로 들어온다. 블로그 홈·목록·댓글 경로는 기존 HTML 처리를 유지한다.
+
+본문은 `.post_ct`로 제한한다. 스마트에디터 ONE의 `.se-main-container`를 감싸는
+컨테이너이며 구버전 에디터 게시물에도 같은 이름으로 존재해 두 버전을 한 선택자로
+수집한다. 카테고리·제목 한 줄만 더 포함한다. 제목에서
+`: 네이버 블로그` 접미사를 제거한다. 대표 이미지는 본문 사진 CDN인
+`mblogthumb-phinf.pstatic.net` HTTPS 후보 중 첫 번째다. 같은 사진의 지연 로딩
+placeholder(`type=w80_blur`)가 원본보다 먼저 오므로 `blur` 후보는 제외한다.
+프로필(`blogpfthumb`), 외부 링크 카드 썸네일(`dthumb`), 블로그 UI 아이콘도 게시물 자체
+이미지가 아니므로 제외한다. 후보가 없으면 null이다.
+
+preview와 collect는 각각 요청 1회다. TinyFish 키가 없으면 기존 HTML 경로를 사용하며,
+이때 PC 경로에서는 수집 결과가 없을 수 있다. 스마트에디터 ONE 게시물(`smartEditorVersion: 4`)의
+PC·모바일 링크와 구버전 게시물(`smartEditorVersion: 1`, 2009년 글)을 실제 TinyFish 응답으로
+확인했다. 두 버전 모두 본문 사진 CDN은 `mblogthumb-phinf.pstatic.net`이다.
+비공개·삭제 게시물은 지원을 보장하지 않는다.
 
 ### Instagram 게시물·릴스 캡션 수집
 
