@@ -650,6 +650,68 @@ describe('LinkContentService', () => {
         expect(fetchSpy).not.toHaveBeenCalled()
     })
 
+    it('원티드 공고는 추적 쿼리를 제거해 한 번 수집하고 회사 이미지를 사용한다', async () => {
+        tinyFishFetchClient.isEnabled.mockReturnValue(true)
+        const companyImage =
+            'https://image.wanted.co.kr/optimize?src=https%3A%2F%2Fstatic.wanted.co.kr%2Fimages%2Fcompany%2F193%2Fyskl5u1uzd45eba5__1080_790.png&w=700&q=100'
+        tinyFishFetchClient.fetch.mockResolvedValue({
+            status: 'SUCCESS',
+            content: {
+                title: '[위시켓] 백엔드 개발 채용 공고 | 원티드',
+                description:
+                    '위시켓의 백엔드 개발 포지션을 확인해 보세요. 취업·이직에 성공하면, 합격보상금 50만원을 드립니다.',
+                content: '## 포지션 상세\n• Django 기반 서비스를 개발합니다.',
+                imageLinks: [
+                    'https://image.wanted.co.kr/optimize?src=https%3A%2F%2Fstatic.wanted.co.kr%2Fimages%2Fbrand_new%2Finstagram.png&w=20&q=100',
+                    companyImage,
+                ],
+            },
+        })
+
+        await expect(
+            service.preview(
+                'https://wanted.co.kr/wd/202585?country_code=WW&utm_source=share',
+            ),
+        ).resolves.toEqual({
+            title: '[위시켓] 백엔드 개발 채용 공고',
+            thumbnailUrl: companyImage,
+            source: 'wanted.co.kr',
+        })
+        expect(tinyFishFetchClient.fetch).toHaveBeenCalledTimes(1)
+        expect(tinyFishFetchClient.fetch).toHaveBeenCalledWith(
+            new URL('https://www.wanted.co.kr/wd/202585'),
+        )
+        expect(fetchSpy).not.toHaveBeenCalled()
+    })
+
+    it('원티드 저장 수집은 정형 홍보 설명을 버리고 공고 본문만 남긴다', async () => {
+        tinyFishFetchClient.isEnabled.mockReturnValue(true)
+        tinyFishFetchClient.fetch.mockResolvedValue({
+            status: 'SUCCESS',
+            content: {
+                title: '[케이크] 백엔드 개발자 채용 공고 | 원티드',
+                description:
+                    '케이크의 백엔드 개발자 포지션을 확인해 보세요. 취업·이직에 성공하면, 합격보상금 50만원을 드립니다.',
+                content: [
+                    '## 포지션 상세',
+                    '• 서버 API를 개발합니다.',
+                    '**<저작권자 (주)원티드랩. 무단전재-재배포금지>**',
+                    '## 더 많은 포지션을 찾아 볼까요?',
+                ].join('\n'),
+                imageLinks: [],
+            },
+        })
+
+        await expect(
+            service.collect('https://www.wanted.co.kr/wd/47990'),
+        ).resolves.toEqual({
+            title: '[케이크] 백엔드 개발자 채용 공고',
+            description: null,
+            content: '## 포지션 상세\n• 서버 API를 개발합니다.',
+            image: null,
+        })
+    })
+
     it('쿠팡 공유 링크를 안전하게 해석해 상품 옵션만 유지하고 한 번 수집한다', async () => {
         tinyFishFetchClient.isEnabled.mockReturnValue(true)
         fetchSpy.mockResolvedValueOnce(

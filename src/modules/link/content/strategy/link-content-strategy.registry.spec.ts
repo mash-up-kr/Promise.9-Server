@@ -29,6 +29,8 @@ describe('resolveLinkContentStrategy', () => {
         ['https://store.musinsa.com/app/goods/4438679', 'musinsa'],
         ['https://www.coupang.com/vp/products/9332072213', 'coupang'],
         ['https://m.coupang.com/vm/products/9332072213', 'coupang'],
+        ['https://www.wanted.co.kr/wd/202585', 'wanted'],
+        ['https://wanted.co.kr/wd/39710', 'wanted'],
     ])(
         '지원 URL에 사이트별 TinyFish 전략을 적용한다: %s',
         (rawUrl, expectedName) => {
@@ -51,6 +53,9 @@ describe('resolveLinkContentStrategy', () => {
         'https://www.musinsa.com/search/goods?keyword=boots',
         'https://coupang.com.evil.example/vp/products/9332072213',
         'https://www.coupang.com/np/search?q=mouse',
+        'https://wanted.co.kr.evil.example/wd/202585',
+        'https://www.wanted.co.kr/wdlist',
+        'https://www.wanted.co.kr/company/193',
         'https://x.com/login',
         'https://www.instagram.com/accounts/login/',
     ])('등록되지 않은 URL에는 기본 OG 전략을 적용한다: %s', (rawUrl) => {
