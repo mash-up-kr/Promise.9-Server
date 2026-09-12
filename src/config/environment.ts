@@ -64,7 +64,16 @@ const appEnvSchema = z
             .default(DEFAULT_LLM_REQUEST_TIMEOUT_MS),
         OPENAI_API_KEY: z.string().min(1).optional(),
         GEMINI_API_KEY: z.string().min(1).optional(),
-        TINY_FISH_API_KEY: z.string().min(1).optional(),
+        TINY_FISH_API_KEY: z.string().trim().min(1).optional(),
+        TINY_FISH_API_KEYS: z
+            .string()
+            .trim()
+            .refine(
+                (value) =>
+                    value.split(',').every((key) => /^\S+$/.test(key.trim())),
+                'TINY_FISH_API_KEYS는 비어 있지 않은 키를 쉼표로 구분해야 합니다.',
+            )
+            .optional(),
         YOUTUBE_API_KEY: z.string().trim().min(1).optional(),
         AWS_REGION: z.string().min(1).default('ap-northeast-2'),
         SQS_LINK_ANALYSIS_QUEUE_URL: z.url().optional(),

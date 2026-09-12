@@ -89,6 +89,11 @@ workflow는 다음 파일을 `/opt/promise9`에 배치한다.
 
 `KAKAO_CLIENT_SECRET`, `MASTER_ACCESS_TOKEN`, `MASTER_USER_ID`는 값이 있는 경우에만 기록한다. `DB_POOL_SIZE`, JWT 만료 시간, `LLM_DEFAULT_MODEL`, `LLM_REQUEST_TIMEOUT_MS`, `PORT`는 애플리케이션 기본값을 사용한다. `GEMINI_API_KEY`는 Gemini 모델을 활성화할 때 별도로 전달해야 한다.
 
+TinyFish는 `TINY_FISH_API_KEYS` 또는 기존 `TINY_FISH_API_KEY` secret 중 하나가 필요하다.
+여러 키는 `TINY_FISH_API_KEYS`에 `key-a,key-b,key-c`처럼 쉼표로 구분해 등록한다.
+두 secret이 모두 있으면 배포 시 `TINY_FISH_API_KEYS`만 기록한다. 키 목록 변경은 다음
+배포·프로세스 재시작부터 반영된다.
+
 ## 네트워크
 
 Lightsail public firewall은 CDK의 `Promise9LightsailStack`에서 관리한다. 현재 포트와 변경
