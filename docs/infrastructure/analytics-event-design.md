@@ -30,9 +30,9 @@ CDK는 수집·저장·조회 리소스를 구성하고, 클라이언트의 공�
 | `session_id` | 실행 세션 식별자 또는 `null` |
 | `operation_id` | 요청·결과 등 같은 작업의 이벤트를 연결하는 선택적 ID. 사용하지 않으면 `null` |
 | `attribution` | 이벤트 발생 시점의 마케팅 접점 객체 또는 `null` |
-| `properties_json` | 이벤트별 속성을 직렬화한 JSON 문자열 |
+| `custom_data` | 이벤트별 속성을 직렬화한 JSON 문자열. Glue/Athena 컬럼 타입은 `string` |
 
-호출부는 이벤트별 속성을 `properties` 객체로 전달하고, 공통 전송 코드가 `properties_json`으로 변환한다. 공통 필드는 속성 안에 중복해서 넣지 않는다. 이메일·토큰·메모·페이지 본문·URL 전체를 자동 수집하지 않는다.
+호출부는 `custom_data`에 이벤트별 속성 객체를 전달한다. 공통 직렬화기가 이를 JSON 문자열로 바꿔 전송 레코드의 `custom_data`에 넣는다. 사용자·세션·UTM 등 공통 필드는 `custom_data` 안에 중복해서 넣지 않는다. 이메일·토큰·메모·페이지 본문·URL 전체를 자동 수집하지 않는다.
 
 아래는 웹에서 저장 API 성공을 확인한 뒤 Firehose에 전송할 레코드 예시다.
 
@@ -60,7 +60,7 @@ CDK는 수집·저장·조회 리소스를 구성하고, 클라이언트의 공�
     "utm_content": "landing_a",
     "utm_term": null
   },
-  "properties_json": "{\"link_id\":\"456\",\"entry_point\":\"create_link\"}"
+  "custom_data": "{\"link_id\":\"456\",\"entry_point\":\"create_link\"}"
 }
 ```
 
@@ -134,7 +134,7 @@ UTM은 접점 연결 정보다. 전환 집계에는 별도로 기여 기간을 �
 | 이벤트 | 기록 시점 |
 | --- | --- |
 | `signup_completed` | 로그인 API가 `isNewUser=true`를 반환하고 회원 ID를 확인했을 때 |
-| `link_saved` | 링크 저장 API 성공 응답을 확인했을 때. 응답의 링크 ID를 `properties.link_id`에 기록 |
+| `link_saved` | 링크 저장 API 성공 응답을 확인했을 때. 응답의 링크 ID를 `custom_data.link_id`에 기록 |
 
 - 저장 요청을 성공 전환으로 세지 않는다. API 호출이 실패하면 성공 이벤트를 기록하지 않는다.
 - 서버 처리 후 클라이언트가 응답이나 전송을 놓치면 누락될 수 있다. 정확한 가입·저장 건수의 기준은 서비스 DB이며 이벤트는 행동·전환 분석에 사용한다.

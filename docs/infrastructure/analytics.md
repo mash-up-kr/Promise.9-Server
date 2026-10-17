@@ -25,7 +25,7 @@
 
 서버는 계정 UTM 저장·조회 API를 담당한다. AnalyticsStack은 서버 런타임 IAM 사용자를 변경하지 않으며 QueueStack과 독립적으로 구성한다.
 
-`PutRecordBatch`의 각 `Record.Data`에 이벤트 하나를 UTF-8 JSON 바이트로 넣는다. `properties` 객체는 전송 전에 `properties_json` 문자열로 직렬화한다. 필드 추가 시 producer와 Glue 스키마를 함께 변경한다.
+`PutRecordBatch`의 각 `Record.Data`에 이벤트 하나를 UTF-8 JSON 바이트로 넣는다. 호출부의 `custom_data` 객체는 공통 직렬화기에서 JSON 문자열로 바꿔 같은 이름의 필드로 전송한다. Glue/Athena의 `custom_data` 타입은 `string`이며, 공통 필드 추가 시 producer와 Glue 스키마를 함께 변경한다.
 
 실패한 레코드만 같은 ID로 재시도하고 조회 시 `event_id`로 중복 제거한다. Firehose 수락 이후 변환 오류는 `errors/`에서 확인한다. DirectPut의 S3 전달 실패는 최대 24시간 보관·재시도한다. [AWS 전달 실패 처리](https://docs.aws.amazon.com/firehose/latest/dev/retry.html)
 
@@ -39,11 +39,16 @@
 
 `arrival_date`는 파일 내 가장 오래된 레코드의 대략적인 Firehose 도착 시각(UTC)을 기준으로 한다. Projection 범위는 `2026-10-14`부터 `NOW`까지이며 별도 파티션 등록 작업은 없다.
 
+아래는 `custom_data`의 진입 경로별 링크 저장 이벤트 수를 집계하는 예시다. 문자열 안의 속성은 [`json_extract_scalar`](https://docs.aws.amazon.com/athena/latest/ug/extracting-data-from-JSON.html)로 조회한다.
+
 ```sql
-SELECT source, event_name, count(DISTINCT event_id) AS event_count
+SELECT source,
+       json_extract_scalar(custom_data, '$.entry_point') AS entry_point,
+       count(DISTINCT event_id) AS event_count
 FROM promise9_analytics_production.events
 WHERE arrival_date BETWEEN '2026-10-14' AND '2026-10-15'
-GROUP BY source, event_name;
+  AND event_name = 'link_saved'
+GROUP BY source, json_extract_scalar(custom_data, '$.entry_point');
 ```
 
 발생 시각 기준 지표에는 `from_iso8601_timestamp(occurred_at)` 조건을 추가한다. 도착 지연을 감안해 파티션 범위를 잡고, projection 시작일 이전 경로로 backfill할 때는 범위도 변경한다. Grafana 조회용 자격 증명과 권한은 별도로 구성해야 한다.
