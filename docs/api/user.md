@@ -75,7 +75,7 @@ Content-Type: application/json
 
 ## 이벤트에서 사용
 
-프론트의 공통 수집 코드가 조회·동기화 응답의 `userId`를 문자열 `user_id`로, `utm`을 이벤트의 `attribution`으로 사용한다. 접점에는 `model: 'last_marketing_touch'`, `scope: 'user'`를 추가한다. 계정 접점과 새 로컬 접점이 모두 없으면 `attribution=null`이다.
+프론트의 공통 수집 코드가 조회·동기화 응답의 `userId`를 문자열 `user_id`로, `utm`을 이벤트의 최상위 `utm`으로 사용한다. 접점에는 `model: 'last_marketing_touch'`, `scope: 'user'`를 추가한다. 계정 접점과 새 로컬 접점이 모두 없으면 `utm=null`이다. 계정 API는 현재 값을 반환하고, 이벤트에는 발생 당시 값을 보관한다.
 
 비로그인 또는 계정 동기화 대기 중인 새 로컬 접점에는 `scope: 'anonymous'`를 사용한다. 계정에 저장된 값을 전달받으면 이후 이벤트부터 적용하고, 큐에 이미 들어간 이벤트의 UTM은 바꾸지 않는다. 각 클릭·노출·성공 이벤트마다 계정 API를 호출하지 않는다. 사용자 연결과 동기화 흐름은 [공통 이벤트 계약](../infrastructure/analytics-event-design.md)을 참고한다.
 
