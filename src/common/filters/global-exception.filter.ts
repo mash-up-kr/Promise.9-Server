@@ -6,16 +6,19 @@ import {
     HttpStatus,
     Logger,
 } from '@nestjs/common'
+import { SpanStatusCode, trace } from '@opentelemetry/api'
 import { Request, Response } from 'express'
 
+import { getRequestRoute } from '../../infrastructure/observability/http-request'
+import { sanitizeText } from '../../infrastructure/observability/redaction'
 import { BaseException, ErrorResponse } from '../exception/base.exception'
 import { COMMON_ERROR } from '../exception/common-error-code.constant'
 
-@Catch(HttpException)
-export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
+@Catch()
+export class GlobalExceptionFilter implements ExceptionFilter {
     private readonly logger = new Logger(GlobalExceptionFilter.name)
 
-    catch(exception: HttpException, host: ArgumentsHost) {
+    catch(exception: unknown, host: ArgumentsHost) {
         const ctx = host.switchToHttp()
         const request = ctx.getRequest<Request>()
         const response = ctx.getResponse<Response>()
@@ -23,16 +26,47 @@ export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
 
         this.log(exception, request, body)
 
+        response.locals.errorCode = body.error.errorCode
+        if (response.headersSent) {
+            response.end()
+            return
+        }
         response.status(body.error.code).json(body)
     }
 
     // baseException 기반의 예외는 그대로 사용하고, 아닌 경우(httpException)는 공통 포맷으로 감싸는 과정 진행
-    private toErrorResponse(exception: HttpException): ErrorResponse {
+    private toErrorResponse(exception: unknown): ErrorResponse {
         if (exception instanceof BaseException) {
             return exception.getResponse() as ErrorResponse
         }
 
-        return this.fromHttpException(exception)
+        if (exception instanceof HttpException)
+            return this.fromHttpException(exception)
+
+        // Express/body-parser의 http-errors도 기존 4xx 상태를 보존한다.
+        // 예: 본문 크기 초과(413), 지원하지 않는 content-encoding(415).
+        if (
+            exception instanceof Error &&
+            'statusCode' in exception &&
+            typeof exception.statusCode === 'number' &&
+            Number.isInteger(exception.statusCode) &&
+            exception.statusCode >= 400 &&
+            exception.statusCode < 500 &&
+            'expose' in exception &&
+            exception.expose === true
+        ) {
+            return this.fromHttpException(
+                new HttpException(exception.message, exception.statusCode),
+            )
+        }
+
+        return {
+            success: false,
+            error: {
+                ...COMMON_ERROR.INTERNAL_SERVER_ERROR,
+                timestamp: new Date().toISOString(),
+            },
+        }
     }
 
     // Nest 기본 HttpException을 공통 포맷으로 감싸기
@@ -82,18 +116,29 @@ export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
     }
 
     // 에러에 대한 Log 기록 함수
-    private log(
-        exception: HttpException,
-        request: Request,
-        body: ErrorResponse,
-    ) {
+    private log(exception: unknown, request: Request, body: ErrorResponse) {
         const { code, errorCode, message } = body.error
-        // 어떤 요청이 어떤 상태·에러코드·메시지로 실패했는지 한 줄로 남긴다.
-        const summary = `${request.method} ${request.originalUrl} → ${code} (errorCode: ${errorCode}) ${message}`
+        const summary = {
+            event: 'http.exception',
+            method: request.method,
+            route: getRequestRoute(request),
+            status_code: code,
+            error_code: errorCode,
+            message,
+        }
 
         // 5xx는 서버가 확인해야 할 실제 문제이므로 스택트레이스와 함께 error로 남긴다.
         if (code >= 500) {
-            this.logger.error(summary, exception.stack)
+            const span = trace.getActiveSpan()
+            span?.setStatus({ code: SpanStatusCode.ERROR })
+            if (exception instanceof Error) {
+                span?.recordException({
+                    name: exception.name,
+                    message: sanitizeText(exception.message),
+                    stack: exception.stack && sanitizeText(exception.stack),
+                })
+            }
+            this.logger.error({ ...summary, error: exception })
             return
         }
 

@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule'
 
 import { DatabaseModule } from './config/database/database.module'
 import { validateEnvironment } from './config/environment'
+import { ObservabilityModule } from './infrastructure/observability/observability.module'
 import { SqsModule } from './infrastructure/sqs/sqs.module'
 import { AuthModule } from './modules/auth/auth.module'
 import { FolderModule } from './modules/folder/folder.module'
@@ -20,6 +21,7 @@ import { AppService } from './app.service'
             validate: validateEnvironment,
         }),
         ScheduleModule.forRoot(),
+        ObservabilityModule,
         DatabaseModule,
         SqsModule,
         FolderModule,

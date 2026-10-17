@@ -1,0 +1,79 @@
+// Lightsail host metrics only. Application logs/traces use the NestJS OTLP SDK.
+logging {
+  level = "warn"
+}
+
+prometheus.exporter.unix "lightsail" {
+  rootfs_path = "/host/root"
+  procfs_path = "/host/proc"
+  sysfs_path  = "/host/sys"
+
+  set_collectors = ["cpu", "meminfo", "filesystem", "diskstats", "uname"]
+
+  filesystem {
+    mount_points_exclude = "^/(dev|proc|sys|run|var/lib/docker|var/lib/containerd)($|/)"
+  }
+}
+
+discovery.relabel "lightsail" {
+  targets = prometheus.exporter.unix.lightsail.targets
+
+  rule {
+    target_label = "job"
+    replacement  = "integrations/node_exporter"
+  }
+  rule {
+    target_label = "instance"
+    replacement  = sys.env("OTEL_HOST_ID")
+  }
+  rule {
+    target_label = "host_id"
+    replacement  = sys.env("OTEL_HOST_ID")
+  }
+  rule {
+    target_label = "deployment_environment"
+    replacement  = "production"
+  }
+  rule {
+    target_label = "deployment_environment_name"
+    replacement  = "production"
+  }
+}
+
+prometheus.scrape "lightsail" {
+  targets         = discovery.relabel.lightsail.output
+  forward_to      = [prometheus.relabel.lightsail.receiver]
+  scrape_interval = "60s"
+  scrape_timeout  = "10s"
+  // A guard against accidentally enabling many collectors on this single host.
+  sample_limit = 500
+}
+
+prometheus.relabel "lightsail" {
+  forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+
+  rule {
+    source_labels = ["__name__"]
+    regex = "up|scrape_samples_scraped|scrape_duration_seconds|node_scrape_collector_success|node_cpu_seconds_total|node_memory_(MemTotal|MemAvailable|SwapTotal|SwapFree)_bytes|node_filesystem_(size_bytes|avail_bytes|readonly|files|files_free|device_error)|node_disk_(read_bytes_total|written_bytes_total|reads_completed_total|writes_completed_total|read_time_seconds_total|write_time_seconds_total|io_time_seconds_total)|node_uname_info"
+    action = "keep"
+  }
+}
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_METRICS_URL")
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_METRICS_USER")
+      password = sys.env("GRAFANA_CLOUD_METRICS_TOKEN")
+    }
+    queue_config {
+      min_shards = 1
+      max_shards = 1
+      capacity   = 1000
+    }
+  }
+
+  wal {
+    max_keepalive_time = "2h"
+  }
+}

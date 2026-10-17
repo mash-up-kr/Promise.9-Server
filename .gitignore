@@ -44,6 +44,8 @@ lerna-debug.log*
 .env.production
 .env.production.local
 .env.local
+.env.alloy
+.env.alloy.production
 
 # Drizzle local artifacts
 .drizzle/
