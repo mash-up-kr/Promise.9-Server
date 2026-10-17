@@ -1,0 +1,207 @@
+import { describe, it } from 'node:test'
+
+import { App } from 'aws-cdk-lib'
+import { Match, Template } from 'aws-cdk-lib/assertions'
+
+import { AnalyticsStack } from '../lib/analytics-stack'
+import { AWS_ACCOUNT_ID, AWS_REGION, RUNTIME_USER_NAME } from '../lib/constants'
+
+function synthesize() {
+    const app = new App()
+    const stack = new AnalyticsStack(app, 'AnalyticsTest', {
+        env: { account: AWS_ACCOUNT_ID, region: AWS_REGION },
+    })
+    return Template.fromStack(stack)
+}
+
+void describe('AnalyticsStack', () => {
+    void it('Cognito 게스트는 해당 pool에서만 역할을 얻고 Firehose 배치 쓰기만 허용한다', () => {
+        const template = synthesize()
+        template.hasResourceProperties('AWS::Cognito::IdentityPool', {
+            AllowUnauthenticatedIdentities: true,
+            AllowClassicFlow: false,
+        })
+        template.hasResourceProperties('AWS::IAM::Role', {
+            AssumeRolePolicyDocument: {
+                Version: '2012-10-17',
+                Statement: [
+                    {
+                        Effect: 'Allow',
+                        Principal: {
+                            Federated: 'cognito-identity.amazonaws.com',
+                        },
+                        Action: 'sts:AssumeRoleWithWebIdentity',
+                        Condition: {
+                            StringEquals: {
+                                'cognito-identity.amazonaws.com:aud': {
+                                    Ref: 'IdentityPool',
+                                },
+                            },
+                            'ForAnyValue:StringLike': {
+                                'cognito-identity.amazonaws.com:amr':
+                                    'unauthenticated',
+                            },
+                        },
+                    },
+                ],
+            },
+        })
+        template.hasResourceProperties('AWS::IAM::Policy', {
+            Roles: Match.anyValue(),
+            PolicyDocument: {
+                Version: '2012-10-17',
+                Statement: [
+                    {
+                        Effect: 'Allow',
+                        Action: 'firehose:PutRecordBatch',
+                        Resource: { 'Fn::GetAtt': ['DeliveryStream', 'Arn'] },
+                    },
+                ],
+            },
+        })
+        template.resourceCountIs('AWS::Cognito::UserPool', 0)
+    })
+
+    void it('기존 서버 IAM 사용자를 재생성하지 않고 배치 권한만 추가한다', () => {
+        const template = synthesize()
+        template.resourceCountIs('AWS::IAM::User', 0)
+        template.resourceCountIs('AWS::IAM::AccessKey', 0)
+        template.hasResourceProperties('AWS::IAM::Policy', {
+            Users: [RUNTIME_USER_NAME],
+            PolicyDocument: {
+                Version: '2012-10-17',
+                Statement: [
+                    {
+                        Effect: 'Allow',
+                        Action: 'firehose:PutRecordBatch',
+                        Resource: { 'Fn::GetAtt': ['DeliveryStream', 'Arn'] },
+                    },
+                ],
+            },
+        })
+    })
+
+    void it('정상 이벤트는 만료하지 않고 오류·쿼리 결과만 7일 만료하며 버킷은 보존한다', () => {
+        const template = synthesize()
+        template.resourceCountIs('AWS::S3::Bucket', 2)
+        template.allResources(
+            'AWS::S3::Bucket',
+            Match.objectLike({
+                DeletionPolicy: 'Retain',
+                UpdateReplacePolicy: 'Retain',
+                Properties: Match.objectLike({
+                    PublicAccessBlockConfiguration: {
+                        BlockPublicAcls: true,
+                        BlockPublicPolicy: true,
+                        IgnorePublicAcls: true,
+                        RestrictPublicBuckets: true,
+                    },
+                    BucketEncryption: {
+                        ServerSideEncryptionConfiguration: [
+                            {
+                                ServerSideEncryptionByDefault: {
+                                    SSEAlgorithm: 'AES256',
+                                },
+                            },
+                        ],
+                    },
+                }),
+            }),
+        )
+        // 각 버킷의 전체 규칙 배열을 검사해 events/나 버킷 전체 만료가 섞이지 않게 한다.
+        for (const prefix of ['errors/', 'query-results/']) {
+            template.hasResourceProperties('AWS::S3::Bucket', {
+                LifecycleConfiguration: {
+                    Rules: [
+                        {
+                            Prefix: prefix,
+                            Status: 'Enabled',
+                            ExpirationInDays: 7,
+                        },
+                    ],
+                },
+            })
+        }
+        template.resourceCountIs('AWS::S3::BucketPolicy', 2)
+        template.allResourcesProperties('AWS::S3::BucketPolicy', {
+            PolicyDocument: Match.objectLike({
+                Statement: Match.arrayWith([
+                    Match.objectLike({
+                        Effect: 'Deny',
+                        Condition: { Bool: { 'aws:SecureTransport': 'false' } },
+                    }),
+                ]),
+            }),
+        })
+    })
+
+    void it('DirectPut을 Parquet로 변환하고 delivery 역할의 권한 적용을 기다린다', () => {
+        const template = synthesize()
+        template.resourceCountIs('AWS::Kinesis::Stream', 0)
+        template.resourceCountIs('AWS::Lambda::Function', 0)
+        template.hasResourceProperties('AWS::KinesisFirehose::DeliveryStream', {
+            DeliveryStreamType: 'DirectPut',
+            KinesisStreamSourceConfiguration: Match.absent(),
+            DeliveryStreamEncryptionConfigurationInput: {
+                KeyType: 'AWS_OWNED_CMK',
+            },
+            ExtendedS3DestinationConfiguration: Match.objectLike({
+                Prefix: 'events/arrival_date=!{timestamp:yyyy-MM-dd}/',
+                ErrorOutputPrefix:
+                    'errors/type=!{firehose:error-output-type}/arrival_date=!{timestamp:yyyy-MM-dd}/',
+                BufferingHints: { SizeInMBs: 64, IntervalInSeconds: 300 },
+                DynamicPartitioningConfiguration: Match.absent(),
+                DataFormatConversionConfiguration: Match.objectLike({
+                    Enabled: true,
+                    InputFormatConfiguration: {
+                        Deserializer: { OpenXJsonSerDe: {} },
+                    },
+                    OutputFormatConfiguration: {
+                        Serializer: { ParquetSerDe: { Compression: 'SNAPPY' } },
+                    },
+                    SchemaConfiguration: Match.objectLike({
+                        DatabaseName: { Ref: 'Database' },
+                        TableName: { Ref: 'EventsTable' },
+                    }),
+                }),
+            }),
+        })
+        const policyId = Object.keys(
+            template.findResources('AWS::IAM::Policy'),
+        ).find((key) => key.startsWith('DeliveryPolicy'))!
+        template.hasResource('AWS::KinesisFirehose::DeliveryStream', {
+            DependsOn: Match.arrayWith([policyId]),
+        })
+    })
+
+    void it('Athena는 날짜 projection과 properties_json 스키마를 사용하고 결과 설정·스캔 제한을 강제한다', () => {
+        const template = synthesize()
+        template.resourceCountIs('AWS::Glue::Crawler', 0)
+        template.hasResourceProperties('AWS::Glue::Table', {
+            TableInput: Match.objectLike({
+                PartitionKeys: [{ Name: 'arrival_date', Type: 'string' }],
+                Parameters: Match.objectLike({
+                    'projection.enabled': 'true',
+                    'projection.arrival_date.format': 'yyyy-MM-dd',
+                    'projection.arrival_date.range': '2026-10-14,NOW',
+                }),
+                StorageDescriptor: Match.objectLike({
+                    Columns: Match.arrayWith([
+                        { Name: 'properties_json', Type: 'string' },
+                    ]),
+                }),
+            }),
+        })
+        template.hasResourceProperties('AWS::Athena::WorkGroup', {
+            RecursiveDeleteOption: false,
+            WorkGroupConfiguration: Match.objectLike({
+                BytesScannedCutoffPerQuery: 1024 ** 3,
+                EnforceWorkGroupConfiguration: true,
+                ResultConfiguration: Match.objectLike({
+                    ExpectedBucketOwner: AWS_ACCOUNT_ID,
+                    EncryptionConfiguration: { EncryptionOption: 'SSE_S3' },
+                }),
+            }),
+        })
+    })
+})

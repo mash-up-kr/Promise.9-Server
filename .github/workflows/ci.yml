@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - 'feature/analytics-*'
 
 jobs:
   ci:
@@ -30,6 +31,7 @@ jobs:
       - name: Infrastructure check
         run: |
           bun run infra:typecheck
+          bun run --cwd infra test
           bun run infra:synth --quiet --no-notices
 
       - name: Type check and build
