@@ -3,9 +3,9 @@ import { writeSync } from 'node:fs'
 import { ConsoleLogger, LogLevel } from '@nestjs/common'
 import { logs, SeverityNumber } from '@opentelemetry/api-logs'
 
-import { ObservabilityConfig } from './observability.config'
-import { sanitizeLogValue } from './redaction'
-import { getLogCorrelation } from './request-context'
+import { getLogCorrelation } from '../../common/http/request-context'
+import { sanitizeLogValue } from '../../common/logging/redaction'
+import type { ObservabilityConfig } from '../../config/observability.config'
 
 const LEVELS: Record<ObservabilityConfig['logLevel'], LogLevel[]> = {
     debug: ['verbose', 'debug', 'log', 'warn', 'error', 'fatal'],

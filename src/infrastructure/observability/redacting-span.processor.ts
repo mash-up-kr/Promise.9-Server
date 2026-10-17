@@ -1,7 +1,7 @@
 import { Attributes } from '@opentelemetry/api'
 import { BatchSpanProcessor, ReadableSpan } from '@opentelemetry/sdk-trace'
 
-import { sanitizeText } from './redaction'
+import { sanitizeText } from '../../common/logging/redaction'
 
 // 원본 URL·쿼리·IP·헤더·SQL은 수집하지 않는다. 새 계측을 추가할 때도 명시적으로 확장한다.
 const ALLOWED_ATTRIBUTES = new Set([

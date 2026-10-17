@@ -10,12 +10,9 @@ import {
 } from '@opentelemetry/api'
 import { NextFunction, Request, Response } from 'express'
 
-import { recordHttpRequest } from '../../infrastructure/observability/http-metrics'
-import {
-    getRequestRoute,
-    isHealthCheck,
-} from '../../infrastructure/observability/http-request'
-import { requestContext } from '../../infrastructure/observability/request-context'
+import { recordHttpRequest } from '../http/http-metrics'
+import { getRequestRoute, isHealthCheck } from '../http/http-request.util'
+import { requestContext } from '../http/request-context'
 
 const logger = new Logger('HTTP')
 

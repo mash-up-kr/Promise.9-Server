@@ -107,7 +107,7 @@ export class AiService {
         const checked = checkKoreanText(raw)
         if (checked.ok) return checked.text
 
-        const message = `AI ${field}에 한국어가 아닌 문자가 섞였습니다. issue=${checked.issue}, sample=${checked.sample}`
+        const message = `AI ${field}에 한국어가 아닌 문자가 섞였습니다. issue=${checked.issue}`
         this.logger.warn(`${message}, userLinkId=${userLinkId}`)
 
         throw new AiGenerationError({

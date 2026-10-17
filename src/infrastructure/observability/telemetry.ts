@@ -28,10 +28,11 @@ import {
     TraceIdRatioBasedSampler,
 } from '@opentelemetry/sdk-trace'
 
-import { isHealthCheck } from './http-request'
-import { ObservabilityConfig } from './observability.config'
+import { isHealthCheck } from '../../common/http/http-request.util'
+import { sanitizeLogValue } from '../../common/logging/redaction'
+import type { ObservabilityConfig } from '../../config/observability.config'
+
 import { RedactingSpanProcessor } from './redacting-span.processor'
-import { sanitizeLogValue } from './redaction'
 
 let sdk: NodeSDK | undefined
 let shutdown: Promise<void> | undefined

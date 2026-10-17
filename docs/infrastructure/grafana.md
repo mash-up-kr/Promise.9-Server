@@ -56,19 +56,32 @@ Lightsail 한 대를 31일 내내 관측하면 최대 `1 × 24 × 31 = 744 host-
 | HTTP 요청 | 라우트, 메서드, 상태 코드, 소요 시간, 요청 ID |
 | 트레이스 | HTTP 서버, Nest 컨트롤러, Express 핸들러, HTTP/HTTPS·fetch 외부 호출 |
 | 로그 | 기존 Nest `Logger` 호출을 JSON으로 출력하고 같은 내용을 OTLP로 전송 |
-| 에러 | 예상하지 못한 예외도 공통 500 응답으로 처리. 내부 오류 종류·스택은 로그에 기록 |
+| 에러 | 기존 API 오류 응답을 유지하며, 오류 종류·스택을 로그와 트레이스에 기록 |
 | 연계 | 로그의 `request_id`, `trace_id`, `span_id`, `trace_sampled`; 응답의 `x-request-id`, `x-trace-id` |
 | 메트릭 | 요청 수·지연 시간 히스토그램, Node 이벤트 루프·V8 메모리·GC |
 | 제외 | DB 쿼리 span, SQS 메시지 사이의 trace context 전달, 호스트/Nginx/Postgres 자체 로그, 프론트 RUM·리플레이 |
 
 현재 DB는 `postgres.js`를 사용한다. `pg` 전용 자동 계측으로 DB 쿼리가 수집된다고 가정하면 안 된다. 백그라운드 작업의 기존 Nest 로그도 전송되지만, 활성 span이 없는 작업에는 trace ID가 없다.
 
+## 코드 책임
+
+| 위치 | 역할 |
+| --- | --- |
+| `config/observability.config.ts` | Nest를 로드하기 전 관측 환경변수 검증 |
+| `common/http/`, `common/middleware/` | 요청 컨텍스트·라우트·HTTP 지표·접근 로그 |
+| `common/logging/` | 공통 로그 마스킹 |
+| `common/filters/` | 기존 HTTP 예외 응답과 예외 기록 |
+| `infrastructure/observability/` | SDK·exporter·배치·샘플링, Nest Logger 연결, 트레이스 속성 필터링과 SDK 종료 |
+| `instrumentation.ts`, `main.ts` | SDK 선행 초기화, 부팅 실패·치명적 오류와 프로세스 종료 |
+
+공통 HTTP 코드는 표준 OpenTelemetry API로 계측하며 exporter나 Grafana 인증 설정에 의존하지 않는다. SDK는 Nest를 로드하기 전에 시작하고, 정상 종료 시에는 Nest 작업 정리가 끝난 뒤 마지막 배치를 전송한다.
+
 ## 기본 동작
 
 - `OTEL_ENABLED=false`가 기본이다. Grafana 인증정보 없이도 부팅하며 JSON 로그와 요청 ID는 사용할 수 있다.
 - `main.ts`의 첫 import가 `instrumentation.ts`다. SDK가 Nest/HTTP 라이브러리를 먼저 계측할 수 있도록 이 순서를 유지한다. 개발 실행과 Docker의 `node dist/main.js`가 같은 진입점을 사용한다.
 - 정상 요청과 4xx 접근 로그는 `info`, 5xx 접근 로그와 연결 중단은 `warn`, 5xx 예외 상세는 `error`다. 4xx 예외 상세는 `debug`다. 접근 로그의 `error_code`로 비즈니스 오류 코드를 확인할 수 있다.
-- 예상하지 못한 500의 응답 메시지는 `서버 내부 오류가 발생했습니다.`이며 내부 오류 메시지를 응답에 포함하지 않는다. 기존 `BaseException`의 상태·오류 코드·부가 데이터는 유지한다.
+- 기존 `BaseException`·`HttpException`의 응답 형식을 유지한다. 그 외 예외와 Express 오류는 Nest 기본 필터에 맡기며, 일반 오류의 500 응답도 기존 `{ "statusCode": 500, "message": "Internal server error" }` 형식을 유지한다.
 - 로그·트레이스는 최대 2,048개 메모리 큐에서 최대 512개씩, 통상 5초마다 전송한다. 메트릭은 60초마다 전송한다. exporter 요청 timeout은 5초다.
 - Nest 종료 시 작업 drain/HTTP 종료 후 마지막 배치를 flush한다. Docker API 컨테이너에 종료 유예 1분을 설정한다. SIGKILL·프로세스 강제 종료·전송 실패·큐 초과 시 원격 데이터가 빠질 수 있다. stdout 로그는 Docker의 기존 rotation 정책을 따른다.
 - 처리되지 않은 예외·Promise rejection은 마스킹한 fatal JSON을 stderr에 동기 기록하고 exit code 1로 종료한다. Node의 원문 스택 재출력을 막으며, 비정상 상태에서 비동기 OTLP flush를 기다리거나 요청 처리를 재개하지 않는다. 따라서 이 마지막 fatal의 Cloud 수신은 보장하지 않는다. [Node 프로세스 예외 처리](https://nodejs.org/api/process.html#event-uncaughtexception)
@@ -81,6 +94,8 @@ Lightsail 한 대를 31일 내내 관측하면 최대 `1 × 24 × 31 = 744 host-
 접근 로그·메트릭에는 `/api/v1/links/:id` 같은 등록된 라우트를 사용한다. 404는 `unmatched`로 모은다. 요청/응답 본문, 인증 헤더, 원본 URL, 쿼리, SQL 파라미터를 자동 수집하지 않는다. ID와 URL을 메트릭 label로 사용하지 않는다.
 
 트레이스 속성은 `redacting-span.processor.ts`의 허용 목록만 전송한다. 로그는 민감한 키, URL 인증정보·쿼리, Bearer/Basic/JWT, 이메일, Drizzle 쿼리 오류 패턴을 가린다. 임의의 자유 텍스트에 포함된 모든 개인정보를 판별하는 기능은 아니므로, 새로운 로그에 사용자 입력·요약 본문·토큰을 직접 넣지 않는다.
+
+AI 문자 검사 샘플과 검토 사유 원문은 로그에 남기지 않는다. 검토 사유는 기존 `ai_metrics`에서 확인하며, 링크 미리보기 경고에는 원본 URL 대신 호스트만 기록한다.
 
 새 로그는 다음처럼 안정적인 이벤트명과 필요한 내부 식별자, 오류 객체를 사용한다. `request_id`/`trace_id`는 로거가 자동으로 붙인다.
 
@@ -205,7 +220,7 @@ count({job="integrations/node_exporter",deployment_environment="production"})
 Loki 조회 예시:
 
 ```logql
-{service_name="promise9-api"} | deployment_environment="dev" | json | event="http.exception" | status_code >= 500
+{service_name="promise9-api"} | deployment_environment="dev" | json | level="error"
 ```
 
 ```logql

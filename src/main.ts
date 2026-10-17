@@ -8,14 +8,24 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
 import { CommonResponseInterceptor } from './common/interceptor/response.interceptor'
 import { httpLoggerMiddleware } from './common/middleware/http-logger.middleware'
 import { swaggerConfig } from './config/swagger'
-import { registerFatalErrorHandler } from './infrastructure/observability/fatal-error-handler'
 import { shutdownTelemetry } from './infrastructure/observability/telemetry'
 import { TelemetryLogger } from './infrastructure/observability/telemetry.logger'
 
 const logger = new TelemetryLogger(observabilityConfig.logLevel)
 Logger.overrideLogger(logger)
 
-registerFatalErrorHandler(logger)
+// 치명적 오류 뒤에는 요청 처리를 재개하지 않고 동기 로그를 남긴 뒤 종료한다.
+process.once('uncaughtException', (error, origin) => {
+    try {
+        logger.fatal(
+            { event: 'process.uncaught_exception', origin, error },
+            'Bootstrap',
+        )
+    } finally {
+        // 비정상 상태에서는 비동기 OTLP flush를 기다리지 않는다.
+        process.exit(1)
+    }
+})
 
 async function bootstrap() {
     let app: INestApplication | undefined
