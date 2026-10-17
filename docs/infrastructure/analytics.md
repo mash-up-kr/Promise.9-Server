@@ -1,6 +1,6 @@
 # 분석 인프라
 
-`Promise9AnalyticsStack`은 서울 리전의 운영용 이벤트 수집·분석 리소스를 정의한다. 운영용 CDK와 서버 이벤트 큐·전송 모듈을 구현했으며 배포하지 않았다. 계정 UTM 저장·조회 API는 후속 PR에서 추가한다. 회원가입·링크 저장의 서버 이벤트 발행과 Grafana 연결은 후속 작업이다.
+`Promise9AnalyticsStack`은 서울 리전의 운영용 이벤트 수집·분석 리소스를 정의한다. 운영용 CDK, 서버 이벤트 큐·전송, 계정 UTM 저장·조회 API까지 구현했으며 배포하지 않았다. 회원가입·링크 저장의 서버 이벤트 발행과 Grafana 연결은 후속 작업이다.
 
 ## 구성
 
@@ -93,7 +93,7 @@ const result = this.analytics.track({
 ```
 
 - `source=server`, `schema_version=1`, `environment=APP_ENV`, UUID `event_id`, UTC `occurred_at`을 자동으로 채운다. 필요하면 이벤트 ID와 발생 시각을 호출자가 지정할 수 있다.
-- 사용자 ID는 문자열이다. UTM은 호출자가 전달한 스냅샷을 기록한다. 전송 모듈은 계정 DB를 직접 조회하지 않는다. 계정 UTM 저장·조회·동기화 API와 서버 비즈니스 이벤트 호출부, 익명 사용자 연결은 후속 작업이다.
+- 사용자 ID는 문자열이다. UTM은 호출자가 전달한 스냅샷을 기록한다. 계정 UTM 저장·조회·동기화는 [사용자 API](../api/user.md)가 담당한다. 전송 모듈은 계정 DB를 직접 조회하지 않으며, 서버 비즈니스 이벤트 호출부와 익명 사용자 연결은 후속 작업이다.
 - `properties`는 JSON 값만 허용하며, 전송 시 `properties_json` 문자열로 변환한다. 큐 삽입 시 JSON을 고정하므로 이후 원본 객체 변경이 반영되지 않는다.
 - `track()`은 동기적으로 메모리 큐에 넣고 `{ accepted: true, eventId }`를 반환한다. 이는 Firehose/S3 저장 완료 응답이 아니다. 비활성화·종료 중·스키마 오류·큐 가득 참은 `{ accepted: false, reason }`으로 반환해 비즈니스 요청을 실패시키지 않는다.
 - 기본 비활성화. 인프라 배포 후 GitHub Actions repository Variables에 `ANALYTICS_ENABLED=true`와 `ANALYTICS_FIREHOSE_STREAM_NAME`을 설정하면 배포 workflow가 서버 환경변수로 전달한다. 활성화 시 스트림 이름을 필수로 검사한다. AWS SDK 기본 자격 증명 체인을 사용하며 기존 서버 runtime IAM 권한을 이용한다.

@@ -1,11 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger'
 
+import { UserAttributionResponseDto } from './user-attribution.dto'
+
 const TIMESTAMP_EXAMPLE = '2026-07-06T12:34:56.000Z'
 
-export class MeResponseDto {
-    @ApiProperty({ example: 1, description: '유저 ID' })
-    userId!: number
-
+export class MeResponseDto extends UserAttributionResponseDto {
     @ApiProperty({ example: 'user@example.com', description: '대표 이메일' })
     email!: string
 
