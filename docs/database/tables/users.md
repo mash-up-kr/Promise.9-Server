@@ -61,8 +61,8 @@ erDiagram
 
 ## 마케팅 접점
 
-두 컬럼은 `touch_id`, `captured_at`, UTM 다섯 필드를 담은 객체 또는 SQL `NULL`이다. `model`·`scope`는 이벤트의 해석 정보이므로 DB 객체에는 넣지 않는다. 이벤트의 발생 시점에는 `last_marketing_touch`를 복사해 사용한다.
+두 컬럼은 `touch_id`, `captured_at`, UTM 다섯 필드를 담은 객체 또는 SQL `NULL`이다. `model`·`scope`는 이벤트에서 추가한다.
 
-`PATCH /users/me/attribution`이 인증된 사용자의 행을 트랜잭션에서 잠그고 갱신한다. 최초 접점은 한 번만 저장하고, 최근 접점은 더 최근 `captured_at`이 들어왔을 때 전체를 교체한다. 직접 방문·과거 접점·동일 시각의 재시도는 기존 값을 유지한다. 최초 접점은 전 기기의 과거 이력을 재구성한 최솟값이 아니라 계정에 처음 저장된 접점이다.
+`PATCH /users/me/attribution`은 사용자 행을 트랜잭션에서 잠그고 갱신한다. 최초 접점은 보존하고 최근 접점은 더 큰 `captured_at`일 때 전체 교체한다. 검증 규칙과 응답은 [사용자 API](../../api/user.md#마케팅-접점-동기화)를 참고한다.
 
-필드 검증과 API 응답은 [사용자 API 명세](../../api/user.md)에 정리했다. `0014_user_marketing_attribution.sql`은 nullable 컬럼 두 개만 추가하며 기존 사용자·접점을 삭제하거나 백필하지 않는다.
+`0014_user_marketing_attribution.sql`은 nullable 컬럼 두 개를 추가하며 기존 행의 값은 `NULL`이다.
