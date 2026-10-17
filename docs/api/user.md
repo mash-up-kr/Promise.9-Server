@@ -21,13 +21,12 @@ Authorization: Bearer <accessToken>
         "email": "user@example.com",
         "provider": "google",
         "createdAt": "2026-07-13T00:00:00.000Z",
-        "firstMarketingTouch": null,
-        "lastMarketingTouch": null
+        "utm": null
     }
 }
 ```
 
-접점 필드는 아래 `MarketingTouch` 객체 또는 `null`이다. 동기화 전에는 `null`을 반환한다.
+`utm`은 계정에 저장된 최근 접점만 담은 아래 `MarketingTouch` 객체다. 저장된 접점이 없으면 `null`을 반환하며 최초 접점은 응답에 포함하지 않는다.
 
 ## 마케팅 접점 동기화
 
@@ -66,16 +65,17 @@ Content-Type: application/json
 | 필드 | 타입·동작 |
 | --- | --- |
 | `userId` | 회원 ID, number |
-| `firstMarketingTouch` | `MarketingTouch \| null`. 계정에 처음 저장된 유효 접점을 보존 |
-| `lastMarketingTouch` | `MarketingTouch \| null`. 기존 값이 없거나 더 최근 `captured_at`일 때 접점 전체를 교체 |
+| `utm` | `MarketingTouch \| null`. 동기화 후 계정에 저장된 최근 접점 |
 
-동일·과거 시각의 요청은 기존 접점을 반환한다. 생략한 UTM을 과거 값으로 보충하지 않으며 접점이 바뀔 때만 `updated_at`을 갱신한다.
+첫 유효 접점은 DB의 최초·최근 접점 양쪽에 저장한다. 이후 최초 접점은 보존하고, 더 최근 `captured_at`의 접점으로만 최근 접점 전체를 교체한다. 두 API 모두 최근 접점만 `utm`으로 반환한다.
+
+동일·과거 시각의 요청에는 저장된 최근 접점을 반환한다. 생략한 UTM을 과거 값으로 보충하지 않으며 접점이 바뀔 때만 `updated_at`을 갱신한다.
 
 **오류**: `400 / 910001` 잘못된 접점, `401` 인증 실패, `404 / 960001` 존재하지 않거나 탈퇴한 계정.
 
 ## 이벤트에서 사용
 
-프론트의 공통 수집 코드가 조회·동기화 응답의 `userId`를 문자열 `user_id`로, `lastMarketingTouch`를 이벤트의 `attribution`으로 사용한다. 접점에는 `model: 'last_marketing_touch'`, `scope: 'user'`를 추가한다. 계정 접점과 새 로컬 접점이 모두 없으면 `attribution=null`이다.
+프론트의 공통 수집 코드가 조회·동기화 응답의 `userId`를 문자열 `user_id`로, `utm`을 이벤트의 `attribution`으로 사용한다. 접점에는 `model: 'last_marketing_touch'`, `scope: 'user'`를 추가한다. 계정 접점과 새 로컬 접점이 모두 없으면 `attribution=null`이다.
 
 비로그인 또는 계정 동기화 대기 중인 새 로컬 접점에는 `scope: 'anonymous'`를 사용한다. 계정에 저장된 값을 전달받으면 이후 이벤트부터 적용하고, 큐에 이미 들어간 이벤트의 UTM은 바꾸지 않는다. 각 클릭·노출·성공 이벤트마다 계정 API를 호출하지 않는다. 사용자 연결과 동기화 흐름은 [공통 이벤트 계약](../infrastructure/analytics-event-design.md)을 참고한다.
 

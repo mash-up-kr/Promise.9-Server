@@ -63,14 +63,8 @@ export class UserAttributionResponseDto {
     @ApiProperty({
         type: MarketingTouchDto,
         nullable: true,
-        description: '계정에 처음 저장된 마케팅 접점. 이후 보존한다.',
+        description:
+            '계정에 저장된 최근 마케팅 접점(captured_at 기준). 저장된 접점이 없으면 null.',
     })
-    firstMarketingTouch!: MarketingTouchDto | null
-
-    @ApiProperty({
-        type: MarketingTouchDto,
-        nullable: true,
-        description: 'captured_at이 가장 최근인 마케팅 접점',
-    })
-    lastMarketingTouch!: MarketingTouchDto | null
+    utm!: MarketingTouchDto | null
 }

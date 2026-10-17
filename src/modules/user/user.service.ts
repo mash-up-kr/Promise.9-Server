@@ -4,11 +4,15 @@ import { BaseException } from '../../common/exception/base.exception'
 
 import { SocialAccountRepository } from './repository/social-account.repository'
 import { UserRepository } from './repository/user.repository'
-import { MarketingTouch, UserAttribution } from './user-attribution'
+import { MarketingTouch } from './user-attribution'
 import { USER_ERROR } from './user-error.constant'
 
-export interface MeResponse extends UserAttribution {
+export interface UserAttributionResponse {
     userId: number
+    utm: MarketingTouch | null
+}
+
+export interface MeResponse extends UserAttributionResponse {
     email: string
     provider: string
     createdAt: Date
@@ -36,17 +40,22 @@ export class UserService {
             email: user.email,
             provider: socialAccount?.provider ?? 'unknown',
             createdAt: user.createdAt,
-            firstMarketingTouch: user.firstMarketingTouch,
-            lastMarketingTouch: user.lastMarketingTouch,
+            utm: user.lastMarketingTouch,
         }
     }
 
-    async syncAttribution(userId: number, touch: MarketingTouch) {
+    async syncAttribution(
+        userId: number,
+        touch: MarketingTouch,
+    ): Promise<UserAttributionResponse> {
         const attribution = await this.userRepository.syncAttribution(
             userId,
             touch,
         )
         if (!attribution) throw new BaseException(USER_ERROR.NOT_FOUND)
-        return attribution
+        return {
+            userId: attribution.userId,
+            utm: attribution.lastMarketingTouch,
+        }
     }
 }

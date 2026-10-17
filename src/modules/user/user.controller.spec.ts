@@ -26,6 +26,13 @@ const touch: MarketingTouch = {
     utm_term: null,
 }
 
+const latestTouch: MarketingTouch = {
+    ...touch,
+    touch_id: 'touch-newsletter',
+    captured_at: '2026-10-15T12:00:00.000Z',
+    utm_source: 'newsletter',
+}
+
 describe('User API: 계정 UTM', () => {
     let app: INestApplication<Server>
     let token: string
@@ -110,7 +117,7 @@ describe('User API: 계정 UTM', () => {
         expect(repository.syncAttribution).not.toHaveBeenCalled()
     })
 
-    it('인증된 사용자 ID로만 갱신하고 동기화된 접점을 반환한다', async () => {
+    it('인증된 사용자 ID로만 갱신하고 첫 접점을 utm으로 반환한다', async () => {
         const response = await request(app.getHttpServer())
             .patch('/users/me/attribution')
             .auth(token, { type: 'bearer' })
@@ -120,11 +127,27 @@ describe('User API: 계정 UTM', () => {
             success: true,
             data: {
                 userId: 7,
-                firstMarketingTouch: touch,
-                lastMarketingTouch: touch,
+                utm: touch,
             },
         })
         expect(repository.syncAttribution).toHaveBeenCalledWith(7, touch)
+    })
+
+    it('과거 접점을 동기화해도 저장된 최근 접점만 utm으로 반환한다', async () => {
+        repository.syncAttribution.mockResolvedValue({
+            userId: 7,
+            firstMarketingTouch: touch,
+            lastMarketingTouch: latestTouch,
+        })
+        const response = await request(app.getHttpServer())
+            .patch('/users/me/attribution')
+            .auth(token, { type: 'bearer' })
+            .send(touch)
+            .expect(200)
+        expect(response.body).toEqual({
+            success: true,
+            data: { userId: 7, utm: latestTouch },
+        })
     })
 
     it.each([
@@ -176,26 +199,32 @@ describe('User API: 계정 UTM', () => {
                 email: 'user@example.com',
                 provider: 'google',
                 createdAt: '2026-10-15T00:00:00.000Z',
-                firstMarketingTouch: null,
-                lastMarketingTouch: null,
+                utm: null,
             },
         })
     })
 
-    it('내 정보에 저장된 최초·최근 접점 전체를 포함한다', async () => {
+    it('내 정보에는 저장된 최근 접점만 utm으로 포함한다', async () => {
         repository.findActiveById.mockResolvedValue({
             id: 7,
             email: 'user@example.com',
-            createdAt: new Date(),
+            createdAt: new Date('2026-10-15T00:00:00.000Z'),
             firstMarketingTouch: touch,
-            lastMarketingTouch: touch,
+            lastMarketingTouch: latestTouch,
         })
         const response = await request(app.getHttpServer())
             .get('/users/me')
             .auth(token, { type: 'bearer' })
             .expect(200)
-        expect(response.body).toMatchObject({
-            data: { firstMarketingTouch: touch, lastMarketingTouch: touch },
+        expect(response.body).toEqual({
+            success: true,
+            data: {
+                userId: 7,
+                email: 'user@example.com',
+                provider: 'google',
+                createdAt: '2026-10-15T00:00:00.000Z',
+                utm: latestTouch,
+            },
         })
     })
 })

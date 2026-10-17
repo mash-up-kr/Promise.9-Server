@@ -63,6 +63,6 @@ erDiagram
 
 두 컬럼은 `touch_id`, `captured_at`, UTM 다섯 필드를 담은 객체 또는 SQL `NULL`이다. `model`·`scope`는 이벤트에서 추가한다.
 
-`PATCH /users/me/attribution`은 사용자 행을 트랜잭션에서 잠그고 갱신한다. 최초 접점은 보존하고 최근 접점은 더 큰 `captured_at`일 때 전체 교체한다. 검증 규칙과 응답은 [사용자 API](../../api/user.md#마케팅-접점-동기화)를 참고한다.
+`PATCH /users/me/attribution`은 사용자 행을 트랜잭션에서 잠그고 갱신한다. 첫 유효 접점은 두 컬럼에 동일하게 저장한다. 이후 최초 접점은 보존하고 최근 접점은 더 큰 `captured_at`일 때 전체 교체한다. 조회·동기화 API는 최근 접점만 `utm`으로 반환한다. 검증 규칙과 응답은 [사용자 API](../../api/user.md#마케팅-접점-동기화)를 참고한다.
 
 `0014_user_marketing_attribution.sql`은 nullable 컬럼 두 개를 추가하며 기존 행의 값은 `NULL`이다.

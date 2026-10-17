@@ -80,11 +80,11 @@ CDK는 수집·저장·조회 리소스를 구성하고, 클라이언트의 공�
 | `model` | 이벤트에 적용한 선택 기준: `last_marketing_touch` |
 | `scope` | 접점 출처: 비로그인 저장소 `anonymous`, 계정 `user` |
 
-비로그인 접점은 플랫폼 저장소에 보관하고, 로그인 후 계정과 동기화한다. 계정에는 `firstMarketingTouch`와 `lastMarketingTouch`를 저장하며 이후 이벤트에는 최근 접점을 적용한다. `model`·`scope`는 클라이언트가 이벤트에 추가하고 계정 접점에는 저장하지 않는다. 값이 없는 UTM 필드는 `null`이다.
+비로그인 접점은 플랫폼 저장소에 보관하고, 로그인 후 계정과 동기화한다. 첫 유효 접점은 계정의 `firstMarketingTouch`와 `lastMarketingTouch` 양쪽에 저장한다. API는 최근 접점만 `utm`으로 반환하며 이후 이벤트에 적용한다. `model`·`scope`는 클라이언트가 이벤트에 추가하고 계정 접점에는 저장하지 않는다. 값이 없는 UTM 필드는 `null`이다.
 
 1. UTM 링크로 들어오면 클라이언트가 `touch_id`, `captured_at`, UTM 다섯 필드를 로컬에 저장한다. 비로그인 이벤트에는 이 접점과 `scope=anonymous`를 붙인다.
 2. 로그인 후 내 정보에서 회원 ID와 계정 접점을 조회한다. 로컬에 미동기화 접점이 있으면 계정 UTM API로 저장한다.
-3. 조회·저장 응답의 `lastMarketingTouch`에 `model=last_marketing_touch`, `scope=user`를 붙여 공통 이벤트 문맥에 보관한다. UTM 없는 다른 기기의 로그인도 이 값을 사용한다.
+3. 조회·저장 응답의 `utm`에 `model=last_marketing_touch`, `scope=user`를 붙여 공통 이벤트 문맥에 보관한다. UTM 없는 다른 기기의 로그인도 이 값을 사용한다.
 4. 각 이벤트를 큐에 넣을 때 문맥의 `user_id`, `anonymous_id`, `session_id`, `attribution`을 복사한다. 클릭·노출 훅이나 성공 처리마다 UTM을 따로 조합하지 않는다.
 
 동기화 대기 중 더 최근인 로컬 접점은 `scope=anonymous`로 사용하고, 계정 저장 응답을 받은 뒤 `scope=user`로 바꾼다. 동기화에 실패하면 로컬 접점을 보존해 다음 동기화에서 재시도한다. 접점이 전혀 없으면 `attribution=null`이다.
