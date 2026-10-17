@@ -101,10 +101,8 @@ TinyFish는 `TINY_FISH_API_KEYS` 또는 기존 `TINY_FISH_API_KEY` secret 중 �
 | `ANALYTICS_ENABLED` | `true` 또는 `false`. 미설정 시 `false` |
 | `ANALYTICS_FIREHOSE_STREAM_NAME` | 운영 Firehose 스트림 이름. 수집 활성화 시 필수 |
 
-workflow는 매 배포마다 이 값을 `/opt/promise9/.env`에 전달한다. 비활성화 상태에서
-스트림 이름을 설정하지 않으면 해당 항목은 생략한다. 활성화했는데 이름이 없거나
-활성화 값이 잘못되면 서버 파일 업로드 전에 실패한다. 분석 인프라 배포 후 실제
-스트림 이름과 `ANALYTICS_ENABLED=true`를 설정한다.
+workflow가 값을 검증해 `/opt/promise9/.env`에 전달한다. 분석 인프라 생성 후 실제
+스트림 이름과 활성화 값을 설정한다. [분석 전송 사용법](../infrastructure/analytics.md#서버-이벤트-전송)
 
 ## 네트워크
 
