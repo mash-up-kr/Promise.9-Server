@@ -416,7 +416,9 @@ describe('LinkAnalysisService', () => {
             { name: '기타', normalizedName: '기타', sortOrder: 1 },
         ])
         expect(loggerWarnSpy).toHaveBeenCalledWith(
-            expect.stringContaining('로그인 안내 페이지만 수집되었습니다.'),
+            expect.stringContaining(
+                '링크가 개발자 검토 대상으로 표시되었습니다.',
+            ),
         )
     })
 

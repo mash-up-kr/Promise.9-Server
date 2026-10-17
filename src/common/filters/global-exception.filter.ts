@@ -6,11 +6,15 @@ import {
     HttpStatus,
     Logger,
 } from '@nestjs/common'
+import { SpanStatusCode, trace } from '@opentelemetry/api'
 import { Request, Response } from 'express'
 
 import { BaseException, ErrorResponse } from '../exception/base.exception'
 import { COMMON_ERROR } from '../exception/common-error-code.constant'
+import { getRequestRoute } from '../http/http-request.util'
+import { sanitizeText } from '../logging/redaction'
 
+// 일반 예외와 Express 오류의 응답은 기존 Nest 기본 필터에 맡긴다.
 @Catch(HttpException)
 export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
     private readonly logger = new Logger(GlobalExceptionFilter.name)
@@ -23,6 +27,11 @@ export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
 
         this.log(exception, request, body)
 
+        response.locals.errorCode = body.error.errorCode
+        if (response.headersSent) {
+            response.end()
+            return
+        }
         response.status(body.error.code).json(body)
     }
 
@@ -88,12 +97,25 @@ export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
         body: ErrorResponse,
     ) {
         const { code, errorCode, message } = body.error
-        // 어떤 요청이 어떤 상태·에러코드·메시지로 실패했는지 한 줄로 남긴다.
-        const summary = `${request.method} ${request.originalUrl} → ${code} (errorCode: ${errorCode}) ${message}`
+        const summary = {
+            event: 'http.exception',
+            method: request.method,
+            route: getRequestRoute(request),
+            status_code: code,
+            error_code: errorCode,
+            message,
+        }
 
         // 5xx는 서버가 확인해야 할 실제 문제이므로 스택트레이스와 함께 error로 남긴다.
         if (code >= 500) {
-            this.logger.error(summary, exception.stack)
+            const span = trace.getActiveSpan()
+            span?.setStatus({ code: SpanStatusCode.ERROR })
+            span?.recordException({
+                name: exception.name,
+                message: sanitizeText(exception.message),
+                stack: exception.stack && sanitizeText(exception.stack),
+            })
+            this.logger.error({ ...summary, error: exception })
             return
         }
 

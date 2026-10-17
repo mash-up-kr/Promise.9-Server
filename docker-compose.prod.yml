@@ -32,6 +32,8 @@ services:
       - /opt/promise9/.env
     ports:
       - "127.0.0.1:3000:3000"
+    # 인라인 작업 drain(최대 15초)과 마지막 OTLP 배치 전송 시간을 확보한다.
+    stop_grace_period: 1m
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/api/v1"]
       interval: 30s

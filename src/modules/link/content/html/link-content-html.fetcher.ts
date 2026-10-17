@@ -96,7 +96,7 @@ export class LinkContentHtmlFetcher {
         }
 
         this.logger.warn(
-            `링크 미리보기 리다이렉트가 너무 많습니다: ${currentUrl.toString()}`,
+            `링크 미리보기 리다이렉트가 너무 많습니다. host=${currentUrl.hostname}`,
         )
         throw new BaseException(LINK_ERROR.PREVIEW_REDIRECT_FAILED)
     }
@@ -176,7 +176,7 @@ export class LinkContentHtmlFetcher {
         if (!response.ok) {
             cancelLinkContentResponse(response)
             this.logger.warn(
-                `링크 미리보기 대상이 비정상 응답을 반환했습니다: ${response.status} ${finalUrl.toString()}`,
+                `링크 미리보기 대상이 비정상 응답을 반환했습니다. status=${response.status}, host=${finalUrl.hostname}`,
             )
             throw new BaseException({
                 ...LINK_ERROR.PREVIEW_BAD_STATUS,

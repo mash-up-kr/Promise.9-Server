@@ -41,6 +41,11 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      - name: Setup Node (production runtime)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
@@ -49,6 +54,9 @@ jobs:
 
       - name: Test
         run: bun run test -- --runInBand
+
+      - name: Validate host metrics configuration
+        run: bash script/check-alloy-config.sh
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -91,6 +99,12 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          OTEL_ENABLED: ${{ vars.OTEL_ENABLED || 'false' }}
+          OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+          OTEL_HOST_ID: ${{ vars.OTEL_HOST_ID }}
+          OTEL_TRACES_SAMPLER_ARG: ${{ vars.OTEL_TRACES_SAMPLER_ARG || '1' }}
+          LOG_LEVEL: ${{ vars.LOG_LEVEL || 'info' }}
         run: |
           : "${DATABASE_URL_PRODUCTION:?DATABASE_URL_PRODUCTION is required}"
           : "${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}"
@@ -109,8 +123,26 @@ jobs:
             exit 1
           fi
 
+          if [ "$OTEL_ENABLED" = 'true' ]; then
+            : "${OTEL_EXPORTER_OTLP_ENDPOINT:?OTEL_EXPORTER_OTLP_ENDPOINT is required when OTEL_ENABLED=true}"
+            : "${OTEL_EXPORTER_OTLP_HEADERS:?OTEL_EXPORTER_OTLP_HEADERS is required when OTEL_ENABLED=true}"
+            : "${OTEL_HOST_ID:?OTEL_HOST_ID must identify the Lightsail host when OTEL_ENABLED=true}"
+          fi
+
+          umask 077
           {
             printf 'APP_ENV=production\n'
+            printf 'LOG_LEVEL=%s\n' "$LOG_LEVEL"
+            printf 'OTEL_ENABLED=%s\n' "$OTEL_ENABLED"
+            if [ "$OTEL_ENABLED" = 'true' ]; then
+              printf 'OTEL_EXPORTER_OTLP_ENDPOINT=%s\n' "$OTEL_EXPORTER_OTLP_ENDPOINT"
+              printf 'OTEL_EXPORTER_OTLP_HEADERS=%s\n' "$OTEL_EXPORTER_OTLP_HEADERS"
+              printf 'OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf\n'
+              printf 'OTEL_SERVICE_NAME=promise9-api\n'
+              printf 'OTEL_SERVICE_VERSION=%s\n' "$GITHUB_SHA"
+              printf 'OTEL_HOST_ID=%s\n' "$OTEL_HOST_ID"
+              printf 'OTEL_TRACES_SAMPLER_ARG=%s\n' "$OTEL_TRACES_SAMPLER_ARG"
+            fi
             printf 'DATABASE_URL_PRODUCTION=%s\n' "$DATABASE_URL_PRODUCTION"
             printf 'JWT_ACCESS_SECRET=%s\n' "$JWT_ACCESS_SECRET"
             printf 'JWT_REFRESH_SECRET=%s\n' "$JWT_REFRESH_SECRET"
@@ -161,6 +193,26 @@ jobs:
             fi
           } > .env.production
 
+      - name: Create host metrics env file
+        if: vars.HOST_METRICS_ENABLED == 'true'
+        env:
+          OTEL_HOST_ID: ${{ vars.OTEL_HOST_ID }}
+          GRAFANA_CLOUD_METRICS_URL: ${{ vars.GRAFANA_CLOUD_METRICS_URL }}
+          GRAFANA_CLOUD_METRICS_USER: ${{ vars.GRAFANA_CLOUD_METRICS_USER }}
+          GRAFANA_CLOUD_METRICS_TOKEN: ${{ secrets.GRAFANA_CLOUD_METRICS_TOKEN }}
+        run: |
+          : "${OTEL_HOST_ID:?OTEL_HOST_ID is required}"
+          : "${GRAFANA_CLOUD_METRICS_URL:?GRAFANA_CLOUD_METRICS_URL is required}"
+          : "${GRAFANA_CLOUD_METRICS_USER:?GRAFANA_CLOUD_METRICS_USER is required}"
+          : "${GRAFANA_CLOUD_METRICS_TOKEN:?GRAFANA_CLOUD_METRICS_TOKEN is required}"
+          umask 077
+          {
+            printf 'OTEL_HOST_ID=%s\n' "$OTEL_HOST_ID"
+            printf 'GRAFANA_CLOUD_METRICS_URL=%s\n' "$GRAFANA_CLOUD_METRICS_URL"
+            printf 'GRAFANA_CLOUD_METRICS_USER=%s\n' "$GRAFANA_CLOUD_METRICS_USER"
+            printf 'GRAFANA_CLOUD_METRICS_TOKEN=%s\n' "$GRAFANA_CLOUD_METRICS_TOKEN"
+          } > .env.alloy.production
+
       - name: Ensure deploy directory
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -184,6 +236,45 @@ jobs:
           target: /opt/promise9
           overwrite: true
 
+      - name: Upload host metrics files
+        if: vars.HOST_METRICS_ENABLED == 'true'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USERNAME }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          port: ${{ secrets.LIGHTSAIL_PORT || '22' }}
+          source: docker-compose.observability.yml,deploy/observability/config.alloy,.env.alloy.production
+          target: /opt/promise9
+          overwrite: true
+
+      - name: Deploy host metrics collector
+        if: vars.HOST_METRICS_ENABLED == 'true'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USERNAME }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          port: ${{ secrets.LIGHTSAIL_PORT || '22' }}
+          script_stop: true
+          script: |
+            set -eu
+            cd /opt/promise9
+            mv .env.alloy.production .env.alloy
+            chmod 600 .env.alloy
+            docker compose -f docker-compose.observability.yml pull alloy
+            docker compose -f docker-compose.observability.yml run --rm --no-deps alloy validate /etc/alloy/config.alloy
+            # bind mount의 파일 내용 변경은 Compose가 감지하지 않으므로 설정을 다시 읽게 한다.
+            docker compose -f docker-compose.observability.yml up -d --force-recreate alloy
+            for attempt in $(seq 1 15); do
+              if curl --fail --silent --max-time 2 http://127.0.0.1:12345/-/ready > /dev/null; then
+                exit 0
+              fi
+              sleep 2
+            done
+            echo 'Alloy readiness check failed' >&2
+            exit 1
+
       - name: Deploy container
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -193,7 +284,11 @@ jobs:
           port: ${{ secrets.LIGHTSAIL_PORT || '22' }}
           script_stop: true
           script: |
+            set -eu
             cd /opt/promise9
+            if [ '${{ vars.HOST_METRICS_ENABLED || 'false' }}' != 'true' ] && docker container inspect promise9-alloy > /dev/null 2>&1; then
+              docker stop --time 30 promise9-alloy
+            fi
             mv .env.production .env
             chmod 600 .env
             APP_IMAGE="${{ steps.image.outputs.name }}:${{ github.sha }}" docker compose -f docker-compose.prod.yml pull api

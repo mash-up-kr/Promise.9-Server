@@ -1,47 +1,85 @@
-import { ValidationPipe } from '@nestjs/common'
+/* eslint-disable simple-import-sort/imports -- CommonJS에서 Nest/HTTP를 로드하기 전에 SDK를 시작해야 한다. */
+import { observabilityConfig } from './instrumentation'
+
+import { INestApplication, Logger, ValidationPipe } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
 import { CommonResponseInterceptor } from './common/interceptor/response.interceptor'
 import { httpLoggerMiddleware } from './common/middleware/http-logger.middleware'
 import { swaggerConfig } from './config/swagger'
-import { AppModule } from './app.module'
+import { shutdownTelemetry } from './infrastructure/observability/telemetry'
+import { TelemetryLogger } from './infrastructure/observability/telemetry.logger'
+
+const logger = new TelemetryLogger(observabilityConfig.logLevel)
+Logger.overrideLogger(logger)
+
+// 치명적 오류 뒤에는 요청 처리를 재개하지 않고 동기 로그를 남긴 뒤 종료한다.
+process.once('uncaughtException', (error, origin) => {
+    try {
+        logger.fatal(
+            { event: 'process.uncaught_exception', origin, error },
+            'Bootstrap',
+        )
+    } finally {
+        // 비정상 상태에서는 비동기 OTLP flush를 기다리지 않는다.
+        process.exit(1)
+    }
+})
 
 async function bootstrap() {
-    const app = await NestFactory.create(AppModule)
+    let app: INestApplication | undefined
+    try {
+        // 환경변수 검증/모듈 로딩 실패도 같은 JSON 로거로 처리한다.
+        const { AppModule } = await import('./app.module')
+        app = await NestFactory.create(AppModule, {
+            logger,
+            abortOnError: false,
+        })
+        app.use(httpLoggerMiddleware)
+        app.enableCors({
+            origin: [
+                'http://localhost:8090',
+                'https://link-ding-dong.com',
+                'https://dev-promise9-web.2026promise-9.workers.dev',
+                'https://promise9-ranking-lab.dltmdcks.chatgpt.site',
+            ],
+            credentials: true,
+            exposedHeaders: ['x-request-id', 'x-trace-id'],
+        })
+        app.useGlobalFilters(new GlobalExceptionFilter())
+        app.useGlobalInterceptors(new CommonResponseInterceptor())
+        app.useGlobalPipes(new ValidationPipe({ whitelist: true }))
+        app.setGlobalPrefix('api/v1')
+        app.enableShutdownHooks()
+        swaggerConfig(app)
 
-    // 모든 요청의 url·status를 남기는 접근 로그 (라우팅 이전 단계에서 등록)
-    app.use(httpLoggerMiddleware)
+        const port = process.env.PORT ?? 3000
+        const serverHost = process.env.SERVER_HOST
+        if (serverHost) await app.listen(port, serverHost)
+        else await app.listen(port)
 
-    app.enableCors({
-        origin: [
-            'http://localhost:8090',
-            'https://link-ding-dong.com',
-            'https://dev-promise9-web.2026promise-9.workers.dev',
-            'https://promise9-ranking-lab.dltmdcks.chatgpt.site',
-        ],
-        credentials: true,
-    })
-
-    app.useGlobalFilters(new GlobalExceptionFilter())
-    app.useGlobalInterceptors(new CommonResponseInterceptor())
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true }))
-    app.setGlobalPrefix('api/v1')
-
-    // SIGTERM에서 onModuleDestroy를 실행해, 배포 중 진행 중인 링크 분석과
-    // SQS consumer polling을 정리할 시간을 준다.
-    app.enableShutdownHooks()
-
-    swaggerConfig(app)
-
-    const port = process.env.PORT ?? 3000
-    const serverHost = process.env.SERVER_HOST
-
-    if (serverHost) {
-        await app.listen(port, serverHost)
-        return
+        logger.log(
+            {
+                event: 'application.started',
+                telemetry_enabled: observabilityConfig.enabled,
+                environment: observabilityConfig.environment,
+            },
+            'Bootstrap',
+        )
+    } catch (error: unknown) {
+        logger.fatal({ event: 'application.start_failed', error }, 'Bootstrap')
+        await app
+            ?.close()
+            .catch((closeError: unknown) =>
+                logger.error(
+                    { event: 'application.close_failed', error: closeError },
+                    'Bootstrap',
+                ),
+            )
+        await shutdownTelemetry().catch(() => undefined)
+        // create() 중 실패하면 app 참조 없이 열린 연결이 남을 수 있으므로 확실히 종료한다.
+        process.exit(1)
     }
-
-    await app.listen(port)
 }
 void bootstrap()

@@ -168,10 +168,10 @@ export class LinkAnalysisService {
             )
         }
 
-        // 검토 판정은 개발자만 확인한다. 상태는 요약 저장 시 NEEDS_REVIEW로 남기고 사유는 로그와 ai_metrics에서 본다.
+        // 검토 사유 원문은 ai_metrics에서만 확인하고 로그에는 내부 ID만 남긴다.
         if (analysis.needsReview) {
             this.logger.warn(
-                `링크가 개발자 검토 대상으로 표시되었습니다. linkId=${input.linkId}, reason=${analysis.reviewReason ?? '사유 없음'}`,
+                `링크가 개발자 검토 대상으로 표시되었습니다. linkId=${input.linkId}`,
             )
         }
 

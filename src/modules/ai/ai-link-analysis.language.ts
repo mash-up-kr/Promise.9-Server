@@ -39,7 +39,7 @@ export function checkKoreanText(raw: string): KoreanTextCheck {
     return { ok: true, text }
 }
 
-// 로그에 남길 짧은 문맥. 문제 문자 앞뒤 몇 글자만 잘라 요약 전체를 노출하지 않는다.
+// 문제 문자를 확인할 짧은 문맥. 사용자 원문일 수 있으므로 로그에는 기록하지 않는다.
 function sampleAround(text: string, index: number): string {
     return text.slice(Math.max(0, index - 5), index + 6)
 }

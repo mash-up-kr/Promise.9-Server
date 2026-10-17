@@ -1,0 +1,46 @@
+# Separate Compose project: does not manage or restart the API/PostgreSQL.
+name: promise9-observability
+
+services:
+  alloy:
+    image: grafana/alloy:v1.20.1
+    container_name: promise9-alloy
+    restart: unless-stopped
+    # node_uname_info도 컨테이너 대신 실제 호스트의 이름을 사용한다.
+    uts: host
+    env_file:
+      - ${HOST_METRICS_ENV_FILE:-/opt/promise9/.env.alloy}
+    environment:
+      GOMEMLIMIT: 128MiB
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - --disable-reporting
+      - /etc/alloy/config.alloy
+    ports:
+      - "127.0.0.1:12345:12345"
+    volumes:
+      - ./deploy/observability/config.alloy:/etc/alloy/config.alloy:ro
+      - /:/host/root:ro,rslave
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - alloy-data:/var/lib/alloy/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    cpus: "0.25"
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+volumes:
+  alloy-data:
