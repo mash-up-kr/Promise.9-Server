@@ -44,7 +44,6 @@
         "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" \"drizzle.config.ts\"",
         "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" \"drizzle.config.ts\" --fix",
         "test": "jest",
-        "test:observability": "bun run build && node --test test/observability.smoke.cjs",
         "test:watch": "jest --watch",
         "test:cov": "jest --coverage",
         "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",

@@ -6,7 +6,7 @@
 
 | 항목 | 상태 |
 | --- | --- |
-| API 계측·로그·에러 처리 | 구현 및 로컬·운영 Docker 이미지 테스트 완료 |
+| API 계측·로그·에러 처리 | 구현 완료, 운영 반영 전 |
 | Grafana `dev` 연결 | 전용 토큰으로 실제 APM·로그·트레이스·메트릭 수신 확인 |
 | 호스트 CPU·메모리·디스크 | Alloy·배포 설정 검증 완료, 실제 서버 설치 전 |
 | 운영 `production` 연결 | 운영 정책만 생성. 토큰 발급·GitHub 설정·배포·수신 확인은 머지 시 진행 |
@@ -121,6 +121,8 @@ OTEL_RESOURCE_ATTRIBUTES=deployment.environment=dev,deployment.environment.name=
 OTEL_TRACES_SAMPLER_ARG=1
 ```
 
+`.env.local`은 자동으로 로드되지 않는다. 로컬 빌드 실행 시 `node --env-file=.env.local dist/main.js`처럼 명시하며, 실제 API 실행에 필요한 개발 DB 등 기존 환경변수도 설정해야 한다.
+
 `OTEL_RESOURCE_ATTRIBUTES`를 사용하면 추가 resource 속성을 지정할 수 있다. 기본 namespace는 `promise9`, 환경은 `APP_ENV`, instance는 컨테이너 hostname과 PID다. 운영에서는 `OTEL_HOST_ID`를 배포마다 바뀌는 컨테이너 ID가 아닌 안정적인 Lightsail 호스트 식별자로 설정한다.
 
 로컬 수집은 위 예시처럼 `deployment.environment`와 `deployment.environment.name`을 모두 `dev`로 재정의한다. 환경 변수 resource detector가 코드의 기본 resource 값보다 우선하며 로그·트레이스·메트릭에 공통 적용된다. `APP_ENV=development`는 애플리케이션 설정과 개발 DB 선택에 사용하므로 `dev`로 바꾸지 않는다. 같은 스택에서 환경 필터로 구분하는 방식이며 별도 저장소나 접근 권한 경계는 아니다.
@@ -224,33 +226,7 @@ traces_spanmetrics_calls_total{job="promise9/promise9-api",asserts_env="dev"}
 
 RUM과 리플레이는 이 백엔드 변경에 포함하지 않는다. 이후 Faro에서 API 대상으로 `traceparent`를 전달하면 같은 trace로 연결할 수 있다. 서버는 해당 헤더를 추출하며 응답의 요청/trace ID를 CORS로 노출한다.
 
-## 검증
-
-```bash
-bun run test -- --runInBand
-bun run test:observability
-bun run lint
-bash script/check-alloy-config.sh
-```
-
-`test:observability`는 실제 배포 빌드를 Node 프로세스로 띄우되 운영 DB/API를 쓰지 않고 로컬 OTLP 수신기를 사용한다. 부팅 실패·처리되지 않은 예외의 JSON 로그와 종료, 동시 요청의 ID 분리, incoming traceparent, 정상·400·409·404·413·415·500 응답, 연결 중단의 단일 접근 로그, 에러의 stack 및 trace 연계, 비밀값 제거, 외부 fetch 계측, 세 신호의 protobuf 전송, dev·production의 환경/host ID 분리, SIGTERM flush, 수집 비활성화, 수집기 503 장애 중 API 응답을 검증한다. 이 테스트의 성공은 실제 Grafana 인증·수신 성공을 의미하지 않는다.
-
-CI는 Node 22에서 단위 테스트·린트·빌드·관측 테스트·Alloy 설정을 검증한다. 개별 실행 결과는 PR과 CI 로그를 확인한다. 호스트 파일시스템 접근·수집 series 수·운영 인증·Cloud 수신은 실제 서버 배포 후 별도로 확인한다.
-
-### 로컬에서 실제 Cloud 수집 확인
-
-위의 dev 설정과 수집 인증 헤더를 Git에서 제외된 `.env.local`에 저장한 뒤 실행한다.
-
-```bash
-bun run build
-node --env-file=.env.local test/manual/grafana-dev.cjs
-```
-
-배포 런타임과 같은 Node 22를 사용한다. 로컬 기본 Node 버전이 다르면 두 번째 명령을 `npx --yes --package node@22 node --env-file=.env.local test/manual/grafana-dev.cjs`로 실행할 수 있다. `.env.local`은 이 명령의 `--env-file`로 명시적으로 로드하며 일반 개발 실행에서 자동 로드되는 파일은 아니다.
-
-실제 계측 모듈을 사용하는 Nest 검증 서버를 약 130초 실행하며 정상 요청과 의도적인 500 오류를 만든다. 제품 DB나 외부 API를 호출하지 않는다. 서비스는 `promise9-api`, 환경은 `dev`, 버전은 실행별 `grafana-dev-…`, 호스트는 `promise9-local-dev`다. 결과와 trace ID는 `.tmp/grafana-dev-last.json`, 로그는 같은 디렉터리에 남긴다. exporter 오류가 없는 것만으로 수신을 확정하지 않고 Grafana의 로그·트레이스·APM 화면에서 해당 실행을 확인한다. 이 검증 서버는 실제 제품 API의 기능 테스트를 대신하지 않는다.
-
-### 최초 Cloud 검증 결과 — 2026-10-15 KST
+## 최초 Cloud 검증 결과 — 2026-10-15 KST
 
 로컬 Nest fixture에서 HTTP 200 26건·HTTP 500 6건을 전송해 다음을 확인했다.
 

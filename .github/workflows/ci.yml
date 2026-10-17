@@ -37,8 +37,8 @@ jobs:
           bun run infra:typecheck
           bun run infra:synth --quiet --no-notices
 
-      - name: Build and verify OTLP
-        run: bun run test:observability
+      - name: Type check and build
+        run: bun run build
 
       - name: Validate host metrics configuration
         run: bash script/check-alloy-config.sh

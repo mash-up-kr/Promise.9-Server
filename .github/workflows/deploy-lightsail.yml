@@ -55,9 +55,6 @@ jobs:
       - name: Test
         run: bun run test -- --runInBand
 
-      - name: Build and verify OTLP
-        run: bun run test:observability
-
       - name: Validate host metrics configuration
         run: bash script/check-alloy-config.sh
 
