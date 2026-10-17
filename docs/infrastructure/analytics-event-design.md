@@ -60,7 +60,7 @@ CDK는 수집·저장·조회 리소스를 구성하고, 클라이언트의 공�
     "utm_content": "landing_a",
     "utm_term": null
   },
-  "custom_data": "{\"link_id\":\"456\",\"entry_point\":\"create_link\"}"
+  "custom_data": "{\"link_id\":456,\"entry_point\":\"create_link\"}"
 }
 ```
 
@@ -133,8 +133,10 @@ UTM은 접점 연결 정보다. 전환 집계에는 별도로 기여 기간을 �
 
 | 이벤트 | 기록 시점 |
 | --- | --- |
-| `signup_completed` | 로그인 API가 `isNewUser=true`를 반환하고 회원 ID를 확인했을 때 |
-| `link_saved` | 링크 저장 API 성공 응답을 확인했을 때. 응답의 링크 ID를 `custom_data.link_id`에 기록 |
+| `signup_completed` | 로그인 API가 `isNewUser=true`를 반환한 직후 |
+| `link_saved` | 링크 저장 API 성공 응답을 확인했을 때. 응답의 링크 ID를 `custom_data.link_id`에 숫자로 기록 |
+
+가입 이벤트는 회원 ID 조회를 기다리지 않는다. 아직 회원 ID가 없으면 `user_id=null`과 `anonymous_id`로 기록하고, 이후 `identity_identified`를 이용해 조회 단계에서 회원과 연결한다.
 
 - 저장 요청을 성공 전환으로 세지 않는다. API 호출이 실패하면 성공 이벤트를 기록하지 않는다.
 - 서버 처리 후 클라이언트가 응답이나 전송을 놓치면 누락될 수 있다. 정확한 가입·저장 건수의 기준은 서비스 DB이며 이벤트는 행동·전환 분석에 사용한다.
