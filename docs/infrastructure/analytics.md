@@ -1,6 +1,6 @@
 # 분석 인프라
 
-`Promise9AnalyticsStack`은 서울 리전의 운영용 Cognito·Firehose·S3·Glue·Athena 리소스를 정의한다. 클라이언트와 서버가 공용 Firehose에 직접 배치 전송하며, S3의 Parquet을 Athena로 조회한다. 공통 데이터 계약은 [비즈니스 이벤트 수집](./analytics-event-design.md)을 참고한다.
+`Promise9AnalyticsStack`은 서울 리전의 운영용 Cognito·Firehose·S3·Glue·Athena 리소스를 정의한다. 웹·앱·확장 프로그램이 Firehose에 직접 배치 전송하며, S3의 Parquet을 Athena로 조회한다. 공통 데이터 계약은 [비즈니스 이벤트 수집](./analytics-event-design.md)을 참고한다.
 
 ## 구성과 보존
 
@@ -21,7 +21,9 @@
 
 ## 접근 권한과 전송
 
-클라이언트는 Identity Pool ID·리전·스트림 이름으로 Cognito 임시 자격 증명을 발급받는다. 서버는 기존 `Promise9AppRuntime` IAM 사용자를 이용한다. AnalyticsStack은 해당 사용자에 Firehose 쓰기 정책을 추가하며, 사용자 소유 스택인 QueueStack에 의존한다.
+클라이언트는 Identity Pool ID·리전·스트림 이름으로 Cognito 임시 자격 증명을 발급받는다. 서비스 로그인 여부와 관계없이 전송에는 게스트 역할을 사용한다. 서비스 회원 ID는 JWT로 인증된 사용자 API에서 확인해 이벤트에 붙인다.
+
+서버는 계정 UTM 저장·조회 API를 담당한다. AnalyticsStack은 서버 런타임 IAM 사용자를 변경하지 않으며 QueueStack과 독립적으로 구성한다.
 
 `PutRecordBatch`의 각 `Record.Data`에 이벤트 하나를 UTF-8 JSON 바이트로 넣는다. `properties` 객체는 전송 전에 `properties_json` 문자열로 직렬화한다. 필드 추가 시 producer와 Glue 스키마를 함께 변경한다.
 

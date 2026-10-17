@@ -4,7 +4,7 @@ import { App } from 'aws-cdk-lib'
 import { Match, Template } from 'aws-cdk-lib/assertions'
 
 import { AnalyticsStack } from '../lib/analytics-stack'
-import { AWS_ACCOUNT_ID, AWS_REGION, RUNTIME_USER_NAME } from '../lib/constants'
+import { AWS_ACCOUNT_ID, AWS_REGION } from '../lib/constants'
 
 function synthesize() {
     const app = new App()
@@ -62,22 +62,12 @@ void describe('AnalyticsStack', () => {
         template.resourceCountIs('AWS::Cognito::UserPool', 0)
     })
 
-    void it('기존 서버 IAM 사용자를 재생성하지 않고 배치 권한만 추가한다', () => {
+    void it('서버 IAM 사용자에 분석 전송 권한이나 access key를 추가하지 않는다', () => {
         const template = synthesize()
         template.resourceCountIs('AWS::IAM::User', 0)
         template.resourceCountIs('AWS::IAM::AccessKey', 0)
-        template.hasResourceProperties('AWS::IAM::Policy', {
-            Users: [RUNTIME_USER_NAME],
-            PolicyDocument: {
-                Version: '2012-10-17',
-                Statement: [
-                    {
-                        Effect: 'Allow',
-                        Action: 'firehose:PutRecordBatch',
-                        Resource: { 'Fn::GetAtt': ['DeliveryStream', 'Arn'] },
-                    },
-                ],
-            },
+        template.allResourcesProperties('AWS::IAM::Policy', {
+            Users: Match.absent(),
         })
     })
 

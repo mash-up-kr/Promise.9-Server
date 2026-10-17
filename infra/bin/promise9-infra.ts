@@ -82,7 +82,5 @@ const analyticsStack = new AnalyticsStack(app, 'Promise9AnalyticsStack', {
     description:
         'Promise9 production analytics via Cognito, Firehose, S3 and Athena',
 })
-// AnalyticsStack의 서버 쓰기 정책은 QueueStack 소유의 런타임 사용자에 연결한다.
-analyticsStack.addStackDependency(queueStack)
 Tags.of(analyticsStack).add('Project', PROJECT_NAME)
 Tags.of(analyticsStack).add('ManagedBy', 'AWS-CDK')
