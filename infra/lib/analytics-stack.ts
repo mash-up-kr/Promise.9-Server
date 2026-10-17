@@ -33,7 +33,7 @@ const EVENT_COLUMNS: glue.CfnTable.ColumnProperty[] = [
         'custom_data',
     ].map((name) => ({ name, type: 'string' })),
     {
-        name: 'attribution',
+        name: 'utm',
         type: 'struct<touch_id:string,model:string,scope:string,captured_at:string,utm_source:string,utm_medium:string,utm_campaign:string,utm_content:string,utm_term:string>',
     },
 ]

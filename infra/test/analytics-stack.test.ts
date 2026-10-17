@@ -164,7 +164,7 @@ void describe('AnalyticsStack', () => {
         })
     })
 
-    void it('Athena는 날짜 projection과 custom_data 문자열 스키마를 사용하고 결과 설정·스캔 제한을 강제한다', () => {
+    void it('Athena는 날짜 projection과 utm·custom_data 스키마를 사용하고 결과 설정·스캔 제한을 강제한다', () => {
         const template = synthesize()
         template.resourceCountIs('AWS::Glue::Crawler', 0)
         template.hasResourceProperties('AWS::Glue::Table', {
@@ -178,6 +178,10 @@ void describe('AnalyticsStack', () => {
                 StorageDescriptor: Match.objectLike({
                     Columns: Match.arrayWith([
                         { Name: 'custom_data', Type: 'string' },
+                        {
+                            Name: 'utm',
+                            Type: 'struct<touch_id:string,model:string,scope:string,captured_at:string,utm_source:string,utm_medium:string,utm_campaign:string,utm_content:string,utm_term:string>',
+                        },
                     ]),
                 }),
             }),

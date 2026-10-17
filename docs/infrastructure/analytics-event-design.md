@@ -29,7 +29,7 @@ CDK는 수집·저장·조회 리소스를 구성하고, 클라이언트의 공�
 | `user_id` | 서비스 회원 ID의 문자열 표현. 비로그인은 `null` |
 | `session_id` | 실행 세션 식별자 또는 `null` |
 | `operation_id` | 요청·결과 등 같은 작업의 이벤트를 연결하는 선택적 ID. 사용하지 않으면 `null` |
-| `attribution` | 이벤트 발생 시점의 마케팅 접점 객체 또는 `null` |
+| `utm` | 이벤트 발생 시점의 마케팅 접점 객체 또는 `null` |
 | `custom_data` | 이벤트별 속성을 직렬화한 JSON 문자열. Glue/Athena 컬럼 타입은 `string` |
 
 호출부는 `custom_data`에 이벤트별 속성 객체를 전달한다. 공통 직렬화기가 이를 JSON 문자열로 바꿔 전송 레코드의 `custom_data`에 넣는다. 사용자·세션·UTM 등 공통 필드는 `custom_data` 안에 중복해서 넣지 않는다. 이메일·토큰·메모·페이지 본문·URL 전체를 자동 수집하지 않는다.
@@ -49,7 +49,7 @@ CDK는 수집·저장·조회 리소스를 구성하고, 클라이언트의 공�
   "user_id": "123",
   "session_id": "session_001",
   "operation_id": null,
-  "attribution": {
+  "utm": {
     "touch_id": "touch_001",
     "model": "last_marketing_touch",
     "scope": "user",
@@ -65,6 +65,8 @@ CDK는 수집·저장·조회 리소스를 구성하고, 클라이언트의 공�
 ```
 
 이벤트 ID, 발생 시각, 사용자와 UTM은 큐에 넣을 때 고정한다. 로그인·계정 전환·재시도로 대기 이벤트의 문맥을 바꾸지 않는다. `source`는 분석용 구분이며 인증된 발생 주체를 보장하는 필드는 아니다.
+
+계정 API의 `utm`은 현재 계정에 저장된 최근 접점이고, 이벤트의 `utm`은 해당 이벤트가 발생했을 때 적용한 접점의 스냅샷이다.
 
 ## UTM과 계정 접점
 
@@ -85,9 +87,9 @@ CDK는 수집·저장·조회 리소스를 구성하고, 클라이언트의 공�
 1. UTM 링크로 들어오면 클라이언트가 `touch_id`, `captured_at`, UTM 다섯 필드를 로컬에 저장한다. 비로그인 이벤트에는 이 접점과 `scope=anonymous`를 붙인다.
 2. 로그인 후 내 정보에서 회원 ID와 계정 접점을 조회한다. 로컬에 미동기화 접점이 있으면 계정 UTM API로 저장한다.
 3. 조회·저장 응답의 `lastMarketingTouch`에 `model=last_marketing_touch`, `scope=user`를 붙여 공통 이벤트 문맥에 보관한다. UTM 없는 다른 기기의 로그인도 이 값을 사용한다.
-4. 각 이벤트를 큐에 넣을 때 문맥의 `user_id`, `anonymous_id`, `session_id`, `attribution`을 복사한다. 클릭·노출 훅이나 성공 처리마다 UTM을 따로 조합하지 않는다.
+4. 각 이벤트를 큐에 넣을 때 문맥의 `user_id`, `anonymous_id`, `session_id`, `utm`을 복사한다. 클릭·노출 훅이나 성공 처리마다 UTM을 따로 조합하지 않는다.
 
-동기화 대기 중 더 최근인 로컬 접점은 `scope=anonymous`로 사용하고, 계정 저장 응답을 받은 뒤 `scope=user`로 바꾼다. 동기화에 실패하면 로컬 접점을 보존해 다음 동기화에서 재시도한다. 접점이 전혀 없으면 `attribution=null`이다.
+동기화 대기 중 더 최근인 로컬 접점은 `scope=anonymous`로 사용하고, 계정 저장 응답을 받은 뒤 `scope=user`로 바꾼다. 동기화에 실패하면 로컬 접점을 보존해 다음 동기화에서 재시도한다. 접점이 전혀 없으면 `utm=null`이다.
 
 - 최초 접점은 계정에 처음 저장된 유효 접점을 보존한다.
 - 최근 접점은 `captured_at`이 더 큰 경우에만 전체 교체한다. 동일·과거 시각의 재전송과 UTM 없는 직접 방문은 기존 값을 유지한다.
