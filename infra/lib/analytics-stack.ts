@@ -15,8 +15,6 @@ import {
 } from 'aws-cdk-lib'
 import { Construct } from 'constructs'
 
-import { RUNTIME_USER_NAME } from './constants'
-
 // producer는 ISO 8601 UTC 문자열을 전송한다. Athena에서 from_iso8601_timestamp로
 // 해석하며 Firehose timestamp 파서의 암묵적인 형식 변환에 의존하지 않는다.
 const EVENT_COLUMNS: glue.CfnTable.ColumnProperty[] = [
@@ -244,24 +242,16 @@ export class AnalyticsStack extends Stack {
                 'sts:AssumeRoleWithWebIdentity',
             ),
         })
-        const writeStatement = new iam.PolicyStatement({
-            actions: ['firehose:PutRecordBatch'],
-            resources: [deliveryStream.attrArn],
-        })
-        clientRole.addToPolicy(writeStatement)
+        clientRole.addToPolicy(
+            new iam.PolicyStatement({
+                actions: ['firehose:PutRecordBatch'],
+                resources: [deliveryStream.attrArn],
+            }),
+        )
         new cognito.CfnIdentityPoolRoleAttachment(this, 'IdentityPoolRoles', {
             identityPoolId: pool.ref,
             roles: { unauthenticated: clientRole.roleArn },
         })
-        // 기존 QueueStack의 IAM User/정책을 이동하거나 교체하지 않는다.
-        new iam.CfnPolicy(this, 'RuntimeWritePolicy', {
-            policyName: `${name}-write`,
-            users: [RUNTIME_USER_NAME],
-            policyDocument: new iam.PolicyDocument({
-                statements: [writeStatement],
-            }).toJSON() as Record<string, unknown>,
-        })
-
         const workgroup = new athena.CfnWorkGroup(this, 'Workgroup', {
             name,
             state: 'ENABLED',

@@ -24,8 +24,6 @@ services:
   api:
     image: ${APP_IMAGE:?APP_IMAGE is required}
     container_name: promise9-api
-    # 링크 분석 정리·HTTP 요청 종료·분석 이벤트 전송(최대 15초)에 여유를 둔다.
-    stop_grace_period: 1m
     restart: unless-stopped
     depends_on:
       db:

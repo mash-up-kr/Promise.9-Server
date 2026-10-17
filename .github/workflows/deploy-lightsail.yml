@@ -85,8 +85,6 @@ jobs:
           MASTER_ACCESS_TOKEN: ${{ secrets.MASTER_ACCESS_TOKEN }}
           MASTER_USER_ID: ${{ secrets.MASTER_USER_ID }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
-          ANALYTICS_ENABLED: ${{ vars.ANALYTICS_ENABLED || 'false' }}
-          ANALYTICS_FIREHOSE_STREAM_NAME: ${{ vars.ANALYTICS_FIREHOSE_STREAM_NAME }}
           SQS_LINK_ANALYSIS_QUEUE_URL: ${{ secrets.SQS_LINK_ANALYSIS_QUEUE_URL }}
           EMAIL_ASSET_BASE_URL: ${{ vars.EMAIL_ASSET_BASE_URL }}
           EMAIL_FROM_ADDRESS: ${{ secrets.EMAIL_FROM_ADDRESS }}
@@ -110,16 +108,6 @@ jobs:
             echo "TINY_FISH_API_KEYS or TINY_FISH_API_KEY is required" >&2
             exit 1
           fi
-          case "$ANALYTICS_ENABLED" in
-            true)
-              : "${ANALYTICS_FIREHOSE_STREAM_NAME:?ANALYTICS_FIREHOSE_STREAM_NAME is required when analytics is enabled}"
-              ;;
-            false) ;;
-            *)
-              echo "ANALYTICS_ENABLED must be true or false" >&2
-              exit 1
-              ;;
-          esac
 
           {
             printf 'APP_ENV=production\n'
@@ -156,10 +144,6 @@ jobs:
             # 빈 값을 쓰면 URL 검증에 실패해 부팅이 막히므로 설정된 항목만 내려보낸다.
             if [ -n "$AWS_REGION" ]; then
               printf 'AWS_REGION=%s\n' "$AWS_REGION"
-            fi
-            printf 'ANALYTICS_ENABLED=%s\n' "$ANALYTICS_ENABLED"
-            if [ -n "$ANALYTICS_FIREHOSE_STREAM_NAME" ]; then
-              printf 'ANALYTICS_FIREHOSE_STREAM_NAME=%s\n' "$ANALYTICS_FIREHOSE_STREAM_NAME"
             fi
             printf 'SQS_LINK_ANALYSIS_QUEUE_URL=%s\n' "$SQS_LINK_ANALYSIS_QUEUE_URL"
             printf 'SQS_CONSUMER_ENABLED=true\n'
