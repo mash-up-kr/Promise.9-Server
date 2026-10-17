@@ -29,7 +29,7 @@ async function bootstrap() {
     app.setGlobalPrefix('api/v1')
 
     // SIGTERM에서 onModuleDestroy를 실행해, 배포 중 진행 중인 링크 분석과
-    // SQS consumer polling을 정리할 시간을 준다.
+    // SQS consumer polling을 정리한다. HTTP 연결 종료 후 analytics 큐를 전송한다.
     app.enableShutdownHooks()
 
     swaggerConfig(app)

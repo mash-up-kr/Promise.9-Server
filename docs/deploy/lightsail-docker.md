@@ -94,6 +94,18 @@ TinyFish는 `TINY_FISH_API_KEYS` 또는 기존 `TINY_FISH_API_KEY` secret 중 �
 두 secret이 모두 있으면 배포 시 `TINY_FISH_API_KEYS`만 기록한다. 키 목록 변경은 다음
 배포·프로세스 재시작부터 반영된다.
 
+분석 수집 설정은 GitHub Actions repository **Variables**로 관리한다.
+
+| Variable | 용도 |
+| --- | --- |
+| `ANALYTICS_ENABLED` | `true` 또는 `false`. 미설정 시 `false` |
+| `ANALYTICS_FIREHOSE_STREAM_NAME` | 운영 Firehose 스트림 이름. 수집 활성화 시 필수 |
+
+workflow는 매 배포마다 이 값을 `/opt/promise9/.env`에 전달한다. 비활성화 상태에서
+스트림 이름을 설정하지 않으면 해당 항목은 생략한다. 활성화했는데 이름이 없거나
+활성화 값이 잘못되면 서버 파일 업로드 전에 실패한다. 분석 인프라 배포 후 실제
+스트림 이름과 `ANALYTICS_ENABLED=true`를 설정한다.
+
 ## 네트워크
 
 Lightsail public firewall은 CDK의 `Promise9LightsailStack`에서 관리한다. 현재 포트와 변경

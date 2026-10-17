@@ -76,6 +76,14 @@ const appEnvSchema = z
             .optional(),
         YOUTUBE_API_KEY: z.string().trim().min(1).optional(),
         AWS_REGION: z.string().min(1).default('ap-northeast-2'),
+        ANALYTICS_ENABLED: z
+            .enum(['true', 'false'])
+            .default('false')
+            .transform((value) => value === 'true'),
+        ANALYTICS_FIREHOSE_STREAM_NAME: z
+            .string()
+            .regex(/^[a-zA-Z0-9_.-]{1,64}$/)
+            .optional(),
         SQS_LINK_ANALYSIS_QUEUE_URL: z.url().optional(),
         SQS_ENDPOINT: z.url().optional(),
         SQS_CONSUMER_ENABLED: z
@@ -143,6 +151,15 @@ const appEnvSchema = z
                 path: ['AWS_SESSION_TOKEN'],
                 message:
                     'AWS_SESSION_TOKEN을 사용하려면 AWS access key도 설정해야 합니다.',
+            })
+        }
+
+        if (env.ANALYTICS_ENABLED && !env.ANALYTICS_FIREHOSE_STREAM_NAME) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['ANALYTICS_FIREHOSE_STREAM_NAME'],
+                message:
+                    '이벤트 수집을 활성화하려면 Firehose 스트림 이름이 필요합니다.',
             })
         }
 

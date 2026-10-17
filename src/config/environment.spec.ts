@@ -24,6 +24,25 @@ const productionEnvironment = {
 }
 
 describe('validateEnvironment', () => {
+    it('분석 전송은 기본 비활성화하고 활성화 시 스트림 이름을 요구한다', () => {
+        expect(
+            validateEnvironment(developmentEnvironment).ANALYTICS_ENABLED,
+        ).toBe(false)
+        expect(() =>
+            validateEnvironment({
+                ...developmentEnvironment,
+                ANALYTICS_ENABLED: 'true',
+            }),
+        ).toThrow('Firehose 스트림 이름')
+        expect(
+            validateEnvironment({
+                ...developmentEnvironment,
+                ANALYTICS_ENABLED: 'true',
+                ANALYTICS_FIREHOSE_STREAM_NAME: 'test-events',
+            }).ANALYTICS_ENABLED,
+        ).toBe(true)
+    })
+
     it('YouTube API key는 선택 사항이며 설정 시 빈 값을 거부한다', () => {
         expect(
             validateEnvironment(developmentEnvironment).YOUTUBE_API_KEY,

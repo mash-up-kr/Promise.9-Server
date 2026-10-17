@@ -1,6 +1,6 @@
 # 분석 인프라
 
-`Promise9AnalyticsStack`은 서울 리전의 운영용 이벤트 수집·분석 리소스를 정의한다. 현재는 운영용 CDK 구현 및 로컬 검증 상태이며 배포하지 않았다. 서버 이벤트 전송, 계정 UTM API, 비즈니스 이벤트 발행과 Grafana 연결은 후속 작업이다.
+`Promise9AnalyticsStack`은 서울 리전의 운영용 이벤트 수집·분석 리소스를 정의한다. 운영용 CDK와 서버 이벤트 큐·전송 모듈을 구현했으며 배포하지 않았다. 계정 UTM 저장·조회 API는 후속 PR에서 추가한다. 회원가입·링크 저장의 서버 이벤트 발행과 Grafana 연결은 후속 작업이다.
 
 ## 구성
 
@@ -73,3 +73,57 @@ CI는 AWS 자격 증명 없이 타입 검사·테스트·합성을 실행한다.
 배포 전에는 기존 팀 CDK 변경 절차에 따라 실제 diff를 검토한다. 새 리소스 생성과 기존 서버 사용자의 Firehose 쓰기 권한 추가가 예상 변경이다. 배포는 별도 승인이 필요하며 아직 실행하지 않았다.
 
 Outputs는 `IdentityPoolId`, `Region`, `DeliveryStreamName`, `DeliveryStreamArn`, `DataBucketName`, `QueryResultsBucketName`, `DatabaseName`, `TableName`, `WorkgroupName`이다. 실제 리소스 값은 배포 후 확인한다. 자격 증명이나 Secret Access Key를 출력하지 않는다.
+
+## 서버 이벤트 전송 코드
+
+`src/infrastructure/analytics/AnalyticsModule`을 사용하는 도메인 모듈의
+`imports`에 추가하고 `AnalyticsService`를 주입한다. 앱 루트에도 등록되어
+종료 시 큐를 정리한다. 아직 회원가입·링크 저장 등의 실제 호출 지점은 연결하지 않았다.
+
+```ts
+const result = this.analytics.track({
+    event_name: 'link_saved',
+    user_id: String(userId),
+    anonymous_id: anonymousId ?? null,
+    operation_id: operationId,
+    platform: 'web',
+    attribution: attributionSnapshot ?? null,
+    properties: { link_id: linkId },
+})
+```
+
+- `source=server`, `schema_version=1`, `environment=APP_ENV`, UUID `event_id`, UTC `occurred_at`을 자동으로 채운다. 필요하면 이벤트 ID와 발생 시각을 호출자가 지정할 수 있다.
+- 사용자 ID는 문자열이다. UTM은 호출자가 전달한 스냅샷을 기록한다. 전송 모듈은 계정 DB를 직접 조회하지 않는다. 계정 UTM 저장·조회·동기화 API와 서버 비즈니스 이벤트 호출부, 익명 사용자 연결은 후속 작업이다.
+- `properties`는 JSON 값만 허용하며, 전송 시 `properties_json` 문자열로 변환한다. 큐 삽입 시 JSON을 고정하므로 이후 원본 객체 변경이 반영되지 않는다.
+- `track()`은 동기적으로 메모리 큐에 넣고 `{ accepted: true, eventId }`를 반환한다. 이는 Firehose/S3 저장 완료 응답이 아니다. 비활성화·종료 중·스키마 오류·큐 가득 참은 `{ accepted: false, reason }`으로 반환해 비즈니스 요청을 실패시키지 않는다.
+- 기본 비활성화. 인프라 배포 후 GitHub Actions repository Variables에 `ANALYTICS_ENABLED=true`와 `ANALYTICS_FIREHOSE_STREAM_NAME`을 설정하면 배포 workflow가 서버 환경변수로 전달한다. 활성화 시 스트림 이름을 필수로 검사한다. AWS SDK 기본 자격 증명 체인을 사용하며 기존 서버 runtime IAM 권한을 이용한다.
+- 메모리 큐는 최대 10,000개 또는 직렬화 데이터 16 MiB. 한도를 넘으면 새 이벤트를 거부하고 경고를 남긴다. payload·UTM·사용자 정보는 전송 로그에 넣지 않는다.
+- 5초 또는 100개 누적 시 전송. 요청당 최대 500개, raw 데이터는 base64 및 요청 메타데이터 여유를 두고 3 MiB 미만으로 제한한다. 이벤트당 최대 1,000 KiB이다.
+- 요청 전체 실패·부분 실패·응답 누락은 해당 이벤트를 큐에 유지한다. 지수 backoff와 jitter로 재시도하며, 이벤트 ID와 payload를 바꾸지 않는다. SDK 자체 재시도는 최대 3회, 배치 전체 요청 제한 시간은 5초이다.
+- 재시도 과정에서 중복 저장 가능성이 있으므로 분석 시 `event_id`로 중복 제거한다. 성공 응답은 Firehose 수락을 의미하고, S3 변환 성공까지 보장하지 않는다.
+- 정상 종료 시 HTTP 연결 정리가 끝난 `onApplicationShutdown`에서 최대 15초 동안 큐 전송을 시도한 후 AWS 클라이언트를 닫는다. SDK가 취소 신호를 처리하지 못해도 배치 대기는 5초에 끝나며, 늦은 응답으로 큐를 수정하지 않는다. 운영 API 컨테이너의 종료 유예는 다른 종료 작업을 고려해 1분으로 설정했다. 종료 중 실패하거나 강제 종료되면 미전송 이벤트는 사라진다. DB outbox는 도입하지 않았다.
+
+단위 테스트는 실제 AWS 요청 없이 스키마, 스냅샷, 부분 실패, 재시도, 큐 한도,
+동시 flush, 종료 처리를 검증한다. 운영 전송 확인은 인프라 배포 이후 별도 수행한다.
+
+
+### 서버 코드 책임 분리
+
+| 파일 | 책임 |
+| --- | --- |
+| `analytics-event.ts` | 공통 이벤트 검증, 기본값과 불변 JSON 스냅샷 생성 |
+| `analytics.queue.ts` | 메모리 용량, 배치 선택, 성공 이벤트 제거와 실패 이벤트 보존 |
+| `analytics.service.ts` | 이벤트 수락, 전송 시점, 재시도와 종료 순서 조율 |
+| `firehose.transport.ts` | AWS 요청과 레코드별 응답 해석, 명시적인 클라이언트 정리 |
+| `analytics-timeout.ts` | 취소 신호와 별개로 비동기 작업의 대기 시간 제한 |
+| `analytics.constants.ts` | 기존 큐 용량·전송 주기·Firehose 제한값 |
+
+큐는 NestJS provider가 아닌 일반 클래스이며 AWS나 타이머를 모른다.
+전송 중인 이벤트도 성공 확인 전까지 큐 용량에 포함한다. 성공한 객체만 제거하므로
+같은 `event_id`의 다른 레코드나 전송 도중 추가된 이벤트를 함께 삭제하지 않는다.
+전송 실패 로그에는 허용된 오류 종류만 기록하고 메시지·UTM·payload는 기록하지 않는다.
+
+종료 시 `AnalyticsService`가 전송 완료 후 `FirehoseTransport.close()`를 직접 호출한다.
+같은 모듈의 provider 종료 훅은 병렬 실행될 수 있으므로 transport에 독립 종료 훅을 두지 않는다.
+테스트에는 HTTP 종료 경계의 이벤트 수집, 실제 AWS SDK의 자격 증명 대기,
+늦게 도착한 전송 응답, 15초 종료 제한과 큐 용량 복구를 포함한다.
