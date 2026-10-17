@@ -164,7 +164,7 @@ void describe('AnalyticsStack', () => {
         })
     })
 
-    void it('Athena는 날짜 projection과 properties_json 스키마를 사용하고 결과 설정·스캔 제한을 강제한다', () => {
+    void it('Athena는 날짜 projection과 custom_data 문자열 스키마를 사용하고 결과 설정·스캔 제한을 강제한다', () => {
         const template = synthesize()
         template.resourceCountIs('AWS::Glue::Crawler', 0)
         template.hasResourceProperties('AWS::Glue::Table', {
@@ -177,7 +177,7 @@ void describe('AnalyticsStack', () => {
                 }),
                 StorageDescriptor: Match.objectLike({
                     Columns: Match.arrayWith([
-                        { Name: 'properties_json', Type: 'string' },
+                        { Name: 'custom_data', Type: 'string' },
                     ]),
                 }),
             }),
