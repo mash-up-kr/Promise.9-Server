@@ -10,6 +10,21 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.6-pg18-bookworm
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: integration
+          POSTGRES_DB: promise9_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d promise9_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,6 +42,11 @@ jobs:
 
       - name: Test
         run: bun run test -- --runInBand
+
+      - name: PostgreSQL integration test
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:integration@localhost:5432/promise9_test
+        run: bun run test:integration
 
       - name: Infrastructure check
         run: |
