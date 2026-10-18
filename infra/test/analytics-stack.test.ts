@@ -1,3 +1,6 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, it } from 'node:test'
 
 import { App } from 'aws-cdk-lib'
@@ -164,7 +167,7 @@ void describe('AnalyticsStack', () => {
         })
     })
 
-    void it('Athena는 날짜 projection과 utm·custom_data 스키마를 사용하고 결과 설정·스캔 제한을 강제한다', () => {
+    void it('Athena는 14개 이벤트 필드와 날짜 projection을 사용하고 결과 설정·스캔 제한을 강제한다', () => {
         const template = synthesize()
         template.resourceCountIs('AWS::Glue::Crawler', 0)
         template.hasResourceProperties('AWS::Glue::Table', {
@@ -176,12 +179,26 @@ void describe('AnalyticsStack', () => {
                     'projection.arrival_date.range': '2026-10-14,NOW',
                 }),
                 StorageDescriptor: Match.objectLike({
-                    Columns: Match.arrayWith([
-                        { Name: 'custom_data', Type: 'string' },
+                    Columns: Match.arrayEquals([
+                        { Name: 'schema_version', Type: 'int' },
+                        ...[
+                            'event_id',
+                            'event_name',
+                            'occurred_at',
+                            'source',
+                            'environment',
+                            'anonymous_id',
+                            'user_id',
+                            'session_id',
+                            'os',
+                            'browser',
+                            'client_version',
+                        ].map((Name) => ({ Name, Type: 'string' })),
                         {
                             Name: 'utm',
-                            Type: 'struct<touch_id:string,model:string,scope:string,captured_at:string,utm_source:string,utm_medium:string,utm_campaign:string,utm_content:string,utm_term:string>',
+                            Type: 'struct<touch_id:string,captured_at:string,utm_source:string,utm_medium:string,utm_campaign:string,utm_content:string,utm_term:string>',
                         },
+                        { Name: 'custom_data', Type: 'string' },
                     ]),
                 }),
             }),
@@ -196,6 +213,54 @@ void describe('AnalyticsStack', () => {
                     EncryptionConfiguration: { EncryptionOption: 'SSE_S3' },
                 }),
             }),
+        })
+    })
+
+    void it('문서의 전송 예시가 Glue 필드·타입과 일치하고 custom_data에는 해당 이벤트 속성만 둔다', () => {
+        const template = synthesize()
+        const table = template.findResources('AWS::Glue::Table').EventsTable
+        const columns = table.Properties.TableInput.StorageDescriptor
+            .Columns as {
+            Name: string
+            Type: string
+        }[]
+        const document = readFileSync(
+            join(
+                __dirname,
+                '../../docs/infrastructure/analytics-event-design.md',
+            ),
+            'utf8',
+        )
+        const example = document.match(/```json\n([\s\S]*?)\n```/)
+        assert.ok(example, '문서에 Firehose 전송 JSON 예시가 있어야 한다')
+        const event = JSON.parse(example[1]) as Record<string, unknown>
+        assert.deepEqual(
+            Object.keys(event).sort(),
+            columns.map(({ Name }) => Name).sort(),
+        )
+
+        for (const { Name, Type } of columns) {
+            const value = event[Name]
+            if (Type.startsWith('struct<')) {
+                assert.ok(value && typeof value === 'object')
+                const fields = Type.slice(7, -1)
+                    .split(',')
+                    .map((field) => field.split(':')[0])
+                assert.deepEqual(Object.keys(value).sort(), fields.sort())
+                for (const fieldValue of Object.values(value)) {
+                    if (fieldValue !== null) {
+                        assert.equal(typeof fieldValue, 'string')
+                    }
+                }
+            } else if (value !== null) {
+                assert.equal(typeof value, Type === 'int' ? 'number' : 'string')
+            }
+        }
+
+        assert.equal(event.schema_version, 1)
+        assert.deepEqual(JSON.parse(event.custom_data as string), {
+            link_id: 456,
+            entry_point: 'create_link_sheet',
         })
     })
 })

@@ -16,23 +16,40 @@ CDK는 수집·저장·조회 리소스를 구성하고, 클라이언트의 공�
 
 ## 공통 이벤트
 
+최상위 필드는 14개다. 클라이언트는 아래 계약으로 전송하고 Glue는 같은 필드·타입으로 Parquet을 만든다. 배포 전 계약이므로 `schema_version`은 `1`을 유지한다.
+
 | 필드 | 타입·의미 |
 | --- | --- |
 | `schema_version` | 정수. 현재 `1` |
 | `event_id` | 사건의 고유 ID. 재전송해도 유지하며 집계 시 중복 제거에 사용 |
 | `event_name` | 비어 있지 않은 사건 이름 |
-| `source` | 이벤트를 기록한 클라이언트: `web`, `app`, `extension` |
-| `platform` | 행동이 시작된 환경. 현재 클라이언트는 `source`와 같은 값을 전송 |
-| `environment` | 배포 환경: `development`, `production` |
 | `occurred_at` | 사건 발생 시각, ISO 8601 UTC 문자열 |
+| `source` | 이벤트를 기록한 클라이언트: `web`, `app`, `extension` |
+| `environment` | 배포 환경: `development`, `production` |
 | `anonymous_id` | 브라우저·앱 설치·확장 프로그램의 익명 식별자 또는 `null` |
 | `user_id` | 서비스 회원 ID의 문자열 표현. 비로그인은 `null` |
 | `session_id` | 실행 세션 식별자 또는 `null` |
-| `operation_id` | 요청·결과 등 같은 작업의 이벤트를 연결하는 선택적 ID. 사용하지 않으면 `null` |
+| `os` | 정규화한 운영체제 이름. 예: `ios`, `android`, `windows`, `macos`, `linux`. 판별 실패는 `unknown` |
+| `browser` | 정규화한 브라우저 이름. 예: `chrome`, `safari`, `firefox`, `edge`. 판별 실패는 `unknown`, 네이티브 앱은 `null` |
+| `client_version` | 실행 중인 웹 배포·앱·확장 버전 문자열. 확인할 수 없으면 `null` |
 | `utm` | 이벤트 발생 시점의 마케팅 접점 객체 또는 `null` |
 | `custom_data` | 이벤트별 속성을 직렬화한 JSON 문자열. Glue/Athena 컬럼 타입은 `string` |
 
-호출부는 `custom_data`에 이벤트별 속성 객체를 전달한다. 공통 직렬화기가 이를 JSON 문자열로 바꿔 전송 레코드의 `custom_data`에 넣는다. 사용자·세션·UTM 등 공통 필드는 `custom_data` 안에 중복해서 넣지 않는다. 이메일·토큰·메모·페이지 본문·URL 전체를 자동 수집하지 않는다.
+`client_version`은 웹 배포 버전·커밋 식별자 또는 앱·확장의 실제 버전이다. 이벤트 형식을 나타내는 `schema_version`과 구분한다. 원본 User-Agent, 이메일·토큰·메모·페이지 본문·URL 전체는 자동 수집하지 않는다.
+
+### 이벤트별 속성
+
+호출부는 `custom_data`에 이벤트별 JSON 객체를 전달하고 공통 직렬화기가 이를 문자열로 바꾼다. 중첩 객체·배열을 포함할 수 있고, 속성이 없는 이벤트는 `"{}"`를 전송한다. 모든 이벤트에 강제되는 공통 하위 속성은 없다. 이벤트별 타입은 `link_saved.link_id`, `signup_completed.provider`처럼 필요한 속성을 필수로 정할 수 있다.
+
+자동·수동 수집 여부로 속성의 위치를 나누지 않는다. 클릭·노출 훅은 해당 이벤트에 필요한 `label`, `item_id`, `screen_name`, `screen_view_id`, 화면 크기·스크롤 값을 `custom_data`에 채울 수 있다. 공통 수집 코어가 이 속성을 모든 이벤트에 주입하지 않으며, 사용자·세션·UTM도 중복해서 넣지 않는다.
+
+| 이벤트별 객체 예 | 전송할 `custom_data` |
+| --- | --- |
+| 속성 없음 | `"{}"` |
+| 링크 저장 결과 | `"{\"link_id\":456,\"entry_point\":\"create_link_sheet\"}"` |
+| 중첩된 실험 속성 | `"{\"experiment\":{\"id\":\"landing\",\"variant\":\"a\"},\"placements\":[\"hero\",\"footer\"]}"` |
+
+`context` 객체와 중복 `platform` 필드는 두지 않는다. 큐 상태·재시도 횟수·배치 ID·flush 사유·collector·`operation_id` 같은 수집·실행 내부 상태를 이벤트나 `custom_data`에 기본 기록하지 않는다. 작업 중 사용자·UTM 스냅샷이나 확장 요청의 상관관계가 필요하면 수집기 내부 메타데이터로 유지한다.
 
 아래는 웹에서 저장 API 성공을 확인한 뒤 Firehose에 전송할 레코드 예시다.
 
@@ -41,18 +58,17 @@ CDK는 수집·저장·조회 리소스를 구성하고, 클라이언트의 공�
   "schema_version": 1,
   "event_id": "b8f2244d-f76e-41d2-bc19-b54d2c414b46",
   "event_name": "link_saved",
-  "source": "web",
-  "platform": "web",
-  "environment": "production",
   "occurred_at": "2026-10-14T09:00:00.000Z",
+  "source": "web",
+  "environment": "production",
   "anonymous_id": "anon_001",
   "user_id": "123",
   "session_id": "session_001",
-  "operation_id": null,
+  "os": "ios",
+  "browser": "safari",
+  "client_version": "web-2026.10.14.1",
   "utm": {
     "touch_id": "touch_001",
-    "model": "last_marketing_touch",
-    "scope": "user",
     "captured_at": "2026-10-13T03:00:00.000Z",
     "utm_source": "instagram",
     "utm_medium": "social",
@@ -60,11 +76,11 @@ CDK는 수집·저장·조회 리소스를 구성하고, 클라이언트의 공�
     "utm_content": "landing_a",
     "utm_term": null
   },
-  "custom_data": "{\"link_id\":456,\"entry_point\":\"create_link\"}"
+  "custom_data": "{\"link_id\":456,\"entry_point\":\"create_link_sheet\"}"
 }
 ```
 
-이벤트 ID, 발생 시각, 사용자와 UTM은 큐에 넣을 때 고정한다. 로그인·계정 전환·재시도로 대기 이벤트의 문맥을 바꾸지 않는다. `source`는 분석용 구분이며 인증된 발생 주체를 보장하는 필드는 아니다.
+이벤트 ID, 발생 시각, 사용자·UTM·실행 환경·`custom_data`는 큐에 넣을 때 고정한다. 로그인·계정 전환·재시도로 대기 이벤트의 값을 바꾸지 않는다. 요청 중 계정이나 UTM이 바뀌어도 해당 요청의 성공 이벤트는 요청 시점에 확보한 문맥을 사용하고, 새 `event_id`와 실제 성공 시각을 기록한다. `source`는 분석용 구분이며 인증된 발생 주체를 보장하는 필드는 아니다.
 
 계정 API의 `utm`은 현재 계정에 저장된 최근 접점이고, 이벤트의 `utm`은 해당 이벤트가 발생했을 때 적용한 접점의 스냅샷이다.
 
@@ -79,17 +95,17 @@ CDK는 수집·저장·조회 리소스를 구성하고, 클라이언트의 공�
 | `utm_campaign` | 동일한 목적과 기획으로 진행한 마케팅 활동 |
 | `utm_content` | 소재·링크 구분 |
 | `utm_term` | 키워드 구분 |
-| `model` | 이벤트에 적용한 선택 기준: `last_marketing_touch` |
-| `scope` | 접점 출처: 비로그인 저장소 `anonymous`, 계정 `user` |
 
-비로그인 접점은 플랫폼 저장소에 보관하고, 로그인 후 계정과 동기화한다. 계정에는 `firstMarketingTouch`와 `lastMarketingTouch`를 저장하며 이후 이벤트에는 최근 접점을 적용한다. `model`·`scope`는 클라이언트가 이벤트에 추가하고 계정 접점에는 저장하지 않는다. 값이 없는 UTM 필드는 `null`이다.
+이벤트의 `utm`은 계정 API와 같은 일곱 필드의 `MarketingTouch` 객체다. 최근 마케팅 접점을 사용하는 `last_marketing_touch` 정책을 적용하며 `model`·`scope`는 전송하지 않는다. 값이 없는 UTM 필드는 `null`이다.
 
-1. UTM 링크로 들어오면 클라이언트가 `touch_id`, `captured_at`, UTM 다섯 필드를 로컬에 저장한다. 비로그인 이벤트에는 이 접점과 `scope=anonymous`를 붙인다.
+비로그인 접점은 플랫폼 저장소에 보관하고, 로그인 후 계정과 동기화한다. 첫 유효 접점은 계정의 `firstMarketingTouch`와 `lastMarketingTouch` 양쪽에 저장한다. API는 최근 접점만 `utm`으로 반환하며 이후 이벤트에 적용한다.
+
+1. UTM 링크로 들어오면 클라이언트가 `touch_id`, `captured_at`, UTM 다섯 필드를 로컬에 저장하고 이벤트의 `utm`으로 사용한다.
 2. 로그인 후 내 정보에서 회원 ID와 계정 접점을 조회한다. 로컬에 미동기화 접점이 있으면 계정 UTM API로 저장한다.
-3. 조회·저장 응답의 `lastMarketingTouch`에 `model=last_marketing_touch`, `scope=user`를 붙여 공통 이벤트 문맥에 보관한다. UTM 없는 다른 기기의 로그인도 이 값을 사용한다.
+3. 조회·저장 응답의 `utm`을 그대로 공통 수집기에 보관한다. 과거 접점을 보낸 경우에도 요청값 대신 서버 응답을 적용한다. UTM 없는 다른 기기의 로그인도 이 값을 사용한다.
 4. 각 이벤트를 큐에 넣을 때 문맥의 `user_id`, `anonymous_id`, `session_id`, `utm`을 복사한다. 클릭·노출 훅이나 성공 처리마다 UTM을 따로 조합하지 않는다.
 
-동기화 대기 중 더 최근인 로컬 접점은 `scope=anonymous`로 사용하고, 계정 저장 응답을 받은 뒤 `scope=user`로 바꾼다. 동기화에 실패하면 로컬 접점을 보존해 다음 동기화에서 재시도한다. 접점이 전혀 없으면 `utm=null`이다.
+동기화 대기 중에는 더 최근인 로컬 접점을 사용한다. 로컬·계정 출처 구분은 수집기 내부 상태로 유지하며 `user_id`로 추론하지 않는다. 인증 확인 중 계정 접점 제거, 로컬 접점 복원, 미동기화 접점 보존을 유지한다. 동기화에 실패하면 로컬 접점을 보존해 다음 동기화에서 재시도하고, 성공한 요청의 `touch_id`만 대기 상태에서 해제한다. 접점이 전혀 없으면 `utm=null`이다.
 
 - 최초 접점은 계정에 처음 저장된 유효 접점을 보존한다.
 - 최근 접점은 `captured_at`이 더 큰 경우에만 전체 교체한다. 동일·과거 시각의 재전송과 UTM 없는 직접 방문은 기존 값을 유지한다.
@@ -112,14 +128,16 @@ UTM은 접점 연결 정보다. 전환 집계에는 별도로 기여 기간을 �
 
 명시적으로 등록한 훅만 수집한다. 웹·확장 프로그램은 `data-label`과 DOM 이벤트·가시성을 연결하고, 앱은 같은 label을 `onPress`·화면 가시성과 연결한다. label은 화면 문구와 독립적인 고정 이름이며 반복 항목은 `item_id`로 구분한다. 훅 사용법은 클라이언트 레포의 `docs/analytics.md`에서 관리한다.
 
-| 이벤트 | 속성 |
+| 이벤트 | 이벤트별 `custom_data` |
 | --- | --- |
 | `component_clicked` | `label`, `screen_name`, `screen_view_id`, `item_id` |
 | `component_impression` | 클릭과 같은 대상 식별 필드 |
 | `screen_viewed` | `screen_name`, `screen_view_id` |
 | `screen_exited` | 화면 식별 필드, `duration_ms`, `exit_reason` |
-| `link_save_requested` | 클라이언트의 링크 저장 요청. API 성공 여부를 뜻하지 않음 |
-| `identity_identified` | 공통 필드의 `anonymous_id`, `user_id` |
+| `link_save_requested` | 정의한 요청 속성 또는 `{}`. API 성공 여부를 뜻하지 않음 |
+| `identity_identified` | 정의한 식별 속성 또는 `{}`. 회원 연결에는 최상위 `anonymous_id`, `user_id`를 사용 |
+
+위 속성은 각 이벤트의 정의이며 다른 이벤트에도 필수로 붙이지 않는다. 화면 크기가 필요하면 `viewport_width`, `viewport_height`를 웹 CSS px·앱 논리 단위로 기록한다. 스크롤을 측정하는 이벤트는 `scroll_depth_percent`, `max_scroll_depth_percent`를 `0`~`100`으로 기록할 수 있다. 미측정 값은 생략하거나 `null`로 두며 `0`으로 만들지 않는다.
 
 노출은 활성 화면에서 대상 면적의 **40% 이상이 연속 1초** 보이면 기록한다. 조건이 깨지면 시간을 다시 측정하고, `screen_view_id + label + item_id`마다 한 번 기록한다. 중첩된 클릭 대상은 가장 가까운 등록 대상만 수집한다.
 

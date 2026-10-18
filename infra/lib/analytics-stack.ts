@@ -22,20 +22,21 @@ const EVENT_COLUMNS: glue.CfnTable.ColumnProperty[] = [
     ...[
         'event_id',
         'event_name',
-        'source',
-        'platform',
-        'environment',
         'occurred_at',
+        'source',
+        'environment',
         'anonymous_id',
         'user_id',
         'session_id',
-        'operation_id',
-        'custom_data',
+        'os',
+        'browser',
+        'client_version',
     ].map((name) => ({ name, type: 'string' })),
     {
         name: 'utm',
-        type: 'struct<touch_id:string,model:string,scope:string,captured_at:string,utm_source:string,utm_medium:string,utm_campaign:string,utm_content:string,utm_term:string>',
+        type: 'struct<touch_id:string,captured_at:string,utm_source:string,utm_medium:string,utm_campaign:string,utm_content:string,utm_term:string>',
     },
+    { name: 'custom_data', type: 'string' },
 ]
 
 export class AnalyticsStack extends Stack {
