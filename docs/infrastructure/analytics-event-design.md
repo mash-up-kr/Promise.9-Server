@@ -141,7 +141,7 @@ UTM은 접점 연결 정보다. 전환 집계에는 별도로 기여 기간을 �
 
 노출은 활성 화면에서 대상 면적의 **40% 이상이 연속 1초** 보이면 기록한다. 조건이 깨지면 시간을 다시 측정하고, `screen_view_id + label + item_id`마다 한 번 기록한다. 중첩된 클릭 대상은 가장 가까운 등록 대상만 수집한다.
 
-화면 이동·숨김·백그라운드 전환 시 방문을 종료하고 보이는 구간의 체류시간만 기록한다. 복귀하면 새 `screen_view_id`를 만든다. `screen_name`은 라우트 패턴 또는 고정 이름을 사용한다. `exit_reason`은 `navigation`, `hidden`, `background`, `pagehide`, `close`, `unmount`다.
+화면 이동·숨김·백그라운드 전환 시 방문을 종료하고 보이는 구간의 체류시간만 기록한다. 복귀하면 새 `screen_view_id`를 만든다. `screen_name`은 웹·앱·확장에서 같은 `home`, `login`, `link_detail` 등의 논리 이름을 사용한다. `exit_reason`은 `navigation`, `hidden`, `background`, `pagehide`, `close`, `unmount`다.
 
 현재 클라이언트의 `session_id`는 실행 중 유지하고 새로고침·앱 재실행·패널 재열기 때 새로 만든다. 화면 방문 수와 세션 수를 구분하고, 이탈 이벤트가 없는 방문의 체류시간은 미측정으로 처리한다.
 
