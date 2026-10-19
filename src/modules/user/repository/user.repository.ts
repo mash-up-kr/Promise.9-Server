@@ -7,6 +7,7 @@ import {
     DbExecutor,
 } from '../../../config/database/database.service'
 import { users } from '../schema/user.schema'
+import { MarketingTouch, mergeMarketingTouches } from '../user-attribution'
 import { USER_ERROR } from '../user-error.constant'
 
 import { SocialAccountRepository } from './social-account.repository'
@@ -26,6 +27,32 @@ export class UserRepository {
     findActiveById(userId: number) {
         return this.db.query.users.findFirst({
             where: and(eq(users.id, userId), isNull(users.deletedAt)),
+        })
+    }
+
+    async syncAttribution(userId: number, touch: MarketingTouch) {
+        return this.db.transaction(async (tx) => {
+            // 같은 계정의 다른 기기가 동시에 동기화해도 최초 접점과 최신 시각을 보존한다.
+            const [stored] = await tx
+                .select({
+                    userId: users.id,
+                    firstMarketingTouch: users.firstMarketingTouch,
+                    lastMarketingTouch: users.lastMarketingTouch,
+                })
+                .from(users)
+                .where(and(eq(users.id, userId), isNull(users.deletedAt)))
+                .for('update')
+
+            if (!stored) return undefined
+
+            const attribution = mergeMarketingTouches(stored, touch)
+            if (attribution !== stored) {
+                await tx
+                    .update(users)
+                    .set({ ...attribution, updatedAt: new Date() })
+                    .where(eq(users.id, userId))
+            }
+            return { userId, ...attribution }
         })
     }
 

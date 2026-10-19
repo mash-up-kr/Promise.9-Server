@@ -43,7 +43,7 @@
 │   ├── config/            # 환경변수, Swagger, 데이터베이스 설정
 │   ├── app.module.ts      # 루트 NestJS 모듈
 │   └── main.ts            # 애플리케이션 부트스트랩
-├── test/                  # e2e 테스트
+├── test/                  # e2e·PostgreSQL 통합 테스트
 ├── docker-compose.prod.yml # Lightsail API·PostgreSQL 구성
 ├── drizzle.config.ts      # Drizzle Kit 설정
 └── package.json
