@@ -10,7 +10,7 @@ const utmValue = z
     .nullable()
     .default(null)
 
-// 계정과 이벤트는 같은 접점 필드를 사용한다. 로컬·계정 출처는 수집기 내부에서 관리한다.
+// 계정 동기화용 접점은 touch_id·captured_at을 포함한다. 이벤트에는 UTM 다섯 필드만 담는다.
 export const marketingTouchSchema = z
     .strictObject({
         touch_id: z.string().trim().min(1).max(128),

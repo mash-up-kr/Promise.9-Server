@@ -151,19 +151,24 @@ describe('User API: 계정 UTM', () => {
     })
 
     it.each([
+        { ...touch, touch_id: undefined },
+        { ...touch, captured_at: undefined },
         { ...touch, userId: 99 },
         { ...touch, utm_source: null },
         { ...touch, captured_at: 'invalid' },
         { ...touch, captured_at: '2026-10-16T00:05:00.001Z' },
         { ...touch, captured_at: '2027-10-16T00:00:00.000Z' },
-    ])('잘못된 접점·타인 지정 요청은 저장 전에 거부한다', async (body) => {
-        await request(app.getHttpServer())
-            .patch('/users/me/attribution')
-            .auth(token, { type: 'bearer' })
-            .send(body)
-            .expect(400)
-        expect(repository.syncAttribution).not.toHaveBeenCalled()
-    })
+    ])(
+        '동기화 필드 누락·잘못된 접점·타인 지정 요청은 저장 전에 거부한다',
+        async (body) => {
+            await request(app.getHttpServer())
+                .patch('/users/me/attribution')
+                .auth(token, { type: 'bearer' })
+                .send(body)
+                .expect(400)
+            expect(repository.syncAttribution).not.toHaveBeenCalled()
+        },
+    )
 
     it('서버 시각보다 정확히 5분 앞선 접점은 원래 시각으로 저장한다', async () => {
         const incoming = {
