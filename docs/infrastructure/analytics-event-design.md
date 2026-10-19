@@ -32,7 +32,7 @@ CDK는 수집·저장·조회 리소스를 구성하고, 클라이언트의 공�
 | `os` | 정규화한 운영체제 이름. 예: `ios`, `android`, `windows`, `macos`, `linux`. 판별 실패는 `unknown` |
 | `browser` | 정규화한 브라우저 이름. 예: `chrome`, `safari`, `firefox`, `edge`. 판별 실패는 `unknown`, 네이티브 앱은 `null` |
 | `client_version` | 실행 중인 웹 배포·앱·확장 버전 문자열. 확인할 수 없으면 `null` |
-| `utm` | 이벤트 발생 시점의 마케팅 접점 객체 또는 `null` |
+| `utm` | 이벤트에 적용한 UTM 캠페인 다섯 필드의 스냅샷 또는 `null` |
 | `custom_data` | 이벤트별 속성을 직렬화한 JSON 문자열. Glue/Athena 컬럼 타입은 `string` |
 
 `client_version`은 웹 배포 버전·커밋 식별자 또는 앱·확장의 실제 버전이다. 이벤트 형식을 나타내는 `schema_version`과 구분한다. 원본 User-Agent, 이메일·토큰·메모·페이지 본문·URL 전체는 자동 수집하지 않는다.
@@ -68,8 +68,6 @@ CDK는 수집·저장·조회 리소스를 구성하고, 클라이언트의 공�
   "browser": "safari",
   "client_version": "web-2026.10.14.1",
   "utm": {
-    "touch_id": "touch_001",
-    "captured_at": "2026-10-13T03:00:00.000Z",
     "utm_source": "instagram",
     "utm_medium": "social",
     "utm_campaign": "launch_october",
@@ -82,28 +80,28 @@ CDK는 수집·저장·조회 리소스를 구성하고, 클라이언트의 공�
 
 이벤트 ID, 발생 시각, 사용자·UTM·실행 환경·`custom_data`는 큐에 넣을 때 고정한다. 로그인·계정 전환·재시도로 대기 이벤트의 값을 바꾸지 않는다. 요청 중 계정이나 UTM이 바뀌어도 해당 요청의 성공 이벤트는 요청 시점에 확보한 문맥을 사용하고, 새 `event_id`와 실제 성공 시각을 기록한다. `source`는 분석용 구분이며 인증된 발생 주체를 보장하는 필드는 아니다.
 
-계정 API의 `utm`은 현재 계정에 저장된 최근 접점이고, 이벤트의 `utm`은 해당 이벤트가 발생했을 때 적용한 접점의 스냅샷이다.
+계정 API의 `utm`은 현재 계정에 저장된 최근 접점이고, 이벤트의 `utm`은 해당 이벤트에 적용한 접점에서 캠페인 다섯 필드만 선택한 스냅샷이다.
 
 ## UTM과 계정 접점
 
-| 필드 | 의미 |
-| --- | --- |
-| `touch_id` | 마케팅 유입 접점 ID |
-| `captured_at` | 접점을 수집한 UTC 시각 |
-| `utm_source` | 사용자를 서비스로 연결한 플랫폼·매체 |
-| `utm_medium` | 광고·일반 게시물·이메일 등 유입 방식 |
-| `utm_campaign` | 동일한 목적과 기획으로 진행한 마케팅 활동 |
-| `utm_content` | 소재·링크 구분 |
-| `utm_term` | 키워드 구분 |
+| 필드 | 의미 | 사용 범위 |
+| --- | --- | --- |
+| `touch_id` | 마케팅 유입 접점 ID | 계정 DB·API·클라이언트 내부 접점 |
+| `captured_at` | 접점을 수집한 UTC 시각 | 계정 DB·API·클라이언트 내부 접점 |
+| `utm_source` | 사용자를 서비스로 연결한 플랫폼·매체 | 계정 접점과 이벤트 |
+| `utm_medium` | 광고·일반 게시물·이메일 등 유입 방식 | 계정 접점과 이벤트 |
+| `utm_campaign` | 동일한 목적과 기획으로 진행한 마케팅 활동 | 계정 접점과 이벤트 |
+| `utm_content` | 소재·링크 구분 | 계정 접점과 이벤트 |
+| `utm_term` | 키워드 구분 | 계정 접점과 이벤트 |
 
-이벤트의 `utm`은 계정 API와 같은 일곱 필드의 `MarketingTouch` 객체다. 최근 마케팅 접점을 사용하는 `last_marketing_touch` 정책을 적용하며 `model`·`scope`는 전송하지 않는다. 값이 없는 UTM 필드는 `null`이다.
+계정 DB·API와 클라이언트 내부는 일곱 필드의 `MarketingTouch`를 유지한다. 이벤트의 `utm`은 `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`만 포함한다. `touch_id`·`captured_at`은 접점 식별·서버 동기화용으로 유지하고 이벤트나 `custom_data`로 전송하지 않는다. 최근 마케팅 접점을 사용하는 `last_marketing_touch` 정책을 적용하며 `model`·`scope`도 전송하지 않는다. 값이 없는 UTM 필드는 `null`이다.
 
 비로그인 접점은 플랫폼 저장소에 보관하고, 로그인 후 계정과 동기화한다. 첫 유효 접점은 계정의 `firstMarketingTouch`와 `lastMarketingTouch` 양쪽에 저장한다. API는 최근 접점만 `utm`으로 반환하며 이후 이벤트에 적용한다.
 
-1. UTM 링크로 들어오면 클라이언트가 `touch_id`, `captured_at`, UTM 다섯 필드를 로컬에 저장하고 이벤트의 `utm`으로 사용한다.
+1. UTM 링크로 들어오면 클라이언트가 `touch_id`, `captured_at`, UTM 다섯 필드를 로컬 접점으로 저장한다.
 2. 로그인 후 내 정보에서 회원 ID와 계정 접점을 조회한다. 로컬에 미동기화 접점이 있으면 계정 UTM API로 저장한다.
-3. 조회·저장 응답의 `utm`을 그대로 공통 수집기에 보관한다. 과거 접점을 보낸 경우에도 요청값 대신 서버 응답을 적용한다. UTM 없는 다른 기기의 로그인도 이 값을 사용한다.
-4. 각 이벤트를 큐에 넣을 때 문맥의 `user_id`, `anonymous_id`, `session_id`, `utm`을 복사한다. 클릭·노출 훅이나 성공 처리마다 UTM을 따로 조합하지 않는다.
+3. 조회·저장 응답의 일곱 필드 `utm`을 공통 수집기의 내부 접점으로 보관한다. 과거 접점을 보낸 경우에도 요청값 대신 서버 응답을 적용한다. UTM 없는 다른 기기의 로그인도 이 값을 사용한다.
+4. 각 이벤트를 큐에 넣을 때 문맥의 `user_id`, `anonymous_id`, `session_id`를 복사하고 공통 직렬화기가 선택한 접점의 캠페인 다섯 필드만 이벤트의 `utm`에 담는다. 클릭·노출 훅이나 성공 처리마다 UTM을 따로 조합하지 않는다.
 
 동기화 대기 중에는 더 최근인 로컬 접점을 사용한다. 로컬·계정 출처 구분은 수집기 내부 상태로 유지하며 `user_id`로 추론하지 않는다. 인증 확인 중 계정 접점 제거, 로컬 접점 복원, 미동기화 접점 보존을 유지한다. 동기화에 실패하면 로컬 접점을 보존해 다음 동기화에서 재시도하고, 성공한 요청의 `touch_id`만 대기 상태에서 해제한다. 접점이 전혀 없으면 `utm=null`이다.
 

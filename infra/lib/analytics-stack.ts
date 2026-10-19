@@ -34,7 +34,8 @@ const EVENT_COLUMNS: glue.CfnTable.ColumnProperty[] = [
     ].map((name) => ({ name, type: 'string' })),
     {
         name: 'utm',
-        type: 'struct<touch_id:string,captured_at:string,utm_source:string,utm_medium:string,utm_campaign:string,utm_content:string,utm_term:string>',
+        // 접점 식별·동기화 정보는 계정 DB/API에 두고 이벤트에는 캠페인 필드만 저장한다.
+        type: 'struct<utm_source:string,utm_medium:string,utm_campaign:string,utm_content:string,utm_term:string>',
     },
     { name: 'custom_data', type: 'string' },
 ]
