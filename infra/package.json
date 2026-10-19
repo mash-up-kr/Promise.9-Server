@@ -9,7 +9,8 @@
         "synth": "cdk synth",
         "diff": "cdk diff --no-change-set",
         "deploy": "cdk deploy --require-approval broadening",
-        "typecheck": "tsc --noEmit"
+        "typecheck": "tsc --noEmit",
+        "test": "bun test test"
     },
     "dependencies": {
         "aws-cdk-lib": "2.262.1",

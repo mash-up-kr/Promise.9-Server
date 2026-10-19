@@ -8,6 +8,7 @@ import {
 } from 'aws-cdk-lib'
 
 import { AccessStack } from '../lib/access-stack'
+import { AnalyticsStack } from '../lib/analytics-stack'
 import { AssetsStack } from '../lib/assets-stack'
 import { AWS_ACCOUNT_ID, AWS_REGION, PROJECT_NAME } from '../lib/constants'
 import { EmailStack } from '../lib/email-stack'
@@ -73,3 +74,13 @@ const assetsStack = new AssetsStack(app, 'Promise9AssetsStack', {
 })
 Tags.of(assetsStack).add('Project', PROJECT_NAME)
 Tags.of(assetsStack).add('ManagedBy', 'AWS-CDK')
+
+const analyticsStack = new AnalyticsStack(app, 'Promise9AnalyticsStack', {
+    env,
+    synthesizer: new CliCredentialsStackSynthesizer(),
+    terminationProtection: true,
+    description:
+        'Promise9 production analytics via Cognito, Firehose, S3 and Athena',
+})
+Tags.of(analyticsStack).add('Project', PROJECT_NAME)
+Tags.of(analyticsStack).add('ManagedBy', 'AWS-CDK')
