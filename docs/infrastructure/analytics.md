@@ -25,7 +25,7 @@
 
 서버는 계정 UTM 저장·조회 API를 담당한다. AnalyticsStack은 서버 런타임 IAM 사용자를 변경하지 않으며 QueueStack과 독립적으로 구성한다.
 
-`PutRecordBatch`의 각 `Record.Data`에 이벤트 하나를 UTF-8 JSON 바이트로 넣는다. 최상위 14개 필드에는 식별자·발생 시각·실행 환경(`source`, `environment`, `os`, `browser`, `client_version`), `utm`, `custom_data`를 둔다. `utm`은 계정 API와 같은 일곱 필드의 객체 또는 `null`이며 Glue에서 `struct`로 저장한다.
+`PutRecordBatch`의 각 `Record.Data`에 이벤트 하나를 UTF-8 JSON 바이트로 넣는다. 최상위 14개 필드에는 식별자·발생 시각·실행 환경(`source`, `environment`, `os`, `browser`, `client_version`), `utm`, `custom_data`를 둔다. `utm`은 캠페인 다섯 필드(`utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`)의 객체 또는 `null`이며 Glue에서 `struct`로 저장한다. 계정 DB·API와 클라이언트 내부 접점에는 `touch_id`·`captured_at`도 유지하며, 공통 직렬화기가 이벤트에 사용할 다섯 필드만 선택한다.
 
 호출부의 `custom_data` 객체만 공통 직렬화기에서 JSON 문자열로 바꿔 전송한다. Glue/Athena 타입은 `string`이며 모든 이벤트에 강제되는 공통 하위 속성은 없다. 빈 객체는 `"{}"`로 전송하고 중첩 객체·배열도 포함할 수 있다. 훅이 채우는 화면·대상 속성도 필요한 이벤트의 `custom_data`에 정의하며, 공통 수집 코어가 모든 이벤트에 주입하지 않는다. 공통 필드 추가 시 producer와 Glue 스키마를 함께 변경한다.
 

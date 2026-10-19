@@ -167,7 +167,7 @@ void describe('AnalyticsStack', () => {
         })
     })
 
-    void it('Athena는 14개 이벤트 필드와 날짜 projection을 사용하고 결과 설정·스캔 제한을 강제한다', () => {
+    void it('Athena는 최상위 14개·UTM 5개 필드와 날짜 projection을 사용하고 결과 설정·스캔 제한을 강제한다', () => {
         const template = synthesize()
         template.resourceCountIs('AWS::Glue::Crawler', 0)
         template.hasResourceProperties('AWS::Glue::Table', {
@@ -196,7 +196,7 @@ void describe('AnalyticsStack', () => {
                         ].map((Name) => ({ Name, Type: 'string' })),
                         {
                             Name: 'utm',
-                            Type: 'struct<touch_id:string,captured_at:string,utm_source:string,utm_medium:string,utm_campaign:string,utm_content:string,utm_term:string>',
+                            Type: 'struct<utm_source:string,utm_medium:string,utm_campaign:string,utm_content:string,utm_term:string>',
                         },
                         { Name: 'custom_data', Type: 'string' },
                     ]),
