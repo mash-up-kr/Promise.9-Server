@@ -2,7 +2,7 @@
 
 > [API 명세 인덱스](./api-spec.md) · [공통 응답](./common.md)
 
-두 API 모두 JWT 인증이 필요하며 사용자 ID는 토큰에서 얻는다.
+세 API 모두 JWT 인증이 필요하며 사용자 ID는 토큰에서 얻는다.
 
 ## 내 정보 조회
 
@@ -20,11 +20,39 @@ Authorization: Bearer <accessToken>
         "userId": 1,
         "email": "user@example.com",
         "provider": "google",
-        "createdAt": "2026-07-13T00:00:00.000Z",
+        "createdAt": "2026-07-13T00:00:00.000Z"
+    }
+}
+```
+
+설정 화면에서 이메일 등 회원 정보를 조회한다. 응답에는 UTM을 포함하지 않는다.
+
+**오류**: `401` 인증 실패, `404 / 960001` 존재하지 않거나 탈퇴한 계정.
+
+## 마케팅 접점 조회
+
+```http
+GET /users/me/attribution
+Authorization: Bearer <accessToken>
+```
+
+분석 초기화·회원 확인 시 호출한다. 소셜 계정 정보 조회나 접점 동기화 없이 계정에 저장된 값을 반환한다.
+
+**Response `200`**
+
+```json
+{
+    "success": true,
+    "data": {
+        "userId": 1,
         "utm": null
     }
 }
 ```
+
+`data`는 PATCH 응답과 동일한 `{ userId, utm }` 계약이다.
+
+**오류**: `401` 인증 실패, `404 / 960001` 존재하지 않거나 탈퇴한 계정.
 
 `utm`은 계정에 저장된 최근 접점만 담은 아래 `MarketingTouch` 객체다. 저장된 접점이 없으면 `null`을 반환하며 최초 접점은 응답에 포함하지 않는다.
 
@@ -67,7 +95,7 @@ Content-Type: application/json
 | `userId` | 회원 ID, number |
 | `utm` | `MarketingTouch \| null`. 동기화 후 계정에 저장된 최근 접점 |
 
-첫 유효 접점은 DB의 최초·최근 접점 양쪽에 저장한다. 이후 최초 접점은 보존하고, 더 최근 `captured_at`의 접점으로만 최근 접점 전체를 교체한다. 두 API 모두 최근 접점만 `utm`으로 반환한다.
+첫 유효 접점은 DB의 최초·최근 접점 양쪽에 저장한다. 이후 최초 접점은 보존하고, 더 최근 `captured_at`의 접점으로만 최근 접점 전체를 교체한다. `GET /users/me/attribution`과 `PATCH /users/me/attribution`은 최근 접점만 `utm`으로 반환한다.
 
 동일·과거 시각의 요청에는 저장된 최근 접점을 반환한다. 생략한 UTM을 과거 값으로 보충하지 않으며 접점이 바뀔 때만 `updated_at`을 갱신한다.
 

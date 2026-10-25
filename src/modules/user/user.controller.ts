@@ -6,7 +6,7 @@ import { AuthUser, JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ZodValidationPipe } from '../../common/pipe/zod-validation.pipe'
 
 import { UserService } from './user.service'
-import { ApiGetMe, ApiSyncAttribution } from './user.swagger'
+import { ApiGetAttribution, ApiGetMe, ApiSyncAttribution } from './user.swagger'
 import { MarketingTouch, marketingTouchSchema } from './user-attribution'
 
 @ApiTags('User')
@@ -20,6 +20,12 @@ export class UserController {
     @ApiGetMe()
     async getMe(@CurrentUser() user: AuthUser) {
         return this.userService.getMe(user.userId)
+    }
+
+    @Get('me/attribution')
+    @ApiGetAttribution()
+    getAttribution(@CurrentUser() user: AuthUser) {
+        return this.userService.getAttribution(user.userId)
     }
 
     @Patch('me/attribution')

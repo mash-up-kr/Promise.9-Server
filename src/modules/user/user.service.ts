@@ -12,7 +12,8 @@ export interface UserAttributionResponse {
     utm: MarketingTouch | null
 }
 
-export interface MeResponse extends UserAttributionResponse {
+export interface MeResponse {
+    userId: number
     email: string
     provider: string
     createdAt: Date
@@ -40,8 +41,14 @@ export class UserService {
             email: user.email,
             provider: socialAccount?.provider ?? 'unknown',
             createdAt: user.createdAt,
-            utm: user.lastMarketingTouch,
         }
+    }
+
+    async getAttribution(userId: number): Promise<UserAttributionResponse> {
+        const user = await this.userRepository.findActiveById(userId)
+        if (!user) throw new BaseException(USER_ERROR.NOT_FOUND)
+
+        return { userId: user.id, utm: user.lastMarketingTouch }
     }
 
     async syncAttribution(

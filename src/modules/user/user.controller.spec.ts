@@ -4,6 +4,7 @@ import { INestApplication } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { JwtModule, JwtService } from '@nestjs/jwt'
 import { PassportModule } from '@nestjs/passport'
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
 
@@ -41,6 +42,8 @@ describe('User API: 계정 UTM', () => {
         syncAttribution: jest.fn(),
     }
 
+    const socialRepository = { findByUserId: jest.fn() }
+
     beforeAll(async () => {
         const module = await Test.createTestingModule({
             imports: [
@@ -54,10 +57,7 @@ describe('User API: 계정 UTM', () => {
                 { provide: UserRepository, useValue: repository },
                 {
                     provide: SocialAccountRepository,
-                    useValue: {
-                        findByUserId: () =>
-                            Promise.resolve({ provider: 'google' }),
-                    },
+                    useValue: socialRepository,
                 },
                 {
                     provide: ConfigService,
@@ -78,6 +78,7 @@ describe('User API: 계정 UTM', () => {
 
     beforeEach(() => {
         jest.clearAllMocks()
+        socialRepository.findByUserId.mockResolvedValue({ provider: 'google' })
         jest.spyOn(Date, 'now').mockReturnValue(
             Date.parse('2026-10-16T00:00:00.000Z'),
         )
@@ -204,12 +205,11 @@ describe('User API: 계정 UTM', () => {
                 email: 'user@example.com',
                 provider: 'google',
                 createdAt: '2026-10-15T00:00:00.000Z',
-                utm: null,
             },
         })
     })
 
-    it('내 정보에는 저장된 최근 접점만 utm으로 포함한다', async () => {
+    it('저장된 접점이 있어도 회원 정보만 반환한다', async () => {
         repository.findActiveById.mockResolvedValue({
             id: 7,
             email: 'user@example.com',
@@ -228,8 +228,95 @@ describe('User API: 계정 UTM', () => {
                 email: 'user@example.com',
                 provider: 'google',
                 createdAt: '2026-10-15T00:00:00.000Z',
-                utm: latestTouch,
             },
         })
+    })
+
+    it.each(['/users/me', '/users/me/attribution'])(
+        '%s는 인증 누락·잘못된 토큰을 거부한다',
+        async (path) => {
+            await request(app.getHttpServer()).get(path).expect(401)
+            await request(app.getHttpServer())
+                .get(path)
+                .auth('invalid', { type: 'bearer' })
+                .expect(401)
+            expect(repository.findActiveById).not.toHaveBeenCalled()
+        },
+    )
+
+    it.each(['/users/me', '/users/me/attribution'])(
+        '%s는 존재하지 않거나 탈퇴한 계정을 거부한다',
+        async (path) => {
+            repository.findActiveById.mockResolvedValue(undefined)
+            await request(app.getHttpServer())
+                .get(path)
+                .auth(token, { type: 'bearer' })
+                .expect(404)
+            expect(repository.findActiveById).toHaveBeenCalledWith(7)
+        },
+    )
+
+    it.each([null, latestTouch])(
+        '접점 조회는 JWT의 계정에 저장된 최근 접점만 반환한다: %j',
+        async (lastMarketingTouch) => {
+            repository.findActiveById.mockResolvedValue({
+                id: 7,
+                firstMarketingTouch: touch,
+                lastMarketingTouch,
+            })
+            const response = await request(app.getHttpServer())
+                .get('/users/me/attribution?userId=99')
+                .auth(token, { type: 'bearer' })
+                .expect(200)
+            expect(response.body).toEqual({
+                success: true,
+                data: { userId: 7, utm: lastMarketingTouch },
+            })
+            expect(repository.findActiveById).toHaveBeenCalledWith(7)
+            expect(socialRepository.findByUserId).not.toHaveBeenCalled()
+            expect(repository.syncAttribution).not.toHaveBeenCalled()
+        },
+    )
+
+    it('소셜 계정이 없으면 기존 회원 조회의 unknown 제공자를 유지한다', async () => {
+        socialRepository.findByUserId.mockResolvedValue(undefined)
+        const response = await request(app.getHttpServer())
+            .get('/users/me')
+            .auth(token, { type: 'bearer' })
+            .expect(200)
+        expect(response.body).toEqual({
+            success: true,
+            data: {
+                userId: 7,
+                email: 'user@example.com',
+                provider: 'unknown',
+                createdAt: '2026-10-15T00:00:00.000Z',
+            },
+        })
+    })
+
+    it('Swagger는 회원 정보와 접점 응답 스키마를 분리한다', () => {
+        const document = SwaggerModule.createDocument(
+            app,
+            new DocumentBuilder().addBearerAuth().build(),
+        )
+        const schemas = document.components?.schemas
+        expect(schemas?.MeResponseDto).toMatchObject({
+            required: ['userId', 'email', 'provider', 'createdAt'],
+        })
+        expect(schemas?.MeResponseDto).toHaveProperty('properties.userId')
+        expect(schemas?.MeResponseDto).not.toHaveProperty('properties.utm')
+        expect(schemas?.UserAttributionResponseDto).toHaveProperty(
+            'properties.utm.nullable',
+            true,
+        )
+        const attribution = document.paths['/users/me/attribution']
+        expect(attribution.get?.security).toEqual([{ bearer: [] }])
+        for (const operation of [attribution.get, attribution.patch]) {
+            expect(operation?.responses['200']).toHaveProperty(
+                'content.application/json.schema.properties.data.$ref',
+                '#/components/schemas/UserAttributionResponseDto',
+            )
+        }
     })
 })

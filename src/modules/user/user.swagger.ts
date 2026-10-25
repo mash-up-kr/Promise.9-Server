@@ -20,7 +20,6 @@ const ME_RESPONSE_EXAMPLE = {
     email: 'user@example.com',
     provider: 'google',
     createdAt: '2026-07-13T09:41:00.000Z',
-    utm: null,
 }
 
 export const ApiGetMe = () =>
@@ -29,6 +28,19 @@ export const ApiGetMe = () =>
         ApiCommonResponse(MeResponseDto, {
             description: '조회 성공',
             dataExample: ME_RESPONSE_EXAMPLE,
+        }),
+        ApiCommonErrorResponses(AUTH_ERROR.INVALID_TOKEN, USER_ERROR.NOT_FOUND),
+    )
+
+export const ApiGetAttribution = () =>
+    applyDecorators(
+        ApiOperation({
+            summary: '내 계정의 마케팅 접점 조회',
+            description:
+                'JWT로 식별한 계정의 최근 접점만 utm으로 반환한다. 저장된 접점이 없으면 null을 반환한다.',
+        }),
+        ApiCommonResponse(UserAttributionResponseDto, {
+            description: '계정의 최근 접점(utm). 접점이 없으면 null',
         }),
         ApiCommonErrorResponses(AUTH_ERROR.INVALID_TOKEN, USER_ERROR.NOT_FOUND),
     )
