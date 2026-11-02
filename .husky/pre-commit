@@ -2,4 +2,4 @@ if ! command -v bun >/dev/null 2>&1 && [ -d "$HOME/.bun/bin" ]; then
     export PATH="$HOME/.bun/bin:$PATH"
 fi
 
-bun test && bunx lint-staged
+bun run test && bunx lint-staged

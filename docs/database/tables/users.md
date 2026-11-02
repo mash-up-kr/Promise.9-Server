@@ -14,6 +14,8 @@ erDiagram
   USERS {
     bigint id PK
     varchar email UK
+    jsonb first_marketing_touch
+    jsonb last_marketing_touch
     timestamptz created_at
     timestamptz updated_at
     timestamptz deleted_at
@@ -46,6 +48,8 @@ erDiagram
 | --- | --- | --- | --- |
 | id | bigint | Y | 회원 식별자 |
 | email | varchar | Y | 설정 화면에 표시할 대표 이메일 |
+| first_marketing_touch | jsonb | N | 계정에 처음 저장된 유효 마케팅 접점. 이후 보존 |
+| last_marketing_touch | jsonb | N | 수집 시각이 가장 최근인 마케팅 접점 |
 | created_at | timestamptz | Y | 회원 생성 일시 |
 | updated_at | timestamptz | Y | 회원 정보 수정 일시 |
 | deleted_at | timestamptz | N | 회원 탈퇴 또는 소프트 삭제 일시 |
@@ -54,3 +58,11 @@ erDiagram
 
 - `email`은 대표 이메일 기준으로 유니크하게 관리한다.
 - 이메일 미제공 소셜 계정 또는 동일 이메일 계정 병합은 인증 정책에서 결정한다.
+
+## 마케팅 접점
+
+두 컬럼은 `touch_id`, `captured_at`, UTM 다섯 필드를 담은 객체 또는 SQL `NULL`이다. 계정 API도 일곱 필드를 반환한다. `touch_id`·`captured_at`은 접점 식별·동기화용으로 유지하며 분석 이벤트에는 UTM 다섯 필드만 포함한다. `model`·`scope`는 이벤트에 추가하지 않는다.
+
+`PATCH /users/me/attribution`은 사용자 행을 트랜잭션에서 잠그고 갱신한다. 첫 유효 접점은 두 컬럼에 동일하게 저장한다. 이후 최초 접점은 보존하고 최근 접점은 더 큰 `captured_at`일 때 전체 교체한다. 조회·동기화 API는 최근 접점만 `utm`으로 반환한다. 검증 규칙과 응답은 [사용자 API](../../api/user.md#마케팅-접점-동기화)를 참고한다.
+
+`0014_user_marketing_attribution.sql`은 nullable 컬럼 두 개를 추가하며 기존 행의 값은 `NULL`이다.

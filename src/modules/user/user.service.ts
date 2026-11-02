@@ -4,7 +4,13 @@ import { BaseException } from '../../common/exception/base.exception'
 
 import { SocialAccountRepository } from './repository/social-account.repository'
 import { UserRepository } from './repository/user.repository'
+import { MarketingTouch } from './user-attribution'
 import { USER_ERROR } from './user-error.constant'
+
+export interface UserAttributionResponse {
+    userId: number
+    utm: MarketingTouch | null
+}
 
 export interface MeResponse {
     userId: number
@@ -35,6 +41,28 @@ export class UserService {
             email: user.email,
             provider: socialAccount?.provider ?? 'unknown',
             createdAt: user.createdAt,
+        }
+    }
+
+    async getAttribution(userId: number): Promise<UserAttributionResponse> {
+        const user = await this.userRepository.findActiveById(userId)
+        if (!user) throw new BaseException(USER_ERROR.NOT_FOUND)
+
+        return { userId: user.id, utm: user.lastMarketingTouch }
+    }
+
+    async syncAttribution(
+        userId: number,
+        touch: MarketingTouch,
+    ): Promise<UserAttributionResponse> {
+        const attribution = await this.userRepository.syncAttribution(
+            userId,
+            touch,
+        )
+        if (!attribution) throw new BaseException(USER_ERROR.NOT_FOUND)
+        return {
+            userId: attribution.userId,
+            utm: attribution.lastMarketingTouch,
         }
     }
 }
