@@ -24,6 +24,24 @@ const productionEnvironment = {
 }
 
 describe('validateEnvironment', () => {
+    it('Expo access token은 선택 사항이며 공백 설정을 거부한다', () => {
+        expect(
+            validateEnvironment(developmentEnvironment).EXPO_ACCESS_TOKEN,
+        ).toBeUndefined()
+        expect(
+            validateEnvironment({
+                ...developmentEnvironment,
+                EXPO_ACCESS_TOKEN: ' expo-token ',
+            }).EXPO_ACCESS_TOKEN,
+        ).toBe('expo-token')
+        expect(() =>
+            validateEnvironment({
+                ...developmentEnvironment,
+                EXPO_ACCESS_TOKEN: ' ',
+            }),
+        ).toThrow('EXPO_ACCESS_TOKEN')
+    })
+
     it('YouTube API key는 선택 사항이며 설정 시 빈 값을 거부한다', () => {
         expect(
             validateEnvironment(developmentEnvironment).YOUTUBE_API_KEY,
