@@ -7,10 +7,11 @@ import { LinkModule } from '../link/link.module'
 import { FolderController } from './folder.controller'
 import { FolderRepository } from './folder.repository'
 import { FolderService } from './folder.service'
+import { SharedFolderController } from './shared-folder.controller'
 
 @Module({
     imports: [DatabaseModule, LinkModule, AuthModule],
-    controllers: [FolderController],
+    controllers: [FolderController, SharedFolderController],
     providers: [FolderService, FolderRepository],
 })
 export class FolderModule {}
