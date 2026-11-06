@@ -12,6 +12,7 @@ import {
     DEFAULT_FOLDER_COLOR,
     FOLDER_COLOR_LENGTH,
     FOLDER_NAME_MAX_LENGTH,
+    SHARE_TOKEN_LENGTH,
 } from './folder.constants'
 
 // 사용자가 생성하는 실제 폴더. 화면의 전체/미분류/즐겨찾기/최근삭제는 row가 아니라 링크 조회 조건으로 처리한다.
@@ -28,6 +29,10 @@ export const folders = pgTable(
             .notNull()
             .default(DEFAULT_FOLDER_COLOR),
         sortOrder: integer(),
+        // 공유 링크용 추측 불가 토큰. 비어 있으면 공유 중이 아니다.
+        shareToken: varchar({ length: SHARE_TOKEN_LENGTH }),
+        // 공유를 처음 켠 시각. 공유를 끄면 비운다.
+        sharedAt: timestamp({ withTimezone: true }),
         viewCount: integer().notNull().default(0),
         createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -38,6 +43,8 @@ export const folders = pgTable(
         uniqueIndex('folders_user_id_name_active_idx')
             .on(table.userId, table.name)
             .where(sql`${table.deletedAt} is null`),
+        // 공유 토큰은 전체에서 유일해야 링크 하나가 폴더 하나만 가리킨다.
+        uniqueIndex('folders_share_token_idx').on(table.shareToken),
     ],
 )
 
