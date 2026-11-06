@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto'
+
 import { Injectable } from '@nestjs/common'
 
 import { BaseException } from '../../common/exception/base.exception'
@@ -7,9 +9,10 @@ import {
     CreateFolderInput,
     ListFoldersQueryInput,
     ReorderFoldersInput,
+    SharedFolderQueryInput,
     UpdateFolderInput,
 } from './dto/folder.dto'
-import { FOLDER_COLORS } from './folder.constants'
+import { FOLDER_COLORS, SHARE_TOKEN_BYTES } from './folder.constants'
 import { FolderRepository } from './folder.repository'
 import { FolderRow } from './folder.schema'
 import { FOLDER_ERROR } from './folder-error.constant'
@@ -128,6 +131,55 @@ export class FolderService {
 
     async remove(userId: number, folderId: number) {
         await this.folderRepository.removeAndUnassignLinks(userId, folderId)
+    }
+
+    // 공유를 켠다. 이미 공유 중이면 원래 토큰을 그대로 돌려줘 링크가 바뀌지 않게 한다.
+    async enableShare(userId: number, folderId: number) {
+        const folder = await this.getOwnedFolder(userId, folderId)
+
+        if (folder.shareToken) {
+            return { shareToken: folder.shareToken, sharedAt: folder.sharedAt }
+        }
+
+        const token = randomBytes(SHARE_TOKEN_BYTES).toString('base64url')
+        const saved = await this.folderRepository.setShareToken(
+            userId,
+            folderId,
+            token,
+        )
+        // 동시에 켜져 다른 요청이 먼저 토큰을 넣었다면 그 값을 다시 읽어 돌려준다.
+        const current = saved ?? (await this.getOwnedFolder(userId, folderId))
+
+        return { shareToken: current.shareToken, sharedAt: current.sharedAt }
+    }
+
+    // 공유 링크를 연 사람에게 보여 줄 폴더와 링크. 로그인 없이 읽기만 되므로 폴더 소유자의
+    // 식별 정보와 메모, 알림 시각 같은 비공개 값은 내보내지 않는다.
+    async getShared(token: string, query: SharedFolderQueryInput) {
+        const folder = await this.folderRepository.findByShareToken(token)
+
+        if (!folder) {
+            throw new BaseException(FOLDER_ERROR.SHARE_NOT_FOUND)
+        }
+
+        const { links, pagination } = await this.linkService.listShared(
+            folder.userId,
+            folder.id,
+            query,
+        )
+
+        return {
+            folderName: folder.name,
+            color: folder.color,
+            sharedAt: folder.sharedAt,
+            links,
+            pagination,
+        }
+    }
+
+    async disableShare(userId: number, folderId: number) {
+        await this.getOwnedFolder(userId, folderId)
+        await this.folderRepository.clearShareToken(userId, folderId)
     }
 
     // 활성 폴더(deleted_at IS NULL) 기준 폴더명 중복을 사전 검증한다. (rename 시 자기 자신 제외)
