@@ -29,6 +29,23 @@ export class GetFolderResponseDto {
 
     @ApiProperty({ example: 24, description: '폴더 누적 조회수' })
     viewCount!: number
+
+    @ApiProperty({
+        type: String,
+        nullable: true,
+        example: null,
+        description: '공유 토큰 (공유 중이 아니면 null)',
+    })
+    shareToken!: string | null
+
+    @ApiProperty({
+        type: String,
+        format: 'date-time',
+        nullable: true,
+        example: null,
+        description: '공유를 처음 켠 시각 (공유 중이 아니면 null)',
+    })
+    sharedAt!: string | null
 }
 
 export class CreateFolderResponseDto {
