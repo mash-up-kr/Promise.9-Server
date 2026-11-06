@@ -98,7 +98,12 @@ export class FolderService {
     async get(userId: number, folderId: number) {
         const folder = await this.getOwnedFolder(userId, folderId)
 
-        return { ...this.toFolderSummary(folder), viewCount: folder.viewCount }
+        return {
+            ...this.toFolderSummary(folder),
+            viewCount: folder.viewCount,
+            shareToken: folder.shareToken,
+            sharedAt: folder.sharedAt,
+        }
     }
 
     // 이름·색상 중 넘어온 값만 부분 수정. (이름을 바꿀 때만 중복 검사)

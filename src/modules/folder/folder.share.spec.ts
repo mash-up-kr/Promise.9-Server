@@ -147,3 +147,23 @@ describe('FolderService 공유 폴더 읽기', () => {
         expect(listShared).not.toHaveBeenCalled()
     })
 })
+
+describe('FolderService 상세의 공유 정보', () => {
+    it('폴더 상세에 공유 토큰과 시작 시각을 넣어 링크를 다시 복사할 수 있게 한다', async () => {
+        const sharedAt = new Date('2026-11-02T00:00:00Z')
+        const service = new FolderService(
+            {
+                findOwned: jest
+                    .fn()
+                    .mockResolvedValue(
+                        baseRow({ shareToken: 'abc', sharedAt }),
+                    ),
+            } as unknown as FolderRepository,
+            {} as unknown as LinkService,
+        )
+
+        await expect(service.get(3, 7)).resolves.toEqual(
+            expect.objectContaining({ shareToken: 'abc', sharedAt }),
+        )
+    })
+})
