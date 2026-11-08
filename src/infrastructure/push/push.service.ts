@@ -18,12 +18,14 @@ export type PushClient = Pick<
 export class PushService {
     private readonly client: PushClient
 
+    /** 서비스에서 재사용할 Expo SDK 클라이언트를 한 번 생성한다. */
     constructor(config: ConfigService<ValidatedEnvironment, true>) {
         this.client = new Expo({
             accessToken: config.get('EXPO_ACCESS_TOKEN', { infer: true }),
         })
     }
 
+    /** 푸시를 Expo에 접수하고 입력 순서대로 토큰별 접수 결과를 반환한다. */
     async send(messages: readonly PushMessage[]): Promise<PushSendResult[]> {
         if (messages.length === 0) return []
 
@@ -87,16 +89,17 @@ export class PushService {
         return results
     }
 
+    /** ticket별 전달 결과를 조회한다. 응답에 없는 ID는 pending으로 반환한다. */
     async getReceipts(
         ticketIds: readonly string[],
     ): Promise<Record<string, PushReceiptResult>> {
         if (ticketIds.length === 0) return {}
 
+        const receiptIds = [...new Set(ticketIds)]
+        const chunks = this.client.chunkPushNotificationReceiptIds(receiptIds)
         const results: Record<string, PushReceiptResult> = {}
 
-        for (const chunk of this.client.chunkPushNotificationReceiptIds([
-            ...new Set(ticketIds),
-        ])) {
+        for (const chunk of chunks) {
             try {
                 const receipts =
                     await this.client.getPushNotificationReceiptsAsync(chunk)
