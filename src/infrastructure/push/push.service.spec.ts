@@ -36,14 +36,15 @@ describe('PushService', () => {
         )
     })
 
-    it('빈 입력이나 유효한 토큰이 없는 경우 SDK 클라이언트를 만들지 않는다', async () => {
+    it('빈 입력이나 유효한 토큰이 없는 경우 SDK 요청을 보내지 않는다', async () => {
         expect(await service.send([])).toEqual([])
         expect(await service.getReceipts([])).toEqual({})
         jest.spyOn(Expo, 'isExpoPushToken').mockReturnValue(false)
         expect(await service.send([{ to: 'invalid' }])).toEqual([
             { to: 'invalid', status: 'rejected', error: 'InvalidPushToken' },
         ])
-        expect(Expo).not.toHaveBeenCalled()
+        expect(client.sendPushNotificationsAsync).not.toHaveBeenCalled()
+        expect(client.getPushNotificationReceiptsAsync).not.toHaveBeenCalled()
     })
 
     it('잘못된 토큰을 제외하고도 원래 순서와 중복 토큰별 ticket을 유지한다', async () => {

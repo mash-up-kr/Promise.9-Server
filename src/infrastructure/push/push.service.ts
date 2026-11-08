@@ -16,11 +16,13 @@ export type PushClient = Pick<
 
 @Injectable()
 export class PushService {
-    private client?: PushClient
+    private readonly client: PushClient
 
-    constructor(
-        private readonly config: ConfigService<ValidatedEnvironment, true>,
-    ) {}
+    constructor(config: ConfigService<ValidatedEnvironment, true>) {
+        this.client = new Expo({
+            accessToken: config.get('EXPO_ACCESS_TOKEN', { infer: true }),
+        })
+    }
 
     async send(messages: readonly PushMessage[]): Promise<PushSendResult[]> {
         if (messages.length === 0) return []
@@ -40,15 +42,15 @@ export class PushService {
 
         if (validMessages.length === 0) return results
 
-        const client = this.getClient()
-        const chunks = client.chunkPushNotifications(validMessages)
+        const chunks = this.client.chunkPushNotifications(validMessages)
         let offset = 0
 
         for (const chunk of chunks) {
             let chunkResults: PushSendResult[]
 
             try {
-                const tickets = await client.sendPushNotificationsAsync(chunk)
+                const tickets =
+                    await this.client.sendPushNotificationsAsync(chunk)
 
                 if (tickets.length !== chunk.length) {
                     throw new Error('Unexpected Expo ticket count')
@@ -90,15 +92,14 @@ export class PushService {
     ): Promise<Record<string, PushReceiptResult>> {
         if (ticketIds.length === 0) return {}
 
-        const client = this.getClient()
         const results: Record<string, PushReceiptResult> = {}
 
-        for (const chunk of client.chunkPushNotificationReceiptIds([
+        for (const chunk of this.client.chunkPushNotificationReceiptIds([
             ...new Set(ticketIds),
         ])) {
             try {
                 const receipts =
-                    await client.getPushNotificationReceiptsAsync(chunk)
+                    await this.client.getPushNotificationReceiptsAsync(chunk)
 
                 for (const id of chunk) {
                     const receipt = receipts[id]
@@ -120,17 +121,5 @@ export class PushService {
         }
 
         return results
-    }
-
-    protected createClient(): PushClient {
-        return new Expo({
-            accessToken: this.config.get('EXPO_ACCESS_TOKEN', { infer: true }),
-        })
-    }
-
-    private getClient(): PushClient {
-        this.client ??= this.createClient()
-
-        return this.client
     }
 }
