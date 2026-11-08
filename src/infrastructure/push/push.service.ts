@@ -4,15 +4,12 @@ import { Expo } from 'expo-server-sdk'
 
 import { ValidatedEnvironment } from '../../config/environment'
 
-import { PushMessage, PushReceiptResult, PushSendResult } from './push.type'
-
-export type PushClient = Pick<
-    Expo,
-    | 'chunkPushNotifications'
-    | 'sendPushNotificationsAsync'
-    | 'chunkPushNotificationReceiptIds'
-    | 'getPushNotificationReceiptsAsync'
->
+import {
+    PushClient,
+    PushMessage,
+    PushReceiptResult,
+    PushSendResult,
+} from './push.type'
 
 @Injectable()
 export class PushService {
@@ -61,15 +58,19 @@ export class PushService {
                 chunkResults = tickets.map((ticket, index) => {
                     const to = validMessages[offset + index].to
 
-                    return ticket.status === 'ok' && ticket.id
-                        ? { to, status: 'accepted', ticketId: ticket.id }
-                        : ticket.status === 'error'
-                          ? {
-                                to,
-                                status: 'rejected',
-                                error: ticket.details?.error ?? 'ExpoError',
-                            }
-                          : { to, status: 'unknown', error: 'REQUEST_FAILED' }
+                    if (ticket.status === 'ok' && ticket.id) {
+                        return { to, status: 'accepted', ticketId: ticket.id }
+                    }
+
+                    if (ticket.status === 'error') {
+                        return {
+                            to,
+                            status: 'rejected',
+                            error: ticket.details?.error ?? 'ExpoError',
+                        }
+                    }
+
+                    return { to, status: 'unknown', error: 'REQUEST_FAILED' }
                 })
             } catch {
                 // SDK 예외에 포함될 수 있는 토큰과 본문을 외부에 노출하지 않는다.
@@ -107,14 +108,20 @@ export class PushService {
                 for (const id of chunk) {
                     const receipt = receipts[id]
 
-                    results[id] = !receipt
-                        ? { status: 'pending' }
-                        : receipt.status === 'ok'
-                          ? { status: 'ok' }
-                          : {
-                                status: 'error',
-                                error: receipt.details?.error ?? 'ExpoError',
-                            }
+                    if (!receipt) {
+                        results[id] = { status: 'pending' }
+                        continue
+                    }
+
+                    if (receipt.status === 'ok') {
+                        results[id] = { status: 'ok' }
+                        continue
+                    }
+
+                    results[id] = {
+                        status: 'error',
+                        error: receipt.details?.error ?? 'ExpoError',
+                    }
                 }
             } catch {
                 for (const id of chunk) {

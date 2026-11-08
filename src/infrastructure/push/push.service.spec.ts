@@ -3,8 +3,8 @@ import { Expo } from 'expo-server-sdk'
 
 import { ValidatedEnvironment } from '../../config/environment'
 
-import { PushClient, PushService } from './push.service'
-import { PushMessage } from './push.type'
+import { PushService } from './push.service'
+import { PushClient, PushMessage } from './push.type'
 
 jest.mock('expo-server-sdk', () => ({
     Expo: Object.assign(jest.fn(), { isExpoPushToken: jest.fn() }),

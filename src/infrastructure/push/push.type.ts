@@ -1,4 +1,16 @@
-import type { ExpoPushErrorReceipt, ExpoPushMessage } from 'expo-server-sdk'
+import type {
+    Expo,
+    ExpoPushErrorReceipt,
+    ExpoPushMessage,
+} from 'expo-server-sdk'
+
+export type PushClient = Pick<
+    Expo,
+    | 'chunkPushNotifications'
+    | 'sendPushNotificationsAsync'
+    | 'chunkPushNotificationReceiptIds'
+    | 'getPushNotificationReceiptsAsync'
+>
 
 // 한 메시지에 한 토큰만 허용해 입력과 ticket의 대응 관계를 유지한다.
 export type PushMessage = Omit<ExpoPushMessage, 'to'> & { to: string }
