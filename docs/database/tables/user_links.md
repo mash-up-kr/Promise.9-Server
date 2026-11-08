@@ -145,3 +145,7 @@ CREATE INDEX links_reminder_at_active_idx
 ## 향후 확장
 
 - 사용자가 AI 요약을 직접 수정할 수 있게 되면 원본 AI 요약과 사용자 수정 요약을 분리할지 결정한다.
+
+## 알림 회차
+
+`links.reminder_occurrence_id`(nullable UUID)는 이메일·푸시가 공유할 리마인드 회차 식별자다. 이번 변경은 컬럼만 추가한다. 발송 연동 시 일정 생성·변경에는 새 UUID를 저장하고 재시도에서는 같은 값을 사용한다. 기존 일정은 NULL이므로 연동 전에 한 번 채워야 한다. [알림 설계](./notifications.md)를 참고한다.

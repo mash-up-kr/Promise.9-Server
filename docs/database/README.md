@@ -21,6 +21,7 @@ Promise.9 서버 DB 문서의 시작점입니다.
 | [social_accounts](./tables/social_accounts.md) | 소셜 로그인 계정 연결 테이블 |
 | [refresh_tokens](./tables/refresh_tokens.md)   | Refresh Token 관리 테이블    |
 | [ai_metrics](./tables/ai_metrics.md)           | LLM 호출 결과 로그           |
+| [notifications](./tables/notifications.md)     | 푸시 토큰·채널 설정·이메일/푸시 이력과 설계 리뷰 |
 
 ## 작성 기준
 
