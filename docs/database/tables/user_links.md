@@ -20,6 +20,7 @@ erDiagram
     varchar ai_summary_status
     text memo
     timestamptz reminder_at
+    uuid reminder_occurrence_id
     boolean is_favorite
     timestamptz viewed_at
     timestamptz deleted_at
@@ -45,6 +46,7 @@ erDiagram
 | ai_summary_status | varchar     | Y    | 비동기 분석 대표 상태. 요약, 태그, 임베딩이 모두 성공해야 `SUCCESS`, AI가 검토 대상으로 판정하면 `NEEDS_REVIEW` |
 | memo              | text        | N    | 사용자 메모. 최대 500자                                                                                       |
 | reminder_at       | timestamptz | N    | 리마인드를 받을 절대 시각. `NULL`이면 리마인드를 설정하지 않음                                                |
+| reminder_occurrence_id | uuid | N | 이메일·푸시 발송 이력이 공유하는 리마인드 회차 식별자 |
 | is_favorite       | boolean     | Y    | 즐겨찾기 여부. 기본값은 `false`                                                                               |
 | viewed_at         | timestamptz | N    | 링크 상세 화면을 마지막으로 조회한 시각. 조회 전에는 `NULL`                                                   |
 | deleted_at        | timestamptz | N    | 최근 삭제된 항목으로 이동한 일시                                                                              |
@@ -145,7 +147,3 @@ CREATE INDEX links_reminder_at_active_idx
 ## 향후 확장
 
 - 사용자가 AI 요약을 직접 수정할 수 있게 되면 원본 AI 요약과 사용자 수정 요약을 분리할지 결정한다.
-
-## 알림 회차
-
-`links.reminder_occurrence_id`(nullable UUID)는 이메일·푸시가 공유할 리마인드 회차 식별자다. 이번 변경은 컬럼만 추가한다. 발송 연동 시 일정 생성·변경에는 새 UUID를 저장하고 재시도에서는 같은 값을 사용한다. 기존 일정은 NULL이므로 연동 전에 한 번 채워야 한다. [알림 설계](./notifications.md)를 참고한다.

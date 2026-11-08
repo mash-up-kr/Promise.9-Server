@@ -160,7 +160,6 @@ erDiagram
 - `tags`는 `(link_id, user_id)` 복합 FK로 `links(id, user_id)`를 참조해 태그·링크의 소유자 정합성을 DB에서 강제한다. 이를 위해 `links`에 `(id, user_id)` 유니크 제약을 둔다. `tags`는 `users`를 직접 참조하지 않고(단독 FK 제거), 소유자·사용자 존재는 `links`를 통해 커버한다.
 - `refresh_tokens`는 토큰 원문 대신 해시만 저장하고 RTR(rotation) 방식으로 재사용을 탐지한다.
 - 세부 컬럼·제약·인덱스는 `docs/database/tables/`의 테이블별 문서를 참조한다.
-- 알림 테이블은 DB 기반만 추가되었으며, 기존 이메일 배치와의 통합 및 소유자 검증은 후속 작업이다. [알림 설계·리뷰](./tables/notifications.md)를 참고한다.
 
 <br>
 
