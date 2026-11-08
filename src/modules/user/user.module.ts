@@ -2,6 +2,9 @@ import { Module } from '@nestjs/common'
 
 import { DatabaseModule } from '../../config/database/database.module'
 
+import { PushTokenController } from './push-token/push-token.controller'
+import { PushTokenRepository } from './push-token/push-token.repository'
+import { PushTokenService } from './push-token/push-token.service'
 import { SocialAccountRepository } from './repository/social-account.repository'
 import { UserRepository } from './repository/user.repository'
 import { UserController } from './user.controller'
@@ -12,8 +15,14 @@ import { UserService } from './user.service'
 // (JwtAuthGuard는 AppModule에 등록된 JwtStrategy로 전역 동작하므로 AuthModule import가 불필요)
 @Module({
     imports: [DatabaseModule],
-    controllers: [UserController],
-    providers: [UserService, UserRepository, SocialAccountRepository],
+    controllers: [UserController, PushTokenController],
+    providers: [
+        UserService,
+        UserRepository,
+        SocialAccountRepository,
+        PushTokenService,
+        PushTokenRepository,
+    ],
     exports: [UserRepository, SocialAccountRepository],
 })
 export class UserModule {}
