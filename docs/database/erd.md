@@ -51,6 +51,7 @@ erDiagram
 
   PUSH_HISTORIES {
     bigint id PK
+    bigint user_id FK
     bigint link_id FK
     uuid occurrence_id
     bigint push_token_id FK

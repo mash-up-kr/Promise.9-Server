@@ -24,6 +24,7 @@ erDiagram
 
   PUSH_HISTORIES {
     bigint id PK
+    bigint user_id FK
     bigint push_token_id FK
   }
 ```
@@ -43,6 +44,7 @@ erDiagram
 
 - `user_id`는 `users.id`를 참조하며, 회원 영구 삭제 시 함께 삭제된다. (`ON DELETE CASCADE`)
 - `token`은 전역 유니크이며 공백만으로 구성된 값은 CHECK로 거부한다.
+- `(id, user_id)`는 유니크하며 `push_histories`의 소유자 검증용 복합 FK가 참조한다.
 - `platform`은 CHECK로 `ios`, `android`만 허용한다.
 - 토큰 삭제 시 [push_histories](./push_histories.md)의 이력은 유지하고 `push_token_id`만 NULL로 바뀐다.
 
@@ -52,8 +54,11 @@ erDiagram
 -- UNIQUE 제약으로 생성되는 인덱스
 CREATE UNIQUE INDEX push_tokens_token_unique ON push_tokens (token);
 
+CREATE UNIQUE INDEX push_tokens_id_user_id_unique ON push_tokens (id, user_id);
+
 CREATE INDEX push_tokens_user_id_idx ON push_tokens (user_id);
 ```
 
 - `token` (유니크): 중복 등록 방지와 토큰 단건 조회.
+- `(id, user_id)` (유니크): 이력과 토큰의 소유자 일치를 검증하는 복합 FK의 참조 대상.
 - `user_id`: 회원별 발송 대상 조회와 토큰 정리.

@@ -3,6 +3,7 @@ import {
     bigint,
     boolean,
     check,
+    foreignKey,
     index,
     pgTable,
     text,
@@ -28,6 +29,7 @@ export const pushTokens = pgTable(
         updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     },
     (table) => [
+        unique('push_tokens_id_user_id_unique').on(table.id, table.userId),
         check(
             'push_tokens_platform_check',
             sql`${table.platform} in ('ios', 'android')`,
@@ -104,16 +106,10 @@ export const pushHistories = pgTable(
     'push_histories',
     {
         id: bigint({ mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
-        linkId: bigint({ mode: 'number' })
-            .notNull()
-            .references(() => links.id, { onDelete: 'cascade' }),
+        userId: bigint({ mode: 'number' }).notNull(),
+        linkId: bigint({ mode: 'number' }).notNull(),
         occurrenceId: uuid().notNull(),
-        pushTokenId: bigint({ mode: 'number' }).references(
-            () => pushTokens.id,
-            {
-                onDelete: 'set null',
-            },
-        ),
+        pushTokenId: bigint({ mode: 'number' }),
         status: varchar({
             length: 20,
             enum: ['PENDING', 'ACCEPTED', 'RECEIPT_OK', 'FAILED', 'UNKNOWN'],
@@ -126,6 +122,17 @@ export const pushHistories = pgTable(
         updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     },
     (table) => [
+        foreignKey({
+            name: 'push_histories_link_owner_fk',
+            columns: [table.linkId, table.userId],
+            foreignColumns: [links.id, links.userId],
+        }).onDelete('cascade'),
+        // shortcut: Drizzle 미지원 대상 컬럼은 0016 SQL에서 지정, FK 재생성 시 SET NULL (push_token_id) 유지.
+        foreignKey({
+            name: 'push_histories_token_owner_fk',
+            columns: [table.pushTokenId, table.userId],
+            foreignColumns: [pushTokens.id, pushTokens.userId],
+        }).onDelete('set null'),
         unique('push_histories_link_occurrence_token_unique').on(
             table.linkId,
             table.occurrenceId,
