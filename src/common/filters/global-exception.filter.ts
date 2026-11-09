@@ -10,6 +10,7 @@ import { Request, Response } from 'express'
 
 import { BaseException, ErrorResponse } from '../exception/base.exception'
 import { COMMON_ERROR } from '../exception/common-error-code.constant'
+import { maskShareToken } from '../security/mask-share-token'
 
 @Catch(HttpException)
 export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
@@ -89,7 +90,7 @@ export class GlobalExceptionFilter implements ExceptionFilter<HttpException> {
     ) {
         const { code, errorCode, message } = body.error
         // 어떤 요청이 어떤 상태·에러코드·메시지로 실패했는지 한 줄로 남긴다.
-        const summary = `${request.method} ${request.originalUrl} → ${code} (errorCode: ${errorCode}) ${message}`
+        const summary = `${request.method} ${maskShareToken(request.originalUrl)} → ${code} (errorCode: ${errorCode}) ${message}`
 
         // 5xx는 서버가 확인해야 할 실제 문제이므로 스택트레이스와 함께 error로 남긴다.
         if (code >= 500) {
