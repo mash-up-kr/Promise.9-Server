@@ -284,17 +284,11 @@ export class LinkService {
         folderId: number,
         query: { cursor?: string; limit: number },
     ) {
-        const { rows } = await this.linkRepository.list(ownerId, {
+        const rows = await this.linkRepository.listSharedLinks(
+            ownerId,
             folderId,
-            cursor: query.cursor,
-            limit: query.limit,
-            sortBy: 'savedAt',
-            order: 'desc',
-            unassigned: false,
-            favorite: false,
-            reminder: false,
-            deleted: false,
-        })
+            query,
+        )
         const { rows: pageRows, pagination } = buildCursorPage(
             rows,
             query.limit,
