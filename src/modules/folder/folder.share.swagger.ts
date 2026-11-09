@@ -1,7 +1,6 @@
 import { applyDecorators } from '@nestjs/common'
 import {
     ApiNoContentResponse,
-    ApiOkResponse,
     ApiOperation,
     ApiParam,
     ApiQuery,
@@ -9,9 +8,16 @@ import {
 
 import { COMMON_ERROR } from '../../common/exception/common-error-code.constant'
 import { MAX_PAGINATION_LIMIT } from '../../common/pagination/pagination.constants'
-import { ApiCommonErrorResponses } from '../../common/swagger/api-response.decorator'
+import {
+    ApiCommonErrorResponses,
+    ApiCommonResponse,
+} from '../../common/swagger/api-response.decorator'
 import { AUTH_ERROR } from '../auth/auth-error.constant'
 
+import {
+    EnableFolderShareResponseDto,
+    SharedFolderResponseDto,
+} from './dto/folder.response.dto'
 import { FOLDER_ERROR } from './folder-error.constant'
 
 const folderIdParam = (description: string) =>
@@ -31,7 +37,7 @@ export const ApiEnableFolderShare = () =>
                 '공유 토큰을 만들어 돌려줍니다. 이미 공유 중이면 원래 토큰을 그대로 돌려주므로 공유 링크가 바뀌지 않습니다. 본인 폴더만 가능합니다.',
         }),
         folderIdParam('[필수] 공유할 폴더 ID'),
-        ApiOkResponse({
+        ApiCommonResponse(EnableFolderShareResponseDto, {
             description: '`shareToken`(공유 주소에 쓰는 값)과 `sharedAt`',
         }),
         ApiCommonErrorResponses(
@@ -82,7 +88,9 @@ export const ApiGetSharedFolder = () =>
             type: Number,
             description: `[선택] 한 번에 받을 개수 (최대 ${MAX_PAGINATION_LIMIT})`,
         }),
-        ApiOkResponse({ description: '폴더와 링크 목록' }),
+        ApiCommonResponse(SharedFolderResponseDto, {
+            description: '폴더와 링크 목록',
+        }),
         ApiCommonErrorResponses(
             COMMON_ERROR.VALIDATION,
             FOLDER_ERROR.SHARE_NOT_FOUND,
