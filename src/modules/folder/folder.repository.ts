@@ -95,6 +95,19 @@ export class FolderRepository {
         return row
     }
 
+    // 공유 토큰으로 폴더를 찾는다. 토큰이 없거나 꺼졌으면 undefined.
+    async findByShareToken(token: string): Promise<FolderRow | undefined> {
+        const [row] = await this.db
+            .select()
+            .from(folders)
+            .where(
+                and(eq(folders.shareToken, token), isNull(folders.deletedAt)),
+            )
+            .limit(1)
+
+        return row
+    }
+
     // 활성 폴더(deleted_at IS NULL) 중 동일 이름이 있는지 조회한다 (rename 시 자기 자신 제외).
     async findActiveByName(
         userId: number,
@@ -172,6 +185,33 @@ export class FolderRepository {
                     and(eq(folders.id, folderId), eq(folders.userId, userId)),
                 )
         })
+    }
+
+    // 아직 공유 중이 아닌 폴더에만 토큰을 넣는다. 동시에 두 번 켜져도 먼저 들어간 토큰이 남도록
+    // share_token IS NULL 조건을 건다. 이미 넣어졌으면 undefined 를 돌려준다.
+    async setShareToken(userId: number, folderId: number, token: string) {
+        const now = new Date()
+        const [row] = await this.db
+            .update(folders)
+            .set({ shareToken: token, sharedAt: now, updatedAt: now })
+            .where(
+                and(
+                    eq(folders.id, folderId),
+                    eq(folders.userId, userId),
+                    isNull(folders.shareToken),
+                ),
+            )
+            .returning()
+
+        return row
+    }
+
+    // 공유를 끈다. 토큰을 지우므로 예전 공유 링크는 바로 열리지 않는다.
+    async clearShareToken(userId: number, folderId: number) {
+        await this.db
+            .update(folders)
+            .set({ shareToken: null, sharedAt: null, updatedAt: new Date() })
+            .where(and(eq(folders.id, folderId), eq(folders.userId, userId)))
     }
 
     // 동시 요청 경합으로 unique index를 위반할 때 나는 23505를 도메인 예외로 변환한다.

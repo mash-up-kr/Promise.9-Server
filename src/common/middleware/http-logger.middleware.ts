@@ -1,6 +1,8 @@
 import { Logger } from '@nestjs/common'
 import { NextFunction, Request, Response } from 'express'
 
+import { maskShareToken } from '../security/mask-share-token'
+
 const logger = new Logger('HTTP')
 
 // 헬스체크 등 주기적으로 호출돼 로그를 도배하는 경로는 접근 로그에서 제외한다.
@@ -24,7 +26,7 @@ export function httpLoggerMiddleware(
     res.on('finish', () => {
         const { statusCode } = res
         const durationMs = Date.now() - startedAt
-        const message = `${method} ${originalUrl} ${statusCode} ${durationMs}ms`
+        const message = `${method} ${maskShareToken(originalUrl)} ${statusCode} ${durationMs}ms`
 
         // 5xx만 경고로 눈에 띄게, 그 외(정상·4xx)는 일반 접근 로그로 남긴다.
         if (statusCode >= 500) {

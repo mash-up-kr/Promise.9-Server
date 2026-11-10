@@ -16,4 +16,9 @@ export const FOLDER_ERROR = {
         errorCode: 920003,
         message: '폴더 순서 목록이 현재 폴더 전체와 일치하지 않습니다.',
     },
+    SHARE_NOT_FOUND: {
+        code: HttpStatus.NOT_FOUND,
+        errorCode: 920004,
+        message: '공유되지 않았거나 공유가 끝난 폴더입니다.',
+    },
 } as const
