@@ -127,7 +127,7 @@ export const pushHistories = pgTable(
             columns: [table.linkId, table.userId],
             foreignColumns: [links.id, links.userId],
         }).onDelete('cascade'),
-        // shortcut: Drizzle 미지원 대상 컬럼은 0016 SQL에서 지정, FK 재생성 시 SET NULL (push_token_id) 유지.
+        // shortcut: Drizzle 미지원 대상 컬럼은 0017 SQL에서 지정, FK 재생성 시 SET NULL (push_token_id) 유지.
         foreignKey({
             name: 'push_histories_token_owner_fk',
             columns: [table.pushTokenId, table.userId],

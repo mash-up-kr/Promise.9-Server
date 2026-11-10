@@ -277,6 +277,37 @@ export class LinkService {
         }
     }
 
+    // 공유 폴더를 연 사람에게 보여 줄 링크 목록. 소유자가 저장한 폴더 안의 활성 링크만
+    // 저장 최신순으로 주고, 메모와 알림 시각처럼 소유자만 볼 값은 포함하지 않는다.
+    async listShared(
+        ownerId: number,
+        folderId: number,
+        query: { cursor?: string; limit: number },
+    ) {
+        const rows = await this.linkRepository.listSharedLinks(
+            ownerId,
+            folderId,
+            query,
+        )
+        const { rows: pageRows, pagination } = buildCursorPage(
+            rows,
+            query.limit,
+            (row) => ({ v: row.cursorValue, id: row.id }),
+        )
+
+        return {
+            links: pageRows.map((row) => ({
+                linkId: row.id,
+                url: row.originalUrl,
+                title: row.title,
+                source: row.domain,
+                thumbnailUrl: pickThumbnailUrl(row.metadata),
+                savedAt: row.createdAt,
+            })),
+            pagination,
+        }
+    }
+
     private toListItems(
         results: Array<{
             row: LinkRow | SearchResultRow

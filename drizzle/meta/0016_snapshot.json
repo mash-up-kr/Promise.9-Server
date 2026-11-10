@@ -1,6 +1,6 @@
 {
-  "id": "d4280216-d746-4abf-aa49-5c80b96b946e",
-  "prevId": "8088b218-c430-41aa-a388-612906beed87",
+  "id": "8f999452-0d06-47e5-ad89-b93265143b05",
+  "prevId": "b7894d26-a919-4d5b-8713-1e9bcdfe6914",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -310,6 +310,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "share_token": {
+          "name": "share_token",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "shared_at": {
+          "name": "shared_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "view_count": {
           "name": "view_count",
           "type": "integer",
@@ -357,6 +369,21 @@
           ],
           "isUnique": true,
           "where": "\"folders\".\"deleted_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "folders_share_token_idx": {
+          "name": "folders_share_token_idx",
+          "columns": [
+            {
+              "expression": "share_token",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -1107,12 +1134,6 @@
             "cycle": false
           }
         },
-        "user_id": {
-          "name": "user_id",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
         "link_id": {
           "name": "link_id",
           "type": "bigint",
@@ -1204,32 +1225,28 @@
         }
       },
       "foreignKeys": {
-        "push_histories_link_owner_fk": {
-          "name": "push_histories_link_owner_fk",
+        "push_histories_link_id_links_id_fk": {
+          "name": "push_histories_link_id_links_id_fk",
           "tableFrom": "push_histories",
           "tableTo": "links",
           "columnsFrom": [
-            "link_id",
-            "user_id"
+            "link_id"
           ],
           "columnsTo": [
-            "id",
-            "user_id"
+            "id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "push_histories_token_owner_fk": {
-          "name": "push_histories_token_owner_fk",
+        "push_histories_push_token_id_push_tokens_id_fk": {
+          "name": "push_histories_push_token_id_push_tokens_id_fk",
           "tableFrom": "push_histories",
           "tableTo": "push_tokens",
           "columnsFrom": [
-            "push_token_id",
-            "user_id"
+            "push_token_id"
           ],
           "columnsTo": [
-            "id",
-            "user_id"
+            "id"
           ],
           "onDelete": "set null",
           "onUpdate": "no action"
@@ -1353,14 +1370,6 @@
           "nullsNotDistinct": false,
           "columns": [
             "token"
-          ]
-        },
-        "push_tokens_id_user_id_unique": {
-          "name": "push_tokens_id_user_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "user_id"
           ]
         }
       },

@@ -18,6 +18,8 @@ erDiagram
     bigint user_id FK
     varchar name
     integer sort_order
+    varchar share_token
+    timestamptz shared_at
     integer view_count
     timestamptz created_at
     timestamptz updated_at
@@ -32,16 +34,18 @@ erDiagram
 
 ## 필드
 
-| 필드       | 타입        | 필수 | 설명                                                 |
-| ---------- | ----------- | ---- | ---------------------------------------------------- |
-| id         | bigint      | Y    | 폴더 식별자                                          |
-| user_id    | bigint      | Y    | 폴더를 생성한 회원 ID                                |
-| name       | varchar     | Y    | 폴더명. 최대 255자 (`varchar(255)`)                  |
-| sort_order | integer     | N    | 사용자별 폴더 노출 순서                              |
-| view_count | integer     | Y    | 폴더 내 링크를 5초 이상 조회한 누적 횟수. 기본값 `0` |
-| created_at | timestamptz | Y    | 폴더 생성 일시                                       |
-| updated_at | timestamptz | Y    | 폴더 수정 일시                                       |
-| deleted_at | timestamptz | N    | 폴더 삭제 일시                                       |
+| 필드        | 타입        | 필수 | 설명                                                                   |
+| ----------- | ----------- | ---- | ---------------------------------------------------------------------- |
+| id          | bigint      | Y    | 폴더 식별자                                                            |
+| user_id     | bigint      | Y    | 폴더를 생성한 회원 ID                                                  |
+| name        | varchar     | Y    | 폴더명. 최대 255자 (`varchar(255)`)                                    |
+| sort_order  | integer     | N    | 사용자별 폴더 노출 순서                                                |
+| share_token | varchar     | N    | 공유 링크용 토큰(32자). 비어 있으면 공유 중이 아니며 전체에서 유일하다 |
+| shared_at   | timestamptz | N    | 공유를 처음 켠 일시. 끄면 비운다                                       |
+| view_count  | integer     | Y    | 폴더 내 링크를 5초 이상 조회한 누적 횟수. 기본값 `0`                   |
+| created_at  | timestamptz | Y    | 폴더 생성 일시                                                         |
+| updated_at  | timestamptz | Y    | 폴더 수정 일시                                                         |
+| deleted_at  | timestamptz | N    | 폴더 삭제 일시                                                         |
 
 ## 제약
 

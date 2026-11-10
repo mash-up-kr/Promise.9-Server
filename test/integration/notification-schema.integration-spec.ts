@@ -61,7 +61,7 @@ describe('알림 스키마 (PostgreSQL)', () => {
         await client.end()
     })
 
-    it('0016은 기존 이력의 소유자를 채우며 다른 회원의 토큰이 있으면 트랜잭션을 롤백한다', async () => {
+    it('0017은 기존 이력의 소유자를 채우며 다른 회원의 토큰이 있으면 트랜잭션을 롤백한다', async () => {
         const schemaName = `notification_migration_${randomUUID().replaceAll('-', '')}`
         const migration = (name: string) =>
             readFileSync(
@@ -75,7 +75,7 @@ describe('알림 스키마 (PostgreSQL)', () => {
                 CREATE TABLE users (id bigint PRIMARY KEY);
                 CREATE TABLE links (id bigint PRIMARY KEY, user_id bigint NOT NULL, UNIQUE(id, user_id));
             `)
-            await tx.unsafe(migration('0015_notification_schema.sql'))
+            await tx.unsafe(migration('0016_notification_schema.sql'))
             await tx.unsafe(`
                 INSERT INTO users VALUES (1), (2);
                 INSERT INTO links (id, user_id) VALUES (10, 1);
@@ -88,7 +88,7 @@ describe('알림 스키마 (PostgreSQL)', () => {
             await expect(
                 tx.savepoint(async (savepoint) => {
                     await savepoint.unsafe(
-                        migration('0016_push_history_owner.sql'),
+                        migration('0017_push_history_owner.sql'),
                     )
                 }),
             ).rejects.toMatchObject({ code: '23503' })
@@ -99,7 +99,7 @@ describe('알림 스키마 (PostgreSQL)', () => {
             expect(column.count).toBe(0)
             expect(await tx`SELECT id FROM push_histories`).toHaveLength(3)
             await tx`DELETE FROM push_histories WHERE ticket_id = 'other-user-token'`
-            await tx.unsafe(migration('0016_push_history_owner.sql'))
+            await tx.unsafe(migration('0017_push_history_owner.sql'))
             const rows = await tx`
                 SELECT user_id, ticket_id FROM push_histories ORDER BY ticket_id
             `
