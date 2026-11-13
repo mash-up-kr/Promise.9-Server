@@ -19,7 +19,6 @@ erDiagram
   USERS ||--o{ NOTIFICATION_SETTINGS : configures
   LINKS ||--o{ EMAIL_HISTORIES : triggers
   LINKS ||--o{ PUSH_HISTORIES : triggers
-  PUSH_TOKENS |o--o{ PUSH_HISTORIES : targets
 
   PUSH_TOKENS {
     bigint id PK
@@ -41,6 +40,7 @@ erDiagram
 
   EMAIL_HISTORIES {
     bigint id PK
+    bigint user_id FK
     bigint link_id FK
     uuid occurrence_id
     varchar status
@@ -54,7 +54,6 @@ erDiagram
     bigint user_id FK
     bigint link_id FK
     uuid occurrence_id
-    bigint push_token_id FK
     varchar status
     varchar ticket_id
     varchar error_code

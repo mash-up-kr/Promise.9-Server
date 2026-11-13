@@ -10,11 +10,13 @@ erDiagram
 
   LINKS {
     bigint id PK
+    bigint user_id
     uuid reminder_occurrence_id
   }
 
   EMAIL_HISTORIES {
     bigint id PK
+    bigint user_id FK
     bigint link_id FK
     uuid occurrence_id
     varchar status
@@ -29,6 +31,7 @@ erDiagram
 | 필드 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | id | bigint | Y | 이메일 발송 이력 식별자. identity PK |
+| user_id | bigint | Y | 링크 소유 회원 ID |
 | link_id | bigint | Y | 대상 링크 ID |
 | occurrence_id | uuid | Y | 이메일·푸시가 공유하는 리마인드 회차 UUID |
 | status | varchar(20) | Y | `PENDING`, `ACCEPTED`, `FAILED`, `UNKNOWN`. 기본값 `PENDING` |
@@ -38,7 +41,7 @@ erDiagram
 
 ## 제약
 
-- `link_id`는 `links.id`를 참조하며, 링크 영구 삭제 시 함께 삭제된다. (`ON DELETE CASCADE`)
+- `(link_id, user_id)`는 `links(id, user_id)`를 참조해 링크 소유자와 이력 소유자의 일치를 강제한다. 링크 영구 삭제 시 함께 삭제된다. (`ON DELETE CASCADE`)
 - `(link_id, occurrence_id)`는 유니크하다.
 - `occurrence_id`는 UUID 자동 생성 기본값을 두지 않는다. `links.reminder_occurrence_id`에 대한 물리 FK는 없다.
 - `status`는 CHECK로 필드 표에 명시된 값만 허용한다.

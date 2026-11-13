@@ -29,7 +29,6 @@ export const pushTokens = pgTable(
         updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     },
     (table) => [
-        unique('push_tokens_id_user_id_unique').on(table.id, table.userId),
         check(
             'push_tokens_platform_check',
             sql`${table.platform} in ('ios', 'android')`,
@@ -67,9 +66,8 @@ export const emailHistories = pgTable(
     'email_histories',
     {
         id: bigint({ mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
-        linkId: bigint({ mode: 'number' })
-            .notNull()
-            .references(() => links.id, { onDelete: 'cascade' }),
+        userId: bigint({ mode: 'number' }).notNull(),
+        linkId: bigint({ mode: 'number' }).notNull(),
         // 회차 UUID는 스케줄러가 한 번 생성하고 모든 채널·재시도에서 재사용한다.
         occurrenceId: uuid().notNull(),
         status: varchar({
@@ -83,6 +81,11 @@ export const emailHistories = pgTable(
         updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     },
     (table) => [
+        foreignKey({
+            name: 'email_histories_link_owner_fk',
+            columns: [table.linkId, table.userId],
+            foreignColumns: [links.id, links.userId],
+        }).onDelete('cascade'),
         unique('email_histories_link_occurrence_unique').on(
             table.linkId,
             table.occurrenceId,
@@ -109,7 +112,6 @@ export const pushHistories = pgTable(
         userId: bigint({ mode: 'number' }).notNull(),
         linkId: bigint({ mode: 'number' }).notNull(),
         occurrenceId: uuid().notNull(),
-        pushTokenId: bigint({ mode: 'number' }),
         status: varchar({
             length: 20,
             enum: ['PENDING', 'ACCEPTED', 'RECEIPT_OK', 'FAILED', 'UNKNOWN'],
@@ -127,17 +129,6 @@ export const pushHistories = pgTable(
             columns: [table.linkId, table.userId],
             foreignColumns: [links.id, links.userId],
         }).onDelete('cascade'),
-        // shortcut: Drizzle 미지원 대상 컬럼은 0017 SQL에서 지정, FK 재생성 시 SET NULL (push_token_id) 유지.
-        foreignKey({
-            name: 'push_histories_token_owner_fk',
-            columns: [table.pushTokenId, table.userId],
-            foreignColumns: [pushTokens.id, pushTokens.userId],
-        }).onDelete('set null'),
-        unique('push_histories_link_occurrence_token_unique').on(
-            table.linkId,
-            table.occurrenceId,
-            table.pushTokenId,
-        ),
         check(
             'push_histories_status_check',
             sql`${table.status} in ('PENDING', 'ACCEPTED', 'RECEIPT_OK', 'FAILED', 'UNKNOWN')`,
@@ -146,7 +137,7 @@ export const pushHistories = pgTable(
             'push_histories_accepted_ticket_check',
             sql`${table.status} not in ('ACCEPTED', 'RECEIPT_OK') or ${table.ticketId} is not null`,
         ),
-        index('push_histories_push_token_id_idx').on(table.pushTokenId),
+        index('push_histories_link_id_idx').on(table.linkId),
         index('push_histories_status_updated_at_idx').on(
             table.status,
             table.updatedAt,

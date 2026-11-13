@@ -127,6 +127,13 @@
       "when": 1794316288836,
       "tag": "0017_push_history_owner",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794552733216,
+      "tag": "0018_notification_history_references",
+      "breakpoints": true
     }
   ]
 }

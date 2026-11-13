@@ -23,7 +23,6 @@ const client = postgres(databaseUrl, {
 describe('알림 스키마 (PostgreSQL)', () => {
     let userId: string
     let linkId: string
-    let tokenId: string
     let token: string
     let occurrenceId: string
 
@@ -45,11 +44,10 @@ describe('알림 스키마 (PostgreSQL)', () => {
             VALUES (${userId}, 'https://example.com', 'https://example.com') RETURNING id
         `
         linkId = link.id as string
-        const [pushToken] = await client`
+        await client`
             INSERT INTO push_tokens (user_id, token, platform)
-            VALUES (${userId}, ${token}, 'ios') RETURNING id
+            VALUES (${userId}, ${token}, 'ios')
         `
-        tokenId = pushToken.id as string
     })
 
     afterEach(async () => {
@@ -61,7 +59,7 @@ describe('알림 스키마 (PostgreSQL)', () => {
         await client.end()
     })
 
-    it('0017은 기존 이력의 소유자를 채우며 다른 회원의 토큰이 있으면 트랜잭션을 롤백한다', async () => {
+    it('0018은 기존 이력을 보존하고 이메일 소유자를 보강하며 토큰 참조만 제거한다', async () => {
         const schemaName = `notification_migration_${randomUUID().replaceAll('-', '')}`
         const migration = (name: string) =>
             readFileSync(
@@ -77,42 +75,39 @@ describe('알림 스키마 (PostgreSQL)', () => {
             `)
             await tx.unsafe(migration('0016_notification_schema.sql'))
             await tx.unsafe(`
-                INSERT INTO users VALUES (1), (2);
+                INSERT INTO users VALUES (1);
                 INSERT INTO links (id, user_id) VALUES (10, 1);
                 INSERT INTO push_tokens (user_id, token, platform)
-                VALUES (1, 'original-token', 'ios'), (1, 'deleted-token', 'android'), (2, 'other-user-token', 'ios');
+                VALUES (1, 'original-token', 'ios'), (1, 'deleted-token', 'android');
                 INSERT INTO push_histories (link_id, occurrence_id, push_token_id, status, ticket_id)
                 SELECT 10, '00000000-0000-0000-0000-000000000001', id, 'ACCEPTED', token FROM push_tokens;
+                INSERT INTO email_histories (link_id, occurrence_id, status, ses_message_id)
+                VALUES (10, '00000000-0000-0000-0000-000000000001', 'ACCEPTED', 'ses-id');
                 DELETE FROM push_tokens WHERE token = 'deleted-token';
             `)
-            await expect(
-                tx.savepoint(async (savepoint) => {
-                    await savepoint.unsafe(
-                        migration('0017_push_history_owner.sql'),
-                    )
-                }),
-            ).rejects.toMatchObject({ code: '23503' })
+            await tx.unsafe(migration('0017_push_history_owner.sql'))
+            const before =
+                await tx`SELECT id, user_id, link_id, occurrence_id, status, ticket_id, created_at, updated_at FROM push_histories ORDER BY id`
+            await tx.unsafe(
+                migration('0018_notification_history_references.sql'),
+            )
+            expect([
+                ...(await tx`SELECT * FROM push_histories ORDER BY id`),
+            ]).toEqual(before.map((row) => ({ ...row, error_code: null })))
+            const [email] =
+                await tx`SELECT user_id, status, ses_message_id FROM email_histories`
+            expect(email).toEqual({
+                user_id: '1',
+                status: 'ACCEPTED',
+                ses_message_id: 'ses-id',
+            })
             const [column] = await tx`
                 SELECT count(*)::integer AS count FROM information_schema.columns
-                WHERE table_schema = ${schemaName} AND table_name = 'push_histories' AND column_name = 'user_id'
+                WHERE table_schema = ${schemaName} AND table_name = 'push_histories' AND column_name = 'push_token_id'
             `
             expect(column.count).toBe(0)
-            expect(await tx`SELECT id FROM push_histories`).toHaveLength(3)
-            await tx`DELETE FROM push_histories WHERE ticket_id = 'other-user-token'`
-            await tx.unsafe(migration('0017_push_history_owner.sql'))
-            const rows = await tx`
-                SELECT user_id, ticket_id FROM push_histories ORDER BY ticket_id
-            `
-            expect([...rows]).toEqual([
-                { user_id: '1', ticket_id: 'deleted-token' },
-                { user_id: '1', ticket_id: 'original-token' },
-            ])
-            await tx`DELETE FROM push_tokens WHERE user_id = 1`
-            expect(
-                await tx`
-                SELECT id FROM push_histories WHERE user_id = 1 AND push_token_id IS NULL AND status = 'ACCEPTED'
-            `,
-            ).toHaveLength(2)
+            await tx`DELETE FROM push_tokens`
+            expect(await tx`SELECT id FROM push_histories`).toHaveLength(2)
             await tx.unsafe(`DROP SCHEMA "${schemaName}" CASCADE`)
         })
     })
@@ -154,128 +149,119 @@ describe('알림 스키마 (PostgreSQL)', () => {
         })
     })
 
-    it('존재하지 않는 사용자와 링크·토큰 참조를 거부한다', async () => {
+    it('존재하지 않는 사용자와 링크 참조를 거부한다', async () => {
         await expect(client`
             INSERT INTO push_tokens (user_id, token, platform) VALUES (-1, ${randomUUID()}, 'ios')
         `).rejects.toMatchObject({ code: '23503' })
         await expect(client`
-            INSERT INTO email_histories (link_id, occurrence_id) VALUES (-1, ${occurrenceId})
+            INSERT INTO email_histories (user_id, link_id, occurrence_id) VALUES (${userId}, -1, ${occurrenceId})
         `).rejects.toMatchObject({ code: '23503' })
         await expect(client`
-            INSERT INTO push_histories (user_id, link_id, occurrence_id, push_token_id)
-            VALUES (${userId}, ${linkId}, ${occurrenceId}, -1)
+            INSERT INTO push_histories (user_id, link_id, occurrence_id) VALUES (${userId}, -1, ${occurrenceId})
         `).rejects.toMatchObject({ code: '23503' })
     })
 
-    it('같은 회차의 이메일과 기기별 푸시는 중복 생성할 수 없다', async () => {
-        await client`
-            UPDATE links SET reminder_occurrence_id = ${occurrenceId} WHERE id = ${linkId}
-        `
-        const [link] = await client`
-            SELECT reminder_occurrence_id FROM links WHERE id = ${linkId}
-        `
+    it('이메일 회차 중복은 거부하고 같은 회차의 푸시 결과는 각각 저장한다', async () => {
+        await client`UPDATE links SET reminder_occurrence_id = ${occurrenceId} WHERE id = ${linkId}`
+        const [link] =
+            await client`SELECT reminder_occurrence_id FROM links WHERE id = ${linkId}`
         expect(link.reminder_occurrence_id).toBe(occurrenceId)
         await client`
-            INSERT INTO email_histories (link_id, occurrence_id) VALUES (${linkId}, ${occurrenceId})
-        `
-        await client`
-            INSERT INTO push_histories (user_id, link_id, occurrence_id, push_token_id)
-            VALUES (${userId}, ${linkId}, ${occurrenceId}, ${tokenId})
+            INSERT INTO email_histories (user_id, link_id, occurrence_id) VALUES (${userId}, ${linkId}, ${occurrenceId})
         `
         await expect(client`
-            INSERT INTO email_histories (link_id, occurrence_id) VALUES (${linkId}, ${occurrenceId})
+            INSERT INTO email_histories (user_id, link_id, occurrence_id) VALUES (${userId}, ${linkId}, ${occurrenceId})
         `).rejects.toMatchObject({ code: '23505' })
-        await expect(client`
-            INSERT INTO push_histories (user_id, link_id, occurrence_id, push_token_id)
-            VALUES (${userId}, ${linkId}, ${occurrenceId}, ${tokenId})
-        `).rejects.toMatchObject({ code: '23505' })
-        const [other] = await client`
-            INSERT INTO push_tokens (user_id, token, platform)
-            VALUES (${userId}, ${randomUUID()}, 'android') RETURNING id
-        `
         await client`
-            INSERT INTO push_histories (user_id, link_id, occurrence_id, push_token_id)
-            VALUES (${userId}, ${linkId}, ${occurrenceId}, ${other.id as string}),
-                   (${userId}, ${linkId}, ${randomUUID()}, ${tokenId})
+            INSERT INTO push_histories (user_id, link_id, occurrence_id, status, ticket_id)
+            VALUES (${userId}, ${linkId}, ${occurrenceId}, 'ACCEPTED', 'ticket-1'),
+                   (${userId}, ${linkId}, ${occurrenceId}, 'ACCEPTED', 'ticket-2')
         `
+        const rows =
+            await client`SELECT ticket_id FROM push_histories WHERE link_id = ${linkId} ORDER BY ticket_id`
+        expect([...rows]).toEqual([
+            { ticket_id: 'ticket-1' },
+            { ticket_id: 'ticket-2' },
+        ])
     })
 
-    it('서로 다른 회원의 링크·토큰 결합과 기존 연결의 소유자 변경을 거부한다', async () => {
-        const [otherUser] = await client`
+    it.each(['email_histories', 'push_histories'])(
+        '%s는 링크와 다른 회원의 이력 생성·소유자 변경을 거부한다',
+        async (table) => {
+            const [otherUser] = await client`
             INSERT INTO users (email) VALUES (${`${randomUUID()}@example.com`}) RETURNING id
         `
-        const otherUserId = otherUser.id as string
-        try {
-            const [otherToken] = await client`
-                INSERT INTO push_tokens (user_id, token, platform)
-                VALUES (${otherUserId}, ${randomUUID()}, 'ios') RETURNING id
-            `
-            const otherTokenId = otherToken.id as string
-            for (const ownerId of [userId, otherUserId]) {
+            const otherUserId = otherUser.id as string
+            try {
                 await expect(client`
-                    INSERT INTO push_histories (user_id, link_id, occurrence_id, push_token_id)
-                    VALUES (${ownerId}, ${linkId}, ${occurrenceId}, ${otherTokenId})
-                `).rejects.toMatchObject({ code: '23503' })
-            }
-            await client`
-                INSERT INTO push_histories (user_id, link_id, occurrence_id, push_token_id)
-                VALUES (${userId}, ${linkId}, ${occurrenceId}, ${tokenId})
+                INSERT INTO ${client(table)} (user_id, link_id, occurrence_id)
+                VALUES (NULL, ${linkId}, ${occurrenceId})
+            `).rejects.toMatchObject({ code: '23502' })
+                await expect(client`
+                INSERT INTO ${client(table)} (user_id, link_id, occurrence_id)
+                VALUES (${otherUserId}, ${linkId}, ${occurrenceId})
+            `).rejects.toMatchObject({ code: '23503' })
+                await client`
+                INSERT INTO ${client(table)} (user_id, link_id, occurrence_id)
+                VALUES (${userId}, ${linkId}, ${occurrenceId})
             `
-            await expect(client`
-                UPDATE push_histories SET push_token_id = ${otherTokenId} WHERE link_id = ${linkId}
+                await expect(client`
+                UPDATE ${client(table)} SET user_id = ${otherUserId} WHERE link_id = ${linkId}
             `).rejects.toMatchObject({ code: '23503' })
-            await expect(client`
-                UPDATE push_histories SET user_id = ${otherUserId} WHERE link_id = ${linkId}
-            `).rejects.toMatchObject({ code: '23503' })
-            await expect(client`
-                UPDATE push_tokens SET user_id = ${otherUserId} WHERE id = ${tokenId}
-            `).rejects.toMatchObject({ code: '23503' })
-            await expect(client`
+                await expect(client`
                 UPDATE links SET user_id = ${otherUserId} WHERE id = ${linkId}
             `).rejects.toMatchObject({ code: '23503' })
-        } finally {
-            await client`DELETE FROM users WHERE id = ${otherUserId}`
-        }
-    })
+            } finally {
+                await client`DELETE FROM users WHERE id = ${otherUserId}`
+            }
+        },
+    )
 
     it('잘못된 상태와 제공자 ID 없는 접수 성공을 거부한다', async () => {
         for (const status of ['INVALID', 'ACCEPTED']) {
             await expect(client`
-                INSERT INTO email_histories (link_id, occurrence_id, status)
-                VALUES (${linkId}, ${occurrenceId}, ${status})
+                INSERT INTO email_histories (user_id, link_id, occurrence_id, status)
+                VALUES (${userId}, ${linkId}, ${occurrenceId}, ${status})
             `).rejects.toMatchObject({ code: '23514' })
         }
         for (const status of ['INVALID', 'ACCEPTED', 'RECEIPT_OK']) {
             await expect(client`
-                INSERT INTO push_histories (user_id, link_id, occurrence_id, push_token_id, status)
-                VALUES (${userId}, ${linkId}, ${occurrenceId}, ${tokenId}, ${status})
+                INSERT INTO push_histories (user_id, link_id, occurrence_id, status)
+                VALUES (${userId}, ${linkId}, ${occurrenceId}, ${status})
             `).rejects.toMatchObject({ code: '23514' })
         }
         await client`
-            INSERT INTO email_histories (link_id, occurrence_id, status, ses_message_id)
-            VALUES (${linkId}, ${occurrenceId}, 'ACCEPTED', 'ses-id')
+            INSERT INTO email_histories (user_id, link_id, occurrence_id, status, ses_message_id)
+            VALUES (${userId}, ${linkId}, ${occurrenceId}, 'ACCEPTED', 'ses-id')
         `
         await client`
-            INSERT INTO push_histories (user_id, link_id, occurrence_id, push_token_id, status, ticket_id)
-            VALUES (${userId}, ${linkId}, ${occurrenceId}, ${tokenId}, 'RECEIPT_OK', 'ticket-id')
+            INSERT INTO push_histories (user_id, link_id, occurrence_id, status, ticket_id)
+            VALUES (${userId}, ${linkId}, ${occurrenceId}, 'RECEIPT_OK', 'ticket-id')
         `
     })
 
-    it('토큰 삭제는 이력을 보존하고 링크 영구 삭제는 이력을 함께 삭제한다', async () => {
+    it('토큰 삭제와 관계없이 이력을 보존하고 receipt 결과를 갱신한다', async () => {
         await client`
-            INSERT INTO email_histories (link_id, occurrence_id) VALUES (${linkId}, ${occurrenceId})
+            INSERT INTO email_histories (user_id, link_id, occurrence_id) VALUES (${userId}, ${linkId}, ${occurrenceId})
         `
         await client`
-            INSERT INTO push_histories (user_id, link_id, occurrence_id, push_token_id)
-            VALUES (${userId}, ${linkId}, ${occurrenceId}, ${tokenId})
+            INSERT INTO push_histories (user_id, link_id, occurrence_id, status, ticket_id)
+            VALUES (${userId}, ${linkId}, ${occurrenceId}, 'ACCEPTED', 'ticket-1'),
+                   (${userId}, ${linkId}, ${occurrenceId}, 'ACCEPTED', 'ticket-2')
         `
-        await client`DELETE FROM push_tokens WHERE id = ${tokenId}`
-        const rows = await client`
-            SELECT user_id, push_token_id FROM push_histories WHERE link_id = ${linkId}
-        `
-        expect(rows).toHaveLength(1)
-        expect(rows[0].push_token_id).toBeNull()
-        expect(rows[0].user_id).toBe(userId)
+        const before =
+            await client`SELECT * FROM push_histories WHERE link_id = ${linkId} ORDER BY id`
+        await client`DELETE FROM push_tokens WHERE user_id = ${userId}`
+        expect([
+            ...(await client`SELECT * FROM push_histories WHERE link_id = ${linkId} ORDER BY id`),
+        ]).toEqual([...before])
+        await client`UPDATE push_histories SET status = 'RECEIPT_OK' WHERE link_id = ${linkId}`
+        const updated =
+            await client`SELECT status FROM push_histories WHERE link_id = ${linkId}`
+        expect([...updated]).toEqual([
+            { status: 'RECEIPT_OK' },
+            { status: 'RECEIPT_OK' },
+        ])
         await client`DELETE FROM links WHERE id = ${linkId}`
         expect(
             await client`SELECT id FROM email_histories WHERE link_id = ${linkId}`,
@@ -285,48 +271,13 @@ describe('알림 스키마 (PostgreSQL)', () => {
         ).toHaveLength(0)
     })
 
-    it('동일 회차의 여러 토큰 삭제 후에도 소유자·ticket·상태를 보존하고 receipt 결과를 갱신한다', async () => {
-        const [otherToken] = await client`
-            INSERT INTO push_tokens (user_id, token, platform)
-            VALUES (${userId}, ${randomUUID()}, 'android') RETURNING id
-        `
-        await client`
-            INSERT INTO push_histories (user_id, link_id, occurrence_id, push_token_id, status, ticket_id)
-            VALUES (${userId}, ${linkId}, ${occurrenceId}, ${tokenId}, 'ACCEPTED', 'ticket-1'),
-                   (${userId}, ${linkId}, ${occurrenceId}, ${otherToken.id as string}, 'ACCEPTED', 'ticket-2')
-        `
-        await client`DELETE FROM push_tokens WHERE user_id = ${userId}`
-        const rows = await client`
-            SELECT user_id, push_token_id, status, ticket_id FROM push_histories
-            WHERE link_id = ${linkId} ORDER BY ticket_id
-        `
-        expect([...rows]).toEqual(
-            ['ticket-1', 'ticket-2'].map((ticketId) => ({
-                user_id: userId,
-                push_token_id: null,
-                status: 'ACCEPTED',
-                ticket_id: ticketId,
-            })),
-        )
-        await client`
-            UPDATE push_histories SET status = 'RECEIPT_OK' WHERE link_id = ${linkId}
-        `
-        const updated = await client`
-            SELECT status FROM push_histories WHERE link_id = ${linkId}
-        `
-        expect([...updated]).toEqual([
-            { status: 'RECEIPT_OK' },
-            { status: 'RECEIPT_OK' },
-        ])
-    })
-
     it('사용자 영구 삭제는 토큰과 설정을 함께 삭제한다', async () => {
         await client`
             INSERT INTO notification_settings (user_id, channel, enabled) VALUES (${userId}, 'push', true)
         `
         await client`
-            INSERT INTO push_histories (user_id, link_id, occurrence_id, push_token_id)
-            VALUES (${userId}, ${linkId}, ${occurrenceId}, ${tokenId})
+            INSERT INTO push_histories (user_id, link_id, occurrence_id)
+            VALUES (${userId}, ${linkId}, ${occurrenceId})
         `
         await client`DELETE FROM users WHERE id = ${userId}`
         expect(
@@ -336,8 +287,8 @@ describe('알림 스키마 (PostgreSQL)', () => {
             await client`SELECT id FROM notification_settings WHERE user_id = ${userId}`,
         ).toHaveLength(0)
         const [history] = await client`
-            SELECT user_id, push_token_id FROM push_histories WHERE link_id = ${linkId}
+            SELECT user_id FROM push_histories WHERE link_id = ${linkId}
         `
-        expect(history).toEqual({ user_id: userId, push_token_id: null })
+        expect(history).toEqual({ user_id: userId })
     })
 })
