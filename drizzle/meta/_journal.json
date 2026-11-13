@@ -113,6 +113,27 @@
       "when": 1793941130926,
       "tag": "0015_folder_share_token",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794316279464,
+      "tag": "0016_notification_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794316288836,
+      "tag": "0017_push_history_owner",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794552733216,
+      "tag": "0018_notification_history_references",
+      "breakpoints": true
     }
   ]
 }

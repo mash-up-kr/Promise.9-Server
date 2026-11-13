@@ -15,6 +15,51 @@ erDiagram
   FOLDERS ||--o{ LINKS : contains
   LINKS ||--o{ TAGS : has
   LINKS ||--o{ AI_METRICS : measured_by
+  USERS ||--o{ PUSH_TOKENS : registers
+  USERS ||--o{ NOTIFICATION_SETTINGS : configures
+  LINKS ||--o{ EMAIL_HISTORIES : triggers
+  LINKS ||--o{ PUSH_HISTORIES : triggers
+
+  PUSH_TOKENS {
+    bigint id PK
+    bigint user_id FK
+    text token UK
+    varchar platform
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  NOTIFICATION_SETTINGS {
+    bigint id PK
+    bigint user_id FK
+    varchar channel
+    boolean enabled
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  EMAIL_HISTORIES {
+    bigint id PK
+    bigint user_id FK
+    bigint link_id FK
+    uuid occurrence_id
+    varchar status
+    varchar ses_message_id
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  PUSH_HISTORIES {
+    bigint id PK
+    bigint user_id FK
+    bigint link_id FK
+    uuid occurrence_id
+    varchar status
+    varchar ticket_id
+    varchar error_code
+    timestamptz created_at
+    timestamptz updated_at
+  }
 
   USERS {
     bigint id PK
@@ -69,6 +114,7 @@ erDiagram
     varchar ai_summary_status
     text memo
     timestamptz reminder_at
+    uuid reminder_occurrence_id
     timestamptz deleted_at
     timestamptz created_at
     timestamptz updated_at

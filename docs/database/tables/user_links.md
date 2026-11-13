@@ -20,6 +20,7 @@ erDiagram
     varchar ai_summary_status
     text memo
     timestamptz reminder_at
+    uuid reminder_occurrence_id
     boolean is_favorite
     timestamptz viewed_at
     timestamptz deleted_at
@@ -45,6 +46,7 @@ erDiagram
 | ai_summary_status | varchar     | Y    | 비동기 분석 대표 상태. 요약, 태그, 임베딩이 모두 성공해야 `SUCCESS`, AI가 검토 대상으로 판정하면 `NEEDS_REVIEW` |
 | memo              | text        | N    | 사용자 메모. 최대 500자                                                                                       |
 | reminder_at       | timestamptz | N    | 리마인드를 받을 절대 시각. `NULL`이면 리마인드를 설정하지 않음                                                |
+| reminder_occurrence_id | uuid | N | 이메일·푸시 발송 이력이 공유하는 리마인드 회차 식별자 |
 | is_favorite       | boolean     | Y    | 즐겨찾기 여부. 기본값은 `false`                                                                               |
 | viewed_at         | timestamptz | N    | 링크 상세 화면을 마지막으로 조회한 시각. 조회 전에는 `NULL`                                                   |
 | deleted_at        | timestamptz | N    | 최근 삭제된 항목으로 이동한 일시                                                                              |

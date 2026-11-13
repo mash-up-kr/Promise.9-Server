@@ -9,6 +9,7 @@ import {
     timestamp,
     unique,
     uniqueIndex,
+    uuid,
     varchar,
     vector,
 } from 'drizzle-orm/pg-core'
@@ -75,6 +76,8 @@ export const links = pgTable(
         embedding: vector({ dimensions: EMBEDDING_DIMENSIONS }),
         memo: text(),
         reminderAt: timestamp({ withTimezone: true }),
+        // 일정 생성·변경 시 새 UUID를 저장하고 이메일·푸시 이력에서 공유한다.
+        reminderOccurrenceId: uuid(),
         // 다음 CONTENT 재수집이 필요한 시각. Instagram 등 썸네일 TTL(oe 파라미터) 만료나
         // YouTube API 정책상 30일 주기 갱신처럼, 다시 수집해야 하는 사유 중 가장 이른 시각을 담는다.
         // 둘 다 해당 없으면 null — 스케줄러가 이 컬럼만으로 갱신 대상을 조회한다.
