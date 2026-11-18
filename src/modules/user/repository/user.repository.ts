@@ -6,6 +6,7 @@ import {
     DatabaseService,
     DbExecutor,
 } from '../../../config/database/database.service'
+import { pushTokens } from '../../notification/notification.schema'
 import { users } from '../schema/user.schema'
 import { MarketingTouch, mergeMarketingTouches } from '../user-attribution'
 import { USER_ERROR } from '../user-error.constant'
@@ -131,5 +132,8 @@ export class UserRepository {
             .update(users)
             .set({ deletedAt: new Date() })
             .where(and(eq(users.id, userId), isNull(users.deletedAt)))
+
+        // 계정 행 잠금 이후 토큰을 정리해 동시 등록이 탈퇴 이후 남지 않도록 한다.
+        await executor.delete(pushTokens).where(eq(pushTokens.userId, userId))
     }
 }
