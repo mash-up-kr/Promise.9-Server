@@ -33,7 +33,7 @@ const client = postgres(databaseUrl, {
     onnotice: () => undefined,
 })
 const db = drizzle(client, { schema, casing: 'snake_case' })
-const databaseService = { db } as DatabaseService
+const databaseService = { db } as unknown as DatabaseService
 const repository = new PushTokenRepository(databaseService)
 const userRepository = new UserRepository(
     databaseService,
