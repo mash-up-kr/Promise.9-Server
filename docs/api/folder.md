@@ -155,6 +155,43 @@ DELETE /folders/{folderId}
 
 폴더에 포함된 활성 링크는 삭제되지 않고 미분류로 이동한다.
 
+## 폴더 공유 켜기
+
+```http
+PUT /folders/{folderId}/share
+```
+
+본인 폴더의 공유를 켜고 공유 토큰을 돌려준다. 이미 공유 중이면 원래 토큰을 그대로 돌려줘 링크가 바뀌지 않는다. `GET /folders/{folderId}` 응답에도 `shareToken`, `sharedAt`이 들어 있어 공유 링크를 다시 복사할 수 있다.
+
+**Response `200`**
+
+```json
+{
+    "data": {
+        "shareToken": "Zm9sZGVyLXNoYXJlLXRva2VuLWV4YW1wbGU",
+        "sharedAt": "2026-11-06T00:00:00.000Z"
+    }
+}
+```
+
+## 폴더 공유 끄기
+
+```http
+DELETE /folders/{folderId}/share
+```
+
+토큰을 지워서 예전 공유 링크를 바로 막는다. 다시 켜면 새 토큰이 만들어진다.
+
+**Response `204`** No Content
+
+## 공유 폴더 읽기
+
+```http
+GET /shared-folders/{shareToken}?cursor=&limit=
+```
+
+로그인 없이 열린다. 공유 토큰으로 폴더 이름과 그 폴더의 활성 링크를 저장 최신순으로 돌려준다. 읽기만 되며 메모, 알림 시각, AI 요약은 포함하지 않는다. 없거나 꺼진 토큰은 `404`(`920004`)다.
+
 ## 후속 정책 결정
 
 | 항목             | 내용                                                |

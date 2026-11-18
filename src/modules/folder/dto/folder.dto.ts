@@ -1,7 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { z } from 'zod'
 
-import { MAX_PAGINATION_LIMIT } from '../../../common/pagination/pagination.constants'
+import {
+    DEFAULT_PAGINATION_LIMIT,
+    MAX_PAGINATION_LIMIT,
+} from '../../../common/pagination/pagination.constants'
 import {
     DEFAULT_FOLDER_COLOR,
     FOLDER_COLOR_SET,
@@ -71,6 +74,21 @@ export const listFoldersQuerySchema = z
     })
     .strict()
 export type ListFoldersQueryInput = z.infer<typeof listFoldersQuerySchema>
+
+// 공유 폴더 읽기. 로그인 없이 열리는 경로라 받는 값을 cursor 와 limit 로만 좁힌다.
+export const sharedFolderQuerySchema = z
+    .object({
+        cursor: z.string().trim().min(1).optional(),
+        limit: z.coerce
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_PAGINATION_LIMIT)
+            .optional()
+            .default(DEFAULT_PAGINATION_LIMIT),
+    })
+    .strict()
+export type SharedFolderQueryInput = z.infer<typeof sharedFolderQuerySchema>
 
 // 폴더 순서 편집: 원하는 최종 순서대로 나열한 folderId 전체 배열을 받는다.
 // (사용자 폴더 수가 적어 전체를 통째로 다시 쓰는 방식으로 순서를 확정한다)

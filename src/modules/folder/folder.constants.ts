@@ -32,3 +32,7 @@ export const DEFAULT_FOLDER_COLOR: FolderColor = FOLDER_COLORS[0]
 
 // 팔레트 검증용 조회 집합 (소문자 정규화된 hex 기준)
 export const FOLDER_COLOR_SET: ReadonlySet<string> = new Set(FOLDER_COLORS)
+
+// 공유 토큰은 랜덤 바이트 24개를 base64url 로 바꾼 32자다.
+export const SHARE_TOKEN_BYTES = 24
+export const SHARE_TOKEN_LENGTH = 32

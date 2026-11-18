@@ -20,7 +20,14 @@ Promise.9 서버 DB 문서의 시작점입니다.
 | [users](./tables/users.md)                     | 회원 계정 기준 테이블        |
 | [social_accounts](./tables/social_accounts.md) | 소셜 로그인 계정 연결 테이블 |
 | [refresh_tokens](./tables/refresh_tokens.md)   | Refresh Token 관리 테이블    |
+| [folders](./tables/folders.md) | 사용자 폴더 |
+| [links](./tables/user_links.md) | 사용자 저장 링크 |
+| [tags](./tables/tags.md) | 링크 태그 |
 | [ai_metrics](./tables/ai_metrics.md)           | LLM 호출 결과 로그           |
+| [push_tokens](./tables/push_tokens.md) | 기기별 푸시 토큰 |
+| [notification_settings](./tables/notification_settings.md) | 채널별 알림 수신 설정 |
+| [email_histories](./tables/email_histories.md) | 이메일 발송 이력 |
+| [push_histories](./tables/push_histories.md) | 푸시 발송 이력 |
 
 ## 작성 기준
 
