@@ -54,8 +54,8 @@ API 명세, Swagger, controller endpoint, 실제 비즈니스 로직의 진행 �
 
 | API | 명세 | Swagger | Endpoint | 로직 | 남은 작업 |
 | --- | :--: | :-----: | :------: | :--: | --- |
-| `PUT /users/me/push-tokens` | O | O | O | △ | #150 스키마 연결, 활성 사용자 확인·token upsert. 현재 501 |
-| `DELETE /users/me/push-tokens` | O | O | O | △ | #150 스키마 연결, 사용자·토큰 범위의 멱등 삭제. 현재 501 |
+| `PUT /users/me/push-tokens` | O | O | O | O | - |
+| `DELETE /users/me/push-tokens` | O | O | O | O | - |
 
 ## 화면 단위 후속 작업
 

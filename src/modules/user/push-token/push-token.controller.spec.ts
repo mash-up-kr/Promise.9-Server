@@ -41,7 +41,10 @@ describe('Push Token API', () => {
             controllers: [PushTokenController],
             providers: [
                 PushTokenService,
-                PushTokenRepository,
+                {
+                    provide: PushTokenRepository,
+                    useValue: { register: jest.fn(), unregister: jest.fn() },
+                },
                 JwtStrategy,
                 {
                     provide: ConfigService,
@@ -66,12 +69,15 @@ describe('Push Token API', () => {
     })
 
     beforeEach(() => {
+        jest.clearAllMocks()
         // API 경계 검증용 fixture. SDK 자체의 토큰 파서는 이 테스트의 대상이 아니다.
         jest.spyOn(Expo, 'isExpoPushToken').mockImplementation(
             (token) => token === pushToken,
         )
-        register = jest.spyOn(repository, 'register')
-        unregister = jest.spyOn(repository, 'unregister')
+        register = jest.spyOn(repository, 'register').mockResolvedValue(true)
+        unregister = jest
+            .spyOn(repository, 'unregister')
+            .mockResolvedValue(true)
     })
 
     afterEach(() => jest.restoreAllMocks())
@@ -125,7 +131,7 @@ describe('Push Token API', () => {
     )
 
     it('등록 시 JWT 사용자와 정규화된 토큰·플랫폼만 전달하고 본문 없는 204를 반환한다', async () => {
-        register.mockResolvedValue(undefined)
+        register.mockResolvedValue(true)
         const response = await request(app.getHttpServer())
             .put(path + '?userId=99')
             .auth(accessToken, { type: 'bearer' })
@@ -137,7 +143,7 @@ describe('Push Token API', () => {
     })
 
     it('해제 시 JWT 사용자와 해당 토큰만 전달하고 본문 없는 204를 반환한다', async () => {
-        unregister.mockResolvedValue(undefined)
+        unregister.mockResolvedValue(true)
         const response = await request(app.getHttpServer())
             .delete(path + '?userId=99')
             .auth(accessToken, { type: 'bearer' })
@@ -149,27 +155,29 @@ describe('Push Token API', () => {
     })
 
     it.each(['put', 'delete'] as const)(
-        '%s의 실제 저장소는 미연결 상태에서 성공 대신 501을 반환한다',
+        '%s는 존재하지 않거나 탈퇴한 사용자를 거부한다',
         async (method) => {
+            if (method === 'put') register.mockResolvedValue(false)
+            else unregister.mockResolvedValue(false)
             const response = await request(app.getHttpServer())
                 [method](path)
                 .auth(accessToken, { type: 'bearer' })
                 .send(method === 'put' ? registration : { token: pushToken })
-                .expect(501)
+                .expect(404)
 
             expect(response.body).toMatchObject({
                 success: false,
                 error: {
-                    code: 501,
-                    errorCode: 910002,
-                    message: '푸시 토큰 저장소는 아직 연결되지 않았습니다.',
+                    code: 404,
+                    errorCode: 960001,
+                    message: '유저를 찾을 수 없습니다.',
                 },
             })
             expect(response.text).not.toContain(pushToken)
         },
     )
 
-    it('Swagger에 인증·등록/해제 요청·204와 현재 501 상태를 명시한다', () => {
+    it('Swagger에 인증·등록/해제 요청·204와 비활성 계정의 404 상태를 명시한다', () => {
         const document = SwaggerModule.createDocument(
             app,
             new DocumentBuilder().addBearerAuth().build(),
@@ -180,7 +188,8 @@ describe('Push Token API', () => {
         ]) {
             expect(operation?.security).toEqual([{ bearer: [] }])
             expect(operation?.responses).toHaveProperty('204')
-            expect(operation?.responses).toHaveProperty('501')
+            expect(operation?.responses).toHaveProperty('404')
+            expect(operation?.responses).not.toHaveProperty('501')
             expect(operation?.requestBody).toBeDefined()
         }
     })

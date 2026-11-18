@@ -1,23 +1,89 @@
 import { Injectable } from '@nestjs/common'
+import { and, eq, isNull } from 'drizzle-orm'
 
 import { BaseException } from '../../../common/exception/base.exception'
+import { COMMON_ERROR } from '../../../common/exception/common-error-code.constant'
+import {
+    DatabaseService,
+    Transaction,
+} from '../../../config/database/database.service'
+import { pushTokens } from '../../notification/notification.schema'
+import { users } from '../schema/user.schema'
 
-import { PUSH_TOKEN_NOT_IMPLEMENTED_ERROR } from './push-token.constant'
 import { RegisterPushTokenInput } from './push-token.type'
 
 @Injectable()
 export class PushTokenRepository {
-    /** 스키마 PR #150 반영 후 token 기준 upsert 쿼리를 연결한다. */
-    register(_userId: number, _input: RegisterPushTokenInput): Promise<void> {
-        // TODO: 활성 회원 확인 후 전역 유니크 token의 userId·platform·updatedAt을 갱신한다.
-        // 동일 토큰 재등록은 멱등하게 처리하고, 계정 전환 시 새 소유자에게 연결한다.
-        throw new BaseException(PUSH_TOKEN_NOT_IMPLEMENTED_ERROR)
+    constructor(private readonly databaseService: DatabaseService) {}
+
+    private get db() {
+        return this.databaseService.db
     }
 
-    /** 인증된 사용자에게 연결된 토큰만 해제한다. 이미 없으면 성공으로 처리한다. */
-    unregister(_userId: number, _token: string): Promise<void> {
-        // TODO: userId와 token을 함께 WHERE 조건으로 사용해 원자적으로 삭제한다.
-        // #150의 ON DELETE SET NULL에 따라 발송 이력은 유지한다.
-        throw new BaseException(PUSH_TOKEN_NOT_IMPLEMENTED_ERROR)
+    /** 활성 회원에게 토큰을 등록·갱신한다. 계정이 없거나 탈퇴했다면 false를 반환한다. */
+    register(userId: number, input: RegisterPushTokenInput): Promise<boolean> {
+        return this.db
+            .transaction(async (tx) => {
+                if (!(await this.lockActiveUser(userId, tx))) return false
+
+                await tx
+                    .insert(pushTokens)
+                    .values({
+                        userId,
+                        token: input.token,
+                        platform: input.platform,
+                    })
+                    .onConflictDoUpdate({
+                        target: pushTokens.token,
+                        set: {
+                            userId,
+                            platform: input.platform,
+                            updatedAt: new Date(),
+                        },
+                    })
+
+                return true
+            })
+            .catch(() => {
+                // Drizzle 오류에는 토큰을 포함한 SQL 파라미터가 들어갈 수 있다.
+                throw new BaseException(COMMON_ERROR.INTERNAL_SERVER_ERROR)
+            })
+    }
+
+    /** 현재 사용자의 토큰만 해제한다. 없는 토큰도 성공하며 비활성 계정은 false다. */
+    unregister(userId: number, token: string): Promise<boolean> {
+        return this.db
+            .transaction(async (tx) => {
+                if (!(await this.lockActiveUser(userId, tx))) return false
+
+                await tx
+                    .delete(pushTokens)
+                    .where(
+                        and(
+                            eq(pushTokens.userId, userId),
+                            eq(pushTokens.token, token),
+                        ),
+                    )
+
+                return true
+            })
+            .catch(() => {
+                // Drizzle 오류에는 토큰을 포함한 SQL 파라미터가 들어갈 수 있다.
+                throw new BaseException(COMMON_ERROR.INTERNAL_SERVER_ERROR)
+            })
+    }
+
+    /** 회원 탈퇴와 토큰 변경이 겹쳐도 탈퇴 후 토큰이 새로 저장되지 않도록 잠근다. */
+    private async lockActiveUser(
+        userId: number,
+        tx: Transaction,
+    ): Promise<boolean> {
+        const [user] = await tx
+            .select({ id: users.id })
+            .from(users)
+            .where(and(eq(users.id, userId), isNull(users.deletedAt)))
+            .for('update')
+
+        return Boolean(user)
     }
 }
