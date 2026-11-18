@@ -30,6 +30,10 @@ import {
 } from './dto/folder.dto'
 import { FolderService } from './folder.service'
 import {
+    ApiDisableFolderShare,
+    ApiEnableFolderShare,
+} from './folder.share.swagger'
+import {
     ApiCreateFolder,
     ApiGetFolder,
     ApiListFolderColors,
@@ -92,6 +96,25 @@ export class FolderController {
         body: CreateFolderInput,
     ) {
         return this.folderService.create(user.userId, body)
+    }
+
+    @Put(':folderId/share')
+    @ApiEnableFolderShare()
+    enableShare(
+        @CurrentUser() user: AuthUser,
+        @Param('folderId', ParseIntPipe) folderId: number,
+    ) {
+        return this.folderService.enableShare(user.userId, folderId)
+    }
+
+    @Delete(':folderId/share')
+    @HttpCode(204)
+    @ApiDisableFolderShare()
+    disableShare(
+        @CurrentUser() user: AuthUser,
+        @Param('folderId', ParseIntPipe) folderId: number,
+    ) {
+        return this.folderService.disableShare(user.userId, folderId)
     }
 
     @Patch(':folderId')

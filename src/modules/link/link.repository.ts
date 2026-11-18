@@ -42,6 +42,14 @@ export type LinkListRow = LinkRow & {
     cursorValue: string | null
 }
 
+// 공유 폴더에 보여 줄 값만 담은 행. 메모, 알림, AI 요약, 임베딩은 읽지 않는다.
+export type SharedLinkRow = Pick<
+    LinkRow,
+    'id' | 'originalUrl' | 'title' | 'domain' | 'metadata' | 'createdAt'
+> & {
+    cursorValue: string | null
+}
+
 export type LinkEmbeddingSource = Pick<
     LinkRow,
     'id' | 'userId' | 'title' | 'aiSummary'
@@ -566,6 +574,43 @@ export class LinkRepository {
         ])
 
         return { rows, totalCount }
+    }
+
+    // 공유 폴더용 목록 조회. 보여 줄 열만 읽고 전체 개수는 세지 않는다.
+    // 저장 최신순이며 다음 페이지 판단을 위해 limit + 1개를 돌려준다.
+    async listSharedLinks(
+        ownerId: number,
+        folderId: number,
+        query: { cursor?: string; limit: number },
+    ): Promise<SharedLinkRow[]> {
+        const cursorCondition = query.cursor
+            ? this.resolveCursorCondition(query.cursor, links.createdAt, 'desc')
+            : undefined
+
+        return this.db
+            .select({
+                id: links.id,
+                originalUrl: links.originalUrl,
+                title: links.title,
+                domain: links.domain,
+                metadata: links.metadata,
+                createdAt: links.createdAt,
+                cursorValue: sql<string | null>`to_char(
+                    ${links.createdAt} at time zone 'UTC',
+                    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+                )`,
+            })
+            .from(links)
+            .where(
+                and(
+                    eq(links.userId, ownerId),
+                    eq(links.folderId, folderId),
+                    isNull(links.deletedAt),
+                    ...(cursorCondition ? [cursorCondition] : []),
+                ),
+            )
+            .orderBy(...buildCursorOrderBy(links.createdAt, links.id, 'desc'))
+            .limit(query.limit + 1)
     }
 
     // 사용자 범위와 목록 필터의 공통 조건을 만든다.
