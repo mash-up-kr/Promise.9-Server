@@ -110,6 +110,7 @@ const appEnvSchema = z
             .optional(),
         EMAIL_FROM_ADDRESS: z.email().optional(),
         EMAIL_CONFIGURATION_SET: z.string().min(1).optional(),
+        EXPO_ACCESS_TOKEN: z.string().trim().min(1).optional(),
         AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
         AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
         AWS_SESSION_TOKEN: z.string().min(1).optional(),
