@@ -441,11 +441,12 @@ export class LinkRepository {
         }
     }
 
-    // 분석 중 삭제된 링크에는 임베딩을 저장하지 않는다.
+    // 생성 중 원본이 바뀌면 낡은 벡터를 버리고 기존 분석 재시도 경로로 넘긴다.
     async updateEmbedding(
         userId: number,
         linkId: number,
         embedding: number[] | null,
+        source: LinkEmbeddingSource,
     ): Promise<boolean> {
         const updated = await this.db
             .update(links)
@@ -455,9 +456,25 @@ export class LinkRepository {
                     eq(links.id, linkId),
                     eq(links.userId, userId),
                     isNull(links.deletedAt),
+                    sql`coalesce(${links.customTitle}, ${links.title}) is not distinct from ${source.title}`,
+                    sql`${links.aiSummary} is not distinct from ${source.aiSummary}`,
+                    sql`coalesce((
+                        select array_agg(${tags.name} order by ${tags.sortOrder}, ${tags.id})
+                        from ${tags}
+                        where ${tags.userId} = ${userId} and ${tags.linkId} = ${linkId}
+                    ), array[]::varchar[]) = array[${sql.join(
+                        source.tagNames.map((name) => sql`${name}`),
+                        sql`, `,
+                    )}]::varchar[]`,
                 ),
             )
             .returning({ id: links.id })
+
+        if (updated.length === 0 && (await this.findOwned(userId, linkId))) {
+            throw new Error(
+                '임베딩 원본이 변경되었습니다. 최신 원본으로 재시도합니다.',
+            )
+        }
 
         return updated.length > 0
     }

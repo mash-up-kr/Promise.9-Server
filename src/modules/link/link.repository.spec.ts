@@ -1,9 +1,12 @@
+import { SQL } from 'drizzle-orm'
+import { PgDialect } from 'drizzle-orm/pg-core'
+
 import { BaseException } from '../../common/exception/base.exception'
 import { encodeCursor } from '../../common/pagination/cursor'
 import { DatabaseService } from '../../config/database/database.service'
 
 import { ListLinksQueryInput } from './dto/link.dto'
-import { LinkRepository } from './link.repository'
+import { LinkEmbeddingSource, LinkRepository } from './link.repository'
 import { LinkRow } from './link.schema'
 
 const listInput = (cursor: string): ListLinksQueryInput => ({
@@ -221,6 +224,81 @@ describe('LinkRepository', () => {
 })
 
 describe('LinkRepository 사용자 지정 제목 임베딩', () => {
+    const source: LinkEmbeddingSource = {
+        id: 42,
+        userId: 7,
+        title: '내 제목',
+        aiSummary: null,
+        tagNames: ['태그'],
+    }
+
+    const buildUpdate = (rows: { id: number }[]) => {
+        const query = {
+            set: jest.fn(),
+            where: jest.fn<unknown, [SQL]>(),
+            returning: jest.fn().mockResolvedValue(rows),
+        }
+        query.set.mockReturnValue(query)
+        query.where.mockReturnValue(query)
+        const repository = new LinkRepository({
+            db: { update: jest.fn().mockReturnValue(query) },
+        } as unknown as DatabaseService)
+        return { repository, query }
+    }
+
+    it.each([{ tagNames: ['태그'] }, { tagNames: [] }])(
+        '제목·요약·태그가 같은 경우에만 벡터 저장과 제거를 허용한다: %j',
+        async ({ tagNames }) => {
+            const { repository, query } = buildUpdate([{ id: 42 }])
+            await expect(
+                repository.updateEmbedding(7, 42, null, {
+                    ...source,
+                    tagNames,
+                }),
+            ).resolves.toBe(true)
+            const condition = new PgDialect({
+                casing: 'snake_case',
+            }).sqlToQuery(query.where.mock.calls[0][0])
+            expect(condition.sql).toContain(
+                'coalesce("links"."custom_title", "links"."title") is not distinct from',
+            )
+            expect(condition.sql).toContain(
+                '"links"."ai_summary" is not distinct from',
+            )
+            expect(condition.sql).toContain(
+                'array_agg("tags"."name" order by "tags"."sort_order", "tags"."id")',
+            )
+            expect(condition.sql).toContain('array[]::varchar[]) = array[')
+            expect(condition.params).toEqual([
+                42,
+                7,
+                source.title,
+                source.aiSummary,
+                7,
+                42,
+                ...tagNames,
+            ])
+        },
+    )
+
+    it('원본이 변경되어 저장하지 못하면 재시도 가능한 오류를 던진다', async () => {
+        const { repository } = buildUpdate([])
+        jest.spyOn(repository, 'findOwned').mockResolvedValue({
+            id: 42,
+        } as LinkRow)
+        await expect(
+            repository.updateEmbedding(7, 42, [1], source),
+        ).rejects.toThrow('임베딩 원본이 변경되었습니다.')
+    })
+
+    it('생성 도중 링크가 삭제되면 재시도 없이 건너뛴다', async () => {
+        const { repository } = buildUpdate([])
+        jest.spyOn(repository, 'findOwned').mockResolvedValue(undefined)
+        await expect(
+            repository.updateEmbedding(7, 42, [1], source),
+        ).resolves.toBe(false)
+    })
+
     it.each(['내 제목', null])(
         '표시 제목으로 임베딩 원본을 만든다',
         async (customTitle) => {

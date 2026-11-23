@@ -31,13 +31,14 @@ export class EmbeddingService {
         }
 
         const text = buildEmbeddingText(source)
+        const embedding = text ? await this.aiService.embedText(text) : null
+        const updated = await this.linkRepository.updateEmbedding(
+            userId,
+            linkId,
+            embedding,
+            source,
+        )
 
-        if (!text) {
-            await this.linkRepository.updateEmbedding(userId, linkId, null)
-            return false
-        }
-
-        const embedding = await this.aiService.embedText(text)
-        return this.linkRepository.updateEmbedding(userId, linkId, embedding)
+        return Boolean(text) && updated
     }
 }

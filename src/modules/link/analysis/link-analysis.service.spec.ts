@@ -506,6 +506,17 @@ describe('LinkAnalysisService', () => {
         ])
     })
 
+    it('임베딩 원본 변경은 EMBEDDING만 재시도 대상으로 남긴다', async () => {
+        const error = new Error('임베딩 원본이 변경되었습니다.')
+        embeddingService.embedLink.mockRejectedValueOnce(error)
+
+        expect(await service.run(INPUT, ['EMBEDDING'])).toEqual([
+            { task: 'EMBEDDING', status: 'FAILED', kind: 'RETRYABLE', error },
+        ])
+        expect(linkContentService.collect).not.toHaveBeenCalled()
+        expect(aiService.generateLinkAnalysis).not.toHaveBeenCalled()
+    })
+
     it('임베딩할 활성 링크 내용이 없으면 SKIPPED로 남긴다', async () => {
         embeddingService.embedLink.mockResolvedValueOnce(false)
 
