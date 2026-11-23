@@ -16,3 +16,4 @@ Promise.9의 AWS 접근과 CDK 운영 문서입니다.
 | [분석 인프라](./analytics.md) | Cognito·Firehose·S3·Glue·Athena 설정, 사용법과 비용 |
 | [비즈니스 이벤트 수집](./analytics-event-design.md) | 공통 이벤트·UTM·사용자 연결·클릭과 노출 기준 |
 | [Team Guide](./team/README.md) | AWS CLI를 처음 사용하는 팀원용 시작 가이드 |
+| [Expo Push](./push.md) | 모바일 푸시 발송과 receipt 조회 |
