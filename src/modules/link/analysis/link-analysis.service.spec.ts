@@ -530,12 +530,40 @@ describe('LinkAnalysisService', () => {
         expect(findResult(results, 'CONTENT')?.status).toBe('SUCCESS')
         expect(findResult(results, 'EMBEDDING')?.status).toBe('SUCCESS')
         expect(updatePatches[0].title).toBe('바뀐 제목')
+        // 재수집은 수집 제목만 갱신하며 동시에 설정된 사용자 제목에는 쓰지 않는다.
+        expect(updatePatches.every((patch) => !('customTitle' in patch))).toBe(
+            true,
+        )
         // 제목이 저장된 뒤에 임베딩이 돌아야 새 제목이 벡터에 반영된다.
         expect(embeddingService.embedLink).toHaveBeenCalledWith(
             INPUT.userId,
             INPUT.linkId,
         )
     })
+
+    it.each(['재수집 제목', null])(
+        '재수집과 원문 삭제 모두 사용자 지정 제목을 보존한다',
+        async (title) => {
+            const stored = { title: '기존 수집 제목', customTitle: '내 제목' }
+            linkRepository.updateActive.mockImplementation(
+                (_userId, _linkId, patch) => {
+                    Object.assign(stored, patch)
+                    return Promise.resolve(undefined)
+                },
+            )
+            linkContentService.collect.mockResolvedValueOnce({
+                title,
+                description: null,
+                content: null,
+                image: null,
+                authoritative: true,
+            })
+
+            await service.run(INPUT, ['CONTENT'])
+
+            expect(stored).toMatchObject({ title, customTitle: '내 제목' })
+        },
+    )
 
     // YouTube 30일 정책: 사라진 영상의 저장 데이터는 갱신이 아니라 삭제로 반영해야 한다.
     it('공식 API가 영상 부재를 확인하면 저장된 제목·설명·썸네일을 지운다', async () => {

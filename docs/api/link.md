@@ -2,6 +2,15 @@
 
 > [API 명세 인덱스](./api-spec.md) · [공통 응답과 페이지네이션](./common.md) · [화면별 API 조합](./screen-mapping.md)
 
+## 사용자 지정 제목
+
+- `POST /links`, `PATCH /links/{linkId}`에서 선택 필드 `customTitle`을 받는다.
+- 앞뒤 공백을 제거한 1~512자 문자열이며 빈 문자열·공백만 있는 값은 `400`으로 거부한다.
+- 생성 시 생략·`null`이면 수집 제목을 사용한다. 수정 시 생략하면 유지하고, `null`이면 사용자 제목을 해제한다.
+- 응답의 `title`은 `customTitle ?? 수집 제목`이다. 생성·수정·상세에는 원래 사용자 입력을 구분할 `customTitle`도 반환한다.
+- 목록·검색·관련 링크·공유 폴더·리마인더에도 표시 제목을 적용한다. 제목 검색과 임베딩은 표시 제목을 기준으로 한다.
+- 콘텐츠 재수집은 수집 제목만 갱신한다. 사용자 제목을 해제하면 가장 최근에 수집된 제목이 표시된다.
+
 ## 링크 목록 조회
 
 ```http
@@ -145,6 +154,7 @@ URL을 먼저 저장하고 링크 정보·대표 이미지 수집, 이미지 색
 ```json
 {
     "url": "https://toss.tech/article/example",
+    "customTitle": "다시 읽을 개발 가이드",
     "folderId": null,
     "memo": null
 }
@@ -158,6 +168,8 @@ URL을 먼저 저장하고 링크 정보·대표 이미지 수집, 이미지 색
     "data": {
         "linkId": 42,
         "url": "https://toss.tech/article/example",
+        "title": "다시 읽을 개발 가이드",
+        "customTitle": "다시 읽을 개발 가이드",
         "savedAt": "2026-07-13T00:00:00.000Z"
     }
 }
@@ -202,6 +214,7 @@ GET /links/{linkId}
         },
         "thumbnailUrl": "https://static.example.com/thumbnail.png",
         "title": "신입 디자이너가 알아야 할 실험 설계 팁",
+        "customTitle": null,
         "source": "toss.tech",
         "publishedAt": "2026-06-19T00:00:00.000Z",
         "savedAt": "2026-07-13T00:00:00.000Z",
@@ -257,12 +270,13 @@ DB의 `ai_summary_status`에는 개발자 검토용 `NEEDS_REVIEW` 값이 추가
 PATCH /links/{linkId}
 ```
 
-폴더, 메모, 즐겨찾기 중 전달된 필드만 변경한다.
+사용자 지정 제목, 폴더, 메모, 리마인더, 즐겨찾기 중 전달된 필드만 변경한다.
 
 **Request Body**
 
 ```json
 {
+    "customTitle": "다시 읽을 개발 가이드",
     "folderId": 3,
     "memo": "나중에 다시 보기",
     "isFavorite": true
@@ -279,6 +293,8 @@ PATCH /links/{linkId}
     "data": {
         "linkId": 42,
         "folderId": 3,
+        "title": "다시 읽을 개발 가이드",
+        "customTitle": "다시 읽을 개발 가이드",
         "memo": "나중에 다시 보기",
         "isFavorite": true,
         "updatedAt": "2026-07-13T00:00:00.000Z"

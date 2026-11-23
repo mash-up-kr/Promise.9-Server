@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { and, asc, eq, isNotNull, isNull, lte } from 'drizzle-orm'
+import { and, asc, eq, isNotNull, isNull, lte, sql } from 'drizzle-orm'
 
 import { DatabaseService } from '../../../config/database/database.service'
 import { folders } from '../../folder/folder.schema'
@@ -23,7 +23,9 @@ export class ReminderRepository {
             .select({
                 linkId: links.id,
                 recipientEmail: users.email,
-                title: links.title,
+                title: sql<
+                    string | null
+                >`coalesce(${links.customTitle}, ${links.title})`,
                 originalUrl: links.originalUrl,
                 finalUrl: links.finalUrl,
                 reminderAt: links.reminderAt,

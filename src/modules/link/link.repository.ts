@@ -435,7 +435,7 @@ export class LinkRepository {
         return {
             id: link.id,
             userId: link.userId,
-            title: link.title,
+            title: link.customTitle ?? link.title,
             aiSummary: link.aiSummary,
             tagNames: tagRows.map((tag) => tag.name),
         }
@@ -591,7 +591,9 @@ export class LinkRepository {
             .select({
                 id: links.id,
                 originalUrl: links.originalUrl,
-                title: links.title,
+                title: sql<
+                    string | null
+                >`coalesce(${links.customTitle}, ${links.title})`,
                 domain: links.domain,
                 metadata: links.metadata,
                 createdAt: links.createdAt,

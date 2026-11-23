@@ -13,6 +13,8 @@ const booleanQuerySchema = z.preprocess((value) => {
     return value
 }, z.boolean())
 
+const customTitleSchema = z.string().trim().min(1).max(512).nullish()
+
 const reminderAtSchema = z.iso
     .datetime({ offset: true })
     .refine((value) => new Date(value).getTime() > Date.now(), {
@@ -27,6 +29,7 @@ export type LinkPreviewQueryInput = z.infer<typeof linkPreviewQuerySchema>
 
 export const createLinkSchema = z.object({
     url: z.url(),
+    customTitle: customTitleSchema,
     folderId: z.number().int().positive().nullish(),
     memo: z.string().max(LINK_MEMO_MAX_LENGTH).nullish(),
     reminderAt: reminderAtSchema.nullish(),
@@ -35,6 +38,7 @@ export type CreateLinkInput = z.infer<typeof createLinkSchema>
 
 export const updateLinkSchema = z
     .object({
+        customTitle: customTitleSchema,
         folderId: z.number().int().positive().nullish(),
         memo: z.string().max(LINK_MEMO_MAX_LENGTH).nullish(),
         reminderAt: reminderAtSchema.nullish(),
@@ -42,6 +46,7 @@ export const updateLinkSchema = z
     })
     .refine(
         (value) =>
+            value.customTitle !== undefined ||
             value.folderId !== undefined ||
             value.memo !== undefined ||
             value.reminderAt !== undefined ||
@@ -108,6 +113,17 @@ export type ListLinksQueryInput = z.infer<typeof listLinksQuerySchema>
 
 // Swagger 문서용 (런타임 검증은 위의 zod 스키마가 담당)
 export class CreateLinkDto {
+    @ApiPropertyOptional({
+        type: String,
+        nullable: true,
+        minLength: 1,
+        maxLength: 512,
+        example: '다시 읽을 개발 가이드',
+        description:
+            '사용자 지정 제목 (앞뒤 공백 제거, null이면 수집 제목 사용, 생략 시 유지)',
+    })
+    customTitle?: string | null
+
     @ApiProperty({
         example: 'https://toss.tech/article/slug',
         description: '[필수] 저장할 URL',
@@ -141,6 +157,17 @@ export class CreateLinkDto {
 }
 
 export class UpdateLinkDto {
+    @ApiPropertyOptional({
+        type: String,
+        nullable: true,
+        minLength: 1,
+        maxLength: 512,
+        example: '다시 읽을 개발 가이드',
+        description:
+            '사용자 지정 제목 (앞뒤 공백 제거, null이면 수집 제목 사용, 생략 시 유지)',
+    })
+    customTitle?: string | null
+
     @ApiPropertyOptional({
         example: 5,
         nullable: true,

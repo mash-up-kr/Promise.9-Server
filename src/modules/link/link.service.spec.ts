@@ -348,3 +348,111 @@ describe('LinkService', () => {
         })
     })
 })
+
+describe('LinkService 사용자 지정 제목', () => {
+    const build = (customTitle: string | null = '내 제목') => {
+        const row = {
+            id: 42,
+            userId: 7,
+            originalUrl: 'https://example.com',
+            title: '수집 제목',
+            customTitle,
+            folderId: null,
+            metadata: null,
+            createdAt: new Date(),
+            aiSummaryStatus: 'SUCCESS',
+        } as LinkRow
+        const repository = {
+            findOwned: jest.fn().mockResolvedValue(row),
+            findActiveByNormalizedUrl: jest.fn().mockResolvedValue(undefined),
+            insert: jest
+                .fn<
+                    ReturnType<LinkRepository['insert']>,
+                    Parameters<LinkRepository['insert']>
+                >()
+                .mockResolvedValue(row),
+            update: jest
+                .fn<
+                    ReturnType<LinkRepository['update']>,
+                    Parameters<LinkRepository['update']>
+                >()
+                .mockImplementation((_userId, _linkId, patch) =>
+                    Promise.resolve({ ...row, ...patch }),
+                ),
+            findTags: jest.fn().mockResolvedValue([]),
+            list: jest.fn().mockResolvedValue({ rows: [row], totalCount: 1 }),
+        }
+        const dispatcher = { dispatch: jest.fn() }
+        const service = new LinkService(
+            repository as unknown as LinkRepository,
+            {} as never,
+            dispatcher as never,
+            { relatedLinks: jest.fn().mockResolvedValue([]) } as never,
+        )
+        return { service, repository, dispatcher }
+    }
+
+    it('생성 시 수집 제목과 분리해 저장한다', async () => {
+        const { service, repository } = build()
+        expect(
+            await service.create(7, {
+                url: 'https://example.com',
+                customTitle: '내 제목',
+            }),
+        ).toMatchObject({ title: '내 제목', customTitle: '내 제목' })
+        expect(repository.insert).toHaveBeenCalledWith(
+            expect.objectContaining({ customTitle: '내 제목' }),
+        )
+        expect(repository.insert.mock.calls[0][0]).not.toHaveProperty('title')
+    })
+
+    it.each(['바꾼 제목', null])(
+        '제목 설정과 해제 시 원본을 보존하고 임베딩을 갱신한다',
+        async (customTitle) => {
+            const { service, repository, dispatcher } = build()
+            expect(await service.update(7, 42, { customTitle })).toMatchObject({
+                title: customTitle ?? '수집 제목',
+                customTitle,
+            })
+            expect(repository.update.mock.calls[0][2]).not.toHaveProperty(
+                'title',
+            )
+            expect(dispatcher.dispatch).toHaveBeenCalledWith(
+                { linkId: 42, userId: 7, url: 'https://example.com' },
+                ['EMBEDDING'],
+            )
+        },
+    )
+
+    it('제목을 생략하면 기존 사용자 제목을 유지한다', async () => {
+        const { service, repository, dispatcher } = build()
+        expect(await service.update(7, 42, { isFavorite: true })).toMatchObject(
+            { title: '내 제목', customTitle: '내 제목' },
+        )
+        expect(repository.update.mock.calls[0][2]).not.toHaveProperty(
+            'customTitle',
+        )
+        expect(dispatcher.dispatch).not.toHaveBeenCalled()
+    })
+
+    it.each(['내 제목', null])(
+        '상세와 목록에서 사용자 제목을 우선하고 없으면 수집 제목을 반환한다',
+        async (customTitle) => {
+            const { service } = build(customTitle)
+            expect(await service.detail(7, 42)).toMatchObject({
+                title: customTitle ?? '수집 제목',
+                customTitle,
+            })
+            const result = await service.list(7, {
+                unassigned: false,
+                favorite: false,
+                reminder: false,
+                deleted: false,
+                sortBy: 'savedAt',
+                order: 'desc',
+                limit: 9,
+            })
+            expect(result.links[0].title).toBe(customTitle ?? '수집 제목')
+        },
+    )
+})

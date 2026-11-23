@@ -40,6 +40,22 @@ export class LinkPreviewResponseDto {
 }
 
 export class CreateLinkResponseDto {
+    @ApiProperty({
+        type: String,
+        nullable: true,
+        example: TITLE_EXAMPLE,
+        description: '표시 제목 (customTitle ?? 수집 제목)',
+    })
+    title!: string | null
+
+    @ApiProperty({
+        type: String,
+        nullable: true,
+        example: null,
+        description: '사용자 지정 제목. null이면 수집 제목 사용',
+    })
+    customTitle!: string | null
+
     @ApiProperty({ example: 42, description: '저장된 링크 ID' })
     linkId!: number
 
@@ -91,6 +107,14 @@ export class RelatedLinkDto {
 }
 
 export class LinkDetailResponseDto {
+    @ApiProperty({
+        type: String,
+        nullable: true,
+        example: null,
+        description: '사용자 지정 제목. null이면 수집 제목 사용',
+    })
+    customTitle!: string | null
+
     @ApiProperty({ example: 42, description: '링크 ID' })
     linkId!: number
 
@@ -114,7 +138,7 @@ export class LinkDetailResponseDto {
     @ApiProperty({
         example: TITLE_EXAMPLE,
         nullable: true,
-        description: '제목',
+        description: '표시 제목 (customTitle ?? 수집 제목)',
     })
     title!: string | null
 
@@ -198,6 +222,22 @@ export class LinkDetailResponseDto {
 }
 
 export class UpdateLinkResponseDto {
+    @ApiProperty({
+        type: String,
+        nullable: true,
+        example: TITLE_EXAMPLE,
+        description: '표시 제목 (customTitle ?? 수집 제목)',
+    })
+    title!: string | null
+
+    @ApiProperty({
+        type: String,
+        nullable: true,
+        example: null,
+        description: '사용자 지정 제목. null이면 수집 제목 사용',
+    })
+    customTitle!: string | null
+
     @ApiProperty({ example: 42, description: '링크 ID' })
     linkId!: number
 
@@ -293,7 +333,7 @@ export class LinkListItemDto {
     @ApiProperty({
         example: TITLE_EXAMPLE,
         nullable: true,
-        description: '제목',
+        description: '표시 제목 (customTitle ?? 수집 제목)',
     })
     title!: string | null
 

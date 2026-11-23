@@ -20,6 +20,7 @@ import { LinkRow } from './link.schema'
 import {
     extractDomain,
     normalizeUrl,
+    pickLinkTitle,
     pickThumbnailUrl,
     toProcessingStatus,
 } from './link.util'
@@ -52,6 +53,7 @@ export class LinkService {
             domain: extractDomain(input.url),
             // 링크 정보와 AI 요약은 저장 이후 비동기로 생성하므로 대기 상태로 둔다.
             aiSummaryStatus: 'PENDING',
+            customTitle: input.customTitle ?? null,
             memo: input.memo ?? null,
             reminderAt: input.reminderAt ? new Date(input.reminderAt) : null,
         })
@@ -67,6 +69,8 @@ export class LinkService {
         return {
             linkId: row.id,
             url: row.originalUrl,
+            title: pickLinkTitle(row),
+            customTitle: row.customTitle,
             savedAt: row.createdAt,
             reminderAt: row.reminderAt,
         }
@@ -89,7 +93,8 @@ export class LinkService {
             url: link.originalUrl,
             folder,
             thumbnailUrl: pickThumbnailUrl(link.metadata),
-            title: link.title,
+            title: pickLinkTitle(link),
+            customTitle: link.customTitle,
             source: link.domain,
             // 발행 시각은 별도 컬럼 없이 메타데이터에서 다룰 예정 — 현재는 null
             publishedAt: null,
@@ -120,6 +125,10 @@ export class LinkService {
             patch.folderId = input.folderId
         }
 
+        if (input.customTitle !== undefined) {
+            patch.customTitle = input.customTitle
+        }
+
         if (input.memo !== undefined) {
             patch.memo = input.memo
         }
@@ -136,9 +145,9 @@ export class LinkService {
 
         const row = await this.linkRepository.update(userId, linkId, patch)
 
-        // 메모가 바뀌면 임베딩 대상 텍스트가 달라지므로 임베딩만 다시 실행한다.
+        // 사용자 지정 제목이나 메모가 바뀌면 임베딩만 다시 실행한다.
         // create와 같은 dispatcher를 거치므로 실패 시 재시도도 동일하게 적용된다.
-        if (input.memo !== undefined) {
+        if (input.customTitle !== undefined || input.memo !== undefined) {
             this.linkAnalysisDispatcher.dispatch(
                 { linkId: row.id, userId, url: row.originalUrl },
                 ['EMBEDDING'],
@@ -147,6 +156,8 @@ export class LinkService {
         return {
             linkId: row.id,
             folderId: row.folderId,
+            title: pickLinkTitle(row),
+            customTitle: row.customTitle,
             memo: row.memo,
             reminderAt: row.reminderAt,
             isFavorite: row.isFavorite,
@@ -299,7 +310,7 @@ export class LinkService {
             links: pageRows.map((row) => ({
                 linkId: row.id,
                 url: row.originalUrl,
-                title: row.title,
+                title: pickLinkTitle(row),
                 source: row.domain,
                 thumbnailUrl: pickThumbnailUrl(row.metadata),
                 savedAt: row.createdAt,
@@ -316,7 +327,7 @@ export class LinkService {
     ) {
         return results.map(({ row, score }) => ({
             linkId: row.id,
-            title: row.title,
+            title: pickLinkTitle(row),
             source: row.domain,
             // TODO: 태그 선정 정책에 따라 목록 카드용 대표 태그를 연결한다.
             representativeTag: null,
@@ -411,7 +422,7 @@ export class LinkService {
             return await this.relatedLinkService.relatedLinks(userId, {
                 id: link.id,
                 folderId: link.folderId,
-                title: link.title,
+                title: pickLinkTitle(link),
                 embedding: link.embedding,
                 normalizedTags,
             })

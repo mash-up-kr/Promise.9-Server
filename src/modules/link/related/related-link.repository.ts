@@ -66,7 +66,9 @@ export class RelatedLinkRepository {
         tokens: readonly string[],
         options: RelatedLinkCandidateOptions,
     ): Promise<number[]> {
-        const searchText = normalizedSearchText([links.title])
+        const searchText = normalizedSearchText([
+            sql`coalesce(${links.customTitle}, ${links.title})`,
+        ])
         const keyword = this.buildTokenKeywordCondition(searchText, tokens)
 
         if (!keyword) return []
@@ -155,7 +157,9 @@ export class RelatedLinkRepository {
             .select({
                 id: links.id,
                 folderId: links.folderId,
-                title: links.title,
+                title: sql<
+                    string | null
+                >`coalesce(${links.customTitle}, ${links.title})`,
                 domain: links.domain,
                 metadata: links.metadata,
                 embeddingSimilarity,

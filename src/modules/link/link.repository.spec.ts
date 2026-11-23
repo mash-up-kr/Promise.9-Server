@@ -4,6 +4,7 @@ import { DatabaseService } from '../../config/database/database.service'
 
 import { ListLinksQueryInput } from './dto/link.dto'
 import { LinkRepository } from './link.repository'
+import { LinkRow } from './link.schema'
 
 const listInput = (cursor: string): ListLinksQueryInput => ({
     unassigned: false,
@@ -217,4 +218,24 @@ describe('LinkRepository', () => {
             expect(tx.update).not.toHaveBeenCalled()
         })
     })
+})
+
+describe('LinkRepository 사용자 지정 제목 임베딩', () => {
+    it.each(['내 제목', null])(
+        '표시 제목으로 임베딩 원본을 만든다',
+        async (customTitle) => {
+            const repository = new LinkRepository({ db: {} } as DatabaseService)
+            jest.spyOn(repository, 'findOwned').mockResolvedValue({
+                id: 42,
+                userId: 7,
+                title: '수집 제목',
+                customTitle,
+                aiSummary: null,
+            } as LinkRow)
+            jest.spyOn(repository, 'findTags').mockResolvedValue([])
+            expect(await repository.findEmbeddingSource(7, 42)).toMatchObject({
+                title: customTitle ?? '수집 제목',
+            })
+        },
+    )
 })

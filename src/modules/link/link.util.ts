@@ -237,3 +237,11 @@ export function buildEmbeddingText(
         .filter((part): part is string => Boolean(part))
         .join('\n')
 }
+
+// 수집 제목은 보존하고 표시할 때만 사용자 지정 제목을 우선한다.
+export function pickLinkTitle(link: {
+    title: string | null
+    customTitle?: string | null
+}): string | null {
+    return link.customTitle ?? link.title
+}

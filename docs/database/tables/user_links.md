@@ -14,6 +14,7 @@ erDiagram
     text normalized_url
     text final_url
     varchar domain
+    varchar custom_title
     varchar title
     jsonb metadata
     text ai_summary
@@ -41,6 +42,7 @@ erDiagram
 | final_url         | text        | N    | redirect 이후 최종 도착 URL. 추적 실패 시 `NULL` 가능                                                         |
 | domain            | varchar     | N    | 출처 표시와 검색에 사용하는 도메인. `final_url` 우선, 없으면 `original_url` 기준                              |
 | title             | varchar     | N    | 수집된 제목. 수집 실패 시 `NULL` 가능                                                                         |
+| custom_title | varchar(512) | N | 사용자 지정 제목. 표시 제목은 `custom_title ?? title`, 재수집은 이 값을 변경하지 않음 |
 | metadata          | jsonb       | N    | Open Graph, favicon, description, 이미지 정보, 색상 등 확장 메타데이터. 최상위에 `version` 포함               |
 | ai_summary        | text        | N    | AI 요약 결과                                                                                                  |
 | ai_summary_status | varchar     | Y    | 비동기 분석 대표 상태. 요약, 태그, 임베딩이 모두 성공해야 `SUCCESS`, AI가 검토 대상으로 판정하면 `NEEDS_REVIEW` |
