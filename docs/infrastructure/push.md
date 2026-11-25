@@ -28,7 +28,7 @@ const results = await pushService.send([
 
 `accepted`는 APNs·FCM 전달이나 기기 수신을 의미하지 않는다. SDK 예외의 원문, 공급자 메시지, debug 정보는 반환하거나 로그로 남기지 않는다. 반환값에는 후속 처리를 위한 토큰이 포함되므로 응답 전체를 로그나 공개 API에 노출하지 않는다.
 
-Expo 대시보드에서 Enhanced push security를 켠 프로젝트는 서버에 `EXPO_ACCESS_TOKEN`을 설정해야 한다. 기본적으로 선택 사항이며 빈 값은 허용하지 않는다. 이 값은 사용자 기기의 Expo Push Token과 다르다. 운영 배포에서는 GitHub Actions secret `EXPO_ACCESS_TOKEN`에 설정하면 `.env.production`으로 전달된다. 설정하지 않은 경우에는 환경변수 항목을 생성하지 않는다.
+Expo 계정에 Enhanced push security가 켜져 있어 발송 요청에 `EXPO_ACCESS_TOKEN`이 필요하다. production 환경에서는 필수이며, 다른 환경에서는 선택 사항이다. 빈 값은 허용하지 않는다. 이 값은 사용자 기기의 Expo Push Token과 다르다. 운영 배포에서는 GitHub Actions secret `EXPO_ACCESS_TOKEN`에 설정하면 `.env.production`으로 전달된다. 설정하지 않은 경우에는 환경변수 항목을 생성하지 않는다.
 
 ## Receipt 조회
 
@@ -45,10 +45,19 @@ const receipts = await pushService.getReceipts(ticketIds)
 
 [Expo 공식 문서](https://docs.expo.dev/push-notifications/sending-notifications/)는 발송 약 15분 뒤 receipt 조회를 권장하며, receipt는 24시간 후 삭제된다. 배치에서 ticket 생성 시각과 조회 일정을 관리해야 한다. 프로세스 메모리나 `setTimeout`에 ticket을 보관하지 않는다.
 
-## 토큰 조회·삭제와 배치 연동
+## 리마인드 배치 연동
 
-토큰 조회·삭제는 테이블 PR이 반영된 후 실제 스키마에 맞춰 구현한다. 현재는 테이블, migration, 임시 repository를 추가하지 않는다.
+`src/modules/link/reminder`의 리마인드 배치가 이 모듈로 푸시를 보낸다. 이메일과 같은 15분 주기로 실행하며, 알림 형식은 [푸시 토큰 API 문서](../api/push-token.md#리마인드-알림)에 정리했다.
 
-배치에서는 발송 결과의 사용자·작업 ID, 토큰과 ticket ID를 저장하고 receipt를 조회한다. ticket 또는 receipt의 `DeviceNotRegistered`를 확인하면 원래 사용자와 토큰을 조건으로 삭제해야 한다. 타임아웃, 인증정보 오류, `MessageTooBig` 같은 다른 오류를 토큰 삭제 근거로 사용하지 않는다.
+1. 발송 시각이 된 링크에 회차(`links.reminder_occurrence_id`)를 한 번 만든다. 일정을 바꾸거나 해제하거나 링크를 삭제하면 회차를 `NULL`로 되돌려 이전 회차의 남은 재시도를 멈춘다.
+2. 채널마다 발송 이력을 먼저 선점한 실행만 보낸다. 이메일은 `(link_id, occurrence_id)`, 푸시는 `(link_id, occurrence_id, push_token_id)` 유니크 제약으로 첫 발송을 선점하고, 재시도는 `FAILED` 이력을 `PENDING`으로 바꾼 실행만 한다. 배치가 겹쳐 실행돼도 이메일과 기기마다 한 번만 보낸다.
+3. 채널은 서로 독립이다. 한 채널의 실패·예외는 다른 채널 발송과 이력에 영향을 주지 않는다.
+4. 한 채널이라도 접수되면 일정을 마친다(`reminder_at = null`). 보낼 채널이 없을 때(이메일 수신 꺼짐, 푸시 수신 꺼짐 또는 등록 기기 없음)도 보내지 않고 일정을 마친다.
+5. 실패한 채널은 일정과 관계없이 첫 시도 뒤 1시간 안에서만 다시 보낸다. 이메일은 실패하면 모두, 푸시는 `MessageRateExceeded`만 다시 보낸다. 기한 안에 어느 채널로도 보내지 못한 일정은 기한이 지나면 마친다.
+6. 접수 여부를 알 수 없는 푸시(`UNKNOWN`)와 발송 도중 예외로 끝나 `PENDING`에 남은 이력은 중복 발송을 막기 위해 다시 보내지 않는다.
+
+같은 실행에서 발송 뒤 15분이 지난 `ACCEPTED` 이력의 receipt를 조회해 `RECEIPT_OK` 또는 `FAILED`로 기록한다. 24시간이 지난 이력은 receipt가 사라졌으므로 조회하지 않는다.
+
+ticket 또는 receipt에서 `DeviceNotRegistered`를 받으면 발송 당시 사용자 ID와 토큰 ID를 함께 조건으로 토큰을 삭제한다. 계정이 바뀐 기기의 토큰은 지우지 않는다. 타임아웃, 인증정보 오류, `MessageTooBig` 같은 다른 오류로는 토큰을 지우지 않는다.
 
 현재 모듈은 서버 내부에서 사용하며 HTTP API를 추가하지 않는다.

@@ -17,7 +17,7 @@ API 명세는 도메인별 문서로 관리한다.
 | 태그   | [tag.md](./tag.md)                       | 링크 태그 추가·삭제                            |
 | 폴더   | [folder.md](./folder.md)                 | 링크 상태별 통계, 사용자 폴더 CRUD             |
 | 추천   | [recommendation.md](./recommendation.md) | 홈 자주 저장한 키워드용 폴더·태그 추천         |
-| 푸시 토큰 | [push-token.md](./push-token.md) | 기기별 Expo Push Token 등록·갱신, 로그아웃 시 삭제 |
+| 푸시 토큰 | [push-token.md](./push-token.md) | 기기별 Expo Push Token 등록·갱신, 로그아웃 시 삭제, 리마인드 알림 형식 |
 | 알림 수신 설정 | [notification-setting.md](./notification-setting.md) | 리마인드 이메일·푸시 수신 여부 조회·변경 |
 
 화면에서 API를 어떻게 조합하는지는 [screen-mapping.md](./screen-mapping.md)를 참고한다.
