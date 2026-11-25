@@ -25,6 +25,9 @@ import {
 } from '../../src/modules/notification/notification.schema'
 import { users } from '../../src/modules/user/schema/user.schema'
 
+// 실제 SDK는 ESM이라 jest에서 불러오지 않는다. 발송은 아래 가짜 PushService로 대신한다.
+jest.mock('expo-server-sdk', () => ({ Expo: jest.fn() }))
+
 const databaseUrl = process.env.TEST_DATABASE_URL
 if (!databaseUrl || !new URL(databaseUrl).pathname.endsWith('_test')) {
     throw new Error(
