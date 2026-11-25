@@ -40,7 +40,7 @@ erDiagram
 | push_token_id | bigint | N | 받은 기기의 푸시 토큰 ID. 토큰이 삭제되면 `NULL` |
 | status | varchar(20) | Y | `PENDING`, `ACCEPTED`, `RECEIPT_OK`, `FAILED`, `UNKNOWN`. 기본값 `PENDING` |
 | ticket_id | varchar(255) | N | 푸시 제공자의 접수 ID |
-| error_code | varchar(100) | N | 푸시 제공자 오류 코드 |
+| error_code | varchar(100) | N | 실패 사유. Expo 오류 코드(`DeviceNotRegistered`, `MessageRateExceeded` 등) 또는 서버 내부 코드(`REQUEST_FAILED`: 요청 실패로 접수 여부 모름, `TOKEN_NOT_OWNED`: 보내기 직전 토큰이 지워졌거나 다른 계정 소유, `NOT_SENT`: Expo 요청 전 단계에서 실패해 보내지 않음) |
 | created_at | timestamptz | Y | 이력 생성 일시. 기본값 `now()` |
 | updated_at | timestamptz | Y | 상태 수정 일시. 기본값 `now()`, 갱신 시 직접 설정 |
 
