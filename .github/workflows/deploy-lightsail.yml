@@ -105,6 +105,7 @@ jobs:
           : "${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY is required}"
           : "${SQS_LINK_ANALYSIS_QUEUE_URL:?SQS_LINK_ANALYSIS_QUEUE_URL is required}"
           : "${EMAIL_FROM_ADDRESS:?EMAIL_FROM_ADDRESS is required}"
+          : "${EXPO_ACCESS_TOKEN:?EXPO_ACCESS_TOKEN is required}"
           if [ -z "$TINY_FISH_API_KEYS" ] && [ -z "$TINY_FISH_API_KEY" ]; then
             echo "TINY_FISH_API_KEYS or TINY_FISH_API_KEY is required" >&2
             exit 1
@@ -130,9 +131,7 @@ jobs:
               printf 'YOUTUBE_API_KEY=%s\n' "$YOUTUBE_API_KEY"
             fi
 
-            if [ -n "$EXPO_ACCESS_TOKEN" ]; then
-              printf 'EXPO_ACCESS_TOKEN=%s\n' "$EXPO_ACCESS_TOKEN"
-            fi
+            printf 'EXPO_ACCESS_TOKEN=%s\n' "$EXPO_ACCESS_TOKEN"
 
             if [ -n "$KAKAO_CLIENT_SECRET" ]; then
               printf 'KAKAO_CLIENT_SECRET=%s\n' "$KAKAO_CLIENT_SECRET"

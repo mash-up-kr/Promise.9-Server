@@ -3,15 +3,20 @@ import { Logger } from '@nestjs/common'
 import { ReminderScheduler } from './reminder.scheduler'
 import { ReminderService } from './reminder.service'
 
+// 실제 SDK는 ESM이라 jest에서 불러오지 않는다.
+jest.mock('expo-server-sdk', () => ({ Expo: jest.fn() }))
+
 describe('ReminderScheduler', () => {
-    it('리마인드 배치를 실행하고 처리 건수를 기록한다', async () => {
+    it('리마인드를 보낸 뒤 푸시 receipt를 조회하고 처리 건수를 기록한다', async () => {
         const reminderService = {
-            sendReminderEmails: jest.fn().mockResolvedValue({
+            sendReminders: jest.fn().mockResolvedValue({
                 targetCount: 4,
-                sentCount: 2,
+                finishedCount: 3,
                 skippedCount: 1,
-                failedCount: 1,
+                email: { sent: 2, failed: 1 },
+                push: { sent: 3, failed: 0 },
             }),
+            checkPushReceipts: jest.fn().mockResolvedValue(undefined),
         }
         const loggerSpy = jest
             .spyOn(Logger.prototype, 'log')
@@ -20,21 +25,23 @@ describe('ReminderScheduler', () => {
             reminderService as unknown as ReminderService,
         )
 
-        await scheduler.sendReminderEmails()
+        await scheduler.sendReminders()
 
-        expect(reminderService.sendReminderEmails).toHaveBeenCalledTimes(1)
+        expect(reminderService.sendReminders).toHaveBeenCalledTimes(1)
+        expect(reminderService.checkPushReceipts).toHaveBeenCalledTimes(1)
         expect(loggerSpy).toHaveBeenCalledWith(
-            '리마인드 이메일 배치를 완료했습니다. target=4 sent=2 skipped=1 failed=1',
+            '리마인드 배치를 완료했습니다. target=4 finished=3 skipped=1 email.sent=2 email.failed=1 push.sent=3 push.failed=0',
         )
 
         loggerSpy.mockRestore()
     })
 
-    it('배치 실행 실패를 기록하고 다음 실행을 위해 예외를 삼킨다', async () => {
+    it('배치 실패를 기록하고 receipt 조회는 계속하며 다음 실행을 위해 예외를 삼킨다', async () => {
         const reminderService = {
-            sendReminderEmails: jest
+            sendReminders: jest.fn().mockRejectedValue(new Error('DB error')),
+            checkPushReceipts: jest
                 .fn()
-                .mockRejectedValue(new Error('DB error')),
+                .mockRejectedValue(new Error('Expo error')),
         }
         const loggerSpy = jest
             .spyOn(Logger.prototype, 'error')
@@ -43,9 +50,14 @@ describe('ReminderScheduler', () => {
             reminderService as unknown as ReminderService,
         )
 
-        await expect(scheduler.sendReminderEmails()).resolves.toBeUndefined()
+        await expect(scheduler.sendReminders()).resolves.toBeUndefined()
+        expect(reminderService.checkPushReceipts).toHaveBeenCalledTimes(1)
         expect(loggerSpy).toHaveBeenCalledWith(
-            '리마인드 이메일 배치에 실패했습니다. error=DB error',
+            '리마인드 배치에 실패했습니다. error=DB error',
+            expect.any(String),
+        )
+        expect(loggerSpy).toHaveBeenCalledWith(
+            '리마인드 푸시 receipt 조회에 실패했습니다. error=Expo error',
             expect.any(String),
         )
 

@@ -8,6 +8,10 @@ import {
 
 import { ReminderEmailData } from './reminder.type'
 
+// 이메일 제목과 푸시 제목, 제목 없는 링크의 표시는 같은 문구를 쓴다.
+export const REMINDER_TITLE = '저장해둔 링크 지금 볼까요?'
+export const REMINDER_FALLBACK_LINK_TITLE = '저장한 링크'
+
 const emailRoot = resolve(process.cwd(), 'email')
 const template = readFileSync(
     resolve(emailRoot, 'link-reminder-email.html'),
@@ -61,7 +65,7 @@ export function buildReminderBulkEmail(
 
     return {
         entries,
-        subject: '저장해둔 링크 지금 볼까요?',
+        subject: REMINDER_TITLE,
         replyTo: 'promise.9@gmail.com',
         text: '{{reminderDate}}\n{{linkTitleText}}\n{{linkUrlText}}\n\n폴더: {{folderNameText}} · {{savedDate}} 저장\n나의 메모: {{memoText}}\n\n링띵동에서 보기 / AI 요약 함께 보기: {{detailUrlText}}\n\n이 메일은 저장하신 링크의 리마인드 날짜가 되어 보내드렸어요.\n문의: promise.9@gmail.com',
         html: assetBaseUrl
@@ -81,7 +85,7 @@ export function buildReminderBulkEmail(
 }
 
 export function buildReminderTemplateData(reminder: ReminderEmailData) {
-    const title = reminder.title?.trim() || '저장한 링크'
+    const title = reminder.title?.trim() || REMINDER_FALLBACK_LINK_TITLE
     const url = new URL(reminder.url)
     if (!['http:', 'https:'].includes(url.protocol))
         throw new Error('리마인드 URL은 http 또는 https만 사용할 수 있습니다.')

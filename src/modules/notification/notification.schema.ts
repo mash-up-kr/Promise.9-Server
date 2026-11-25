@@ -112,6 +112,11 @@ export const pushHistories = pgTable(
         userId: bigint({ mode: 'number' }).notNull(),
         linkId: bigint({ mode: 'number' }).notNull(),
         occurrenceId: uuid().notNull(),
+        // 기기별 중복 발송 방지와 receipt의 DeviceNotRegistered 정리에 쓴다. 토큰이 지워지면 NULL.
+        pushTokenId: bigint({ mode: 'number' }).references(
+            () => pushTokens.id,
+            { onDelete: 'set null' },
+        ),
         status: varchar({
             length: 20,
             enum: ['PENDING', 'ACCEPTED', 'RECEIPT_OK', 'FAILED', 'UNKNOWN'],
@@ -129,6 +134,11 @@ export const pushHistories = pgTable(
             columns: [table.linkId, table.userId],
             foreignColumns: [links.id, links.userId],
         }).onDelete('cascade'),
+        unique('push_histories_link_occurrence_token_unique').on(
+            table.linkId,
+            table.occurrenceId,
+            table.pushTokenId,
+        ),
         check(
             'push_histories_status_check',
             sql`${table.status} in ('PENDING', 'ACCEPTED', 'RECEIPT_OK', 'FAILED', 'UNKNOWN')`,
@@ -138,6 +148,7 @@ export const pushHistories = pgTable(
             sql`${table.status} not in ('ACCEPTED', 'RECEIPT_OK') or ${table.ticketId} is not null`,
         ),
         index('push_histories_link_id_idx').on(table.linkId),
+        index('push_histories_push_token_id_idx').on(table.pushTokenId),
         index('push_histories_status_updated_at_idx').on(
             table.status,
             table.updatedAt,

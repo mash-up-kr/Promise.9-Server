@@ -21,6 +21,7 @@ const productionEnvironment = {
     KAKAO_NATIVE_APP_KEY: 'kakao-native-app-key',
     APPLE_CLIENT_ID: 'apple-client-id',
     OPENAI_API_KEY: 'openai-api-key',
+    EXPO_ACCESS_TOKEN: 'expo-access-token',
 }
 
 describe('validateEnvironment', () => {
@@ -203,6 +204,15 @@ describe('validateEnvironment', () => {
 
         expect(() => validateEnvironment(withoutOpenAiApiKey)).toThrow(
             'production 환경에서는 OPENAI_API_KEY가 필요합니다.',
+        )
+    })
+
+    it('production 환경에서 푸시 발송을 인증할 EXPO_ACCESS_TOKEN을 필수로 검증한다', () => {
+        const { EXPO_ACCESS_TOKEN: _, ...withoutExpoAccessToken } =
+            productionEnvironment
+
+        expect(() => validateEnvironment(withoutExpoAccessToken)).toThrow(
+            'production 환경에서는 EXPO_ACCESS_TOKEN이 필요합니다.',
         )
     })
 

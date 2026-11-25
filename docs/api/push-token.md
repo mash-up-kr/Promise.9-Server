@@ -29,11 +29,37 @@ Content-Type: application/json
 
 [로그아웃 API](./auth.md#로그아웃)에 `refreshToken`과 선택 필드 `pushToken`을 함께 보낸다. 서명 검증을 통과한 리프레시 토큰의 사용자 ID와 해당 푸시 토큰을 함께 조건으로 삭제한다. 계정 전환 뒤 늦게 도착한 이전 계정의 로그아웃 요청은 새 소유자의 토큰을 삭제하지 않는다.
 
-로그아웃 API는 만료된 리프레시 토큰도 허용하며 Access Token 없이 호출할 수 있다. 이미 삭제된 토큰의 재요청도 성공한다. 현재 `push_histories`는 푸시 토큰을 직접 참조하지 않으므로 토큰을 삭제해도 발송 이력은 변경하지 않는다.
+로그아웃 API는 만료된 리프레시 토큰도 허용하며 Access Token 없이 호출할 수 있다. 이미 삭제된 토큰의 재요청도 성공한다. 토큰을 삭제해도 발송 이력은 남고, 이력의 `push_token_id`만 `NULL`이 된다.
 
 회원 탈퇴 시에는 계정의 soft delete와 같은 트랜잭션에서 해당 사용자의 토큰을 정리한다. 등록과 탈퇴가 겹치더라도 사용자 행 잠금으로 처리 순서를 맞춘다.
 
 세션 만료나 장기 미접속만으로 푸시 토큰을 삭제하지 않는다.
+
+## 리마인드 알림
+
+리마인드 시각이 되면 푸시 수신을 켠 사용자의 등록된 모든 기기로 아래 알림을 보낸다. 같은 리마인드는 기기마다 한 번만 보낸다. 발송 규칙은 [Expo Push 발송 모듈](../infrastructure/push.md#리마인드-배치-연동)을 참고한다.
+
+```json
+{
+    "to": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]",
+    "title": "저장해둔 링크 지금 볼까요?",
+    "body": "링크 제목",
+    "data": { "type": "LINK_REMINDER", "linkId": 123 },
+    "sound": "default",
+    "priority": "high",
+    "channelId": "reminder"
+}
+```
+
+| 필드 | 값 |
+| --- | --- |
+| `title` | 고정 문구 `저장해둔 링크 지금 볼까요?` |
+| `body` | 링크 제목. 제목이 없으면 이메일과 같은 `저장한 링크` |
+| `data.type` | `LINK_REMINDER` |
+| `data.linkId` | 링크 ID(number). 앱은 알림을 누르면 이 링크의 상세를 연다 |
+| `sound` | 기기 기본 소리 |
+| `priority` | `high`. 지연 없이 바로 표시한다 |
+| `channelId` | Android 알림 채널 `reminder`. 앱이 같은 ID로 채널을 만든다 |
 
 ## 응답
 

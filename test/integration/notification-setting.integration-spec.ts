@@ -140,24 +140,28 @@ describe('NotificationSettingRepository (PostgreSQL)', () => {
                 })),
             )
             .returning({ id: links.id, userId: links.userId })
-        const targets = await reminderRepository.findEmailTargets(
-            new Date('2026-11-02T00:00:00.000Z'),
-        )
+        const now = new Date('2026-11-02T00:00:00.000Z')
+        await reminderRepository.assignOccurrences(now)
+        const targets = await reminderRepository.findTargets(now, now)
         expect(
             created.map(
                 (link) =>
                     targets.find((target) => target.linkId === link.id)?.userId,
             ),
         ).toEqual([userId, otherUserId])
-        const disabledUserIds = () =>
-            reminderRepository.findEmailDisabledUserIds([userId, otherUserId])
+        const disabledUserIds = (channel: 'email' | 'push') =>
+            reminderRepository.findDisabledUserIds(
+                [userId, otherUserId],
+                channel,
+            )
 
-        expect(await disabledUserIds()).toEqual([])
+        expect(await disabledUserIds('email')).toEqual([])
 
         await repository.update(userId, { email: false })
         await repository.update(otherUserId, { push: false })
 
-        expect(await disabledUserIds()).toEqual([userId])
+        expect(await disabledUserIds('email')).toEqual([userId])
+        expect(await disabledUserIds('push')).toEqual([otherUserId])
         const scheduled = await db
             .select({ reminderAt: links.reminderAt })
             .from(links)

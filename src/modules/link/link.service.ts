@@ -128,6 +128,8 @@ export class LinkService {
             patch.reminderAt = input.reminderAt
                 ? new Date(input.reminderAt)
                 : null
+            // 일정을 바꾸면 새 리마인드로 보고, 이전 회차의 남은 재시도를 멈춘다.
+            patch.reminderOccurrenceId = null
         }
 
         if (input.isFavorite !== undefined) {
@@ -169,6 +171,7 @@ export class LinkService {
         await this.linkRepository.update(userId, linkId, {
             deletedAt: new Date(),
             updatedAt: new Date(),
+            reminderOccurrenceId: null,
         })
     }
 
@@ -183,11 +186,16 @@ export class LinkService {
             throw new BaseException(LINK_ERROR.NOT_DELETED)
         }
 
+        const now = new Date()
+
         // 복구된 링크는 "미분류"로 복원
         const row = await this.linkRepository.update(userId, linkId, {
             deletedAt: null,
             folderId: null,
-            updatedAt: new Date(),
+            updatedAt: now,
+            // 삭제된 동안 지난 리마인드는 복구해도 보내지 않는다. 아직 오지 않은 일정은 유지한다.
+            ...(link.reminderAt &&
+                link.reminderAt <= now && { reminderAt: null }),
         })
 
         return {

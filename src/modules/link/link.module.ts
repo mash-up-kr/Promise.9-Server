@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common'
 import { UrlSecurityModule } from '../../common/security/url-security/url-security.module'
 import { DatabaseModule } from '../../config/database/database.module'
 import { EmailModule } from '../../infrastructure/email/email.module'
+import { PushModule } from '../../infrastructure/push/push.module'
 import { AiModule } from '../ai/ai.module'
 import { AuthModule } from '../auth/auth.module'
 import { ImageColorModule } from '../image-color/image-color.module'
@@ -37,6 +38,7 @@ import { LinkService } from './link.service'
         UrlSecurityModule,
         ImageColorModule,
         EmailModule,
+        PushModule,
     ],
     controllers: [LinkController],
     providers: [

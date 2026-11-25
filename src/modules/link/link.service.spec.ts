@@ -31,6 +31,116 @@ describe('LinkService', () => {
         expect(linkRepository.moveToFolder).toHaveBeenCalledWith(3, [42, 43], 7)
     })
 
+    it.each([
+        ['바꾸면', '2026-12-01T00:00:00.000Z'],
+        ['해제하면', null],
+    ])(
+        '리마인드 시각을 %s 이전 회차를 끊어 지난 일정의 알림을 다시 보내지 않는다',
+        async (_, reminderAt) => {
+            const linkRepository = {
+                findOwned: jest.fn().mockResolvedValue({ id: 42 }),
+                update: jest.fn().mockResolvedValue({ id: 42 }),
+            }
+            const service = new LinkService(
+                linkRepository as unknown as LinkRepository,
+                {} as never,
+                {} as never,
+                {} as never,
+            )
+
+            await service.update(3, 42, { reminderAt })
+
+            expect(linkRepository.update).toHaveBeenCalledWith(
+                3,
+                42,
+                expect.objectContaining({ reminderOccurrenceId: null }),
+            )
+        },
+    )
+
+    it('리마인드와 무관한 수정은 진행 중인 회차를 유지한다', async () => {
+        const linkRepository = {
+            findOwned: jest.fn().mockResolvedValue({ id: 42 }),
+            update: jest.fn().mockResolvedValue({ id: 42 }),
+        }
+        const service = new LinkService(
+            linkRepository as unknown as LinkRepository,
+            {} as never,
+            {} as never,
+            {} as never,
+        )
+
+        await service.update(3, 42, { isFavorite: true })
+
+        expect(linkRepository.update).toHaveBeenCalledWith(
+            3,
+            42,
+            expect.not.objectContaining({ reminderOccurrenceId: null }),
+        )
+    })
+
+    it('링크를 삭제하면 진행 중인 리마인드 회차를 끊는다', async () => {
+        const linkRepository = {
+            findOwned: jest.fn().mockResolvedValue({ id: 42 }),
+            update: jest.fn().mockResolvedValue({ id: 42 }),
+        }
+        const service = new LinkService(
+            linkRepository as unknown as LinkRepository,
+            {} as never,
+            {} as never,
+            {} as never,
+        )
+
+        await service.remove(3, 42)
+
+        expect(linkRepository.update).toHaveBeenCalledWith(
+            3,
+            42,
+            expect.objectContaining({ reminderOccurrenceId: null }),
+        )
+    })
+
+    it.each([
+        ['이미 지난 리마인드는 비운다', '2020-01-01T00:00:00.000Z', null],
+        [
+            '아직 오지 않은 리마인드는 유지한다',
+            '2999-01-01T00:00:00.000Z',
+            undefined,
+        ],
+    ])('삭제한 링크를 복구할 때 %s', async (_, reminderAt, expected) => {
+        const linkRepository = {
+            findOwned: jest.fn().mockResolvedValue({
+                id: 42,
+                deletedAt: new Date('2026-11-01T00:00:00.000Z'),
+                reminderAt: new Date(reminderAt),
+            }),
+            update: jest
+                .fn()
+                .mockResolvedValue({ id: 42, updatedAt: new Date() }),
+        }
+        const service = new LinkService(
+            linkRepository as unknown as LinkRepository,
+            {} as never,
+            {} as never,
+            {} as never,
+        )
+
+        await service.restore(3, 42)
+
+        expect(linkRepository.update).toHaveBeenCalledWith(
+            3,
+            42,
+            expect.objectContaining({ deletedAt: null }),
+        )
+        expect(linkRepository.update).toHaveBeenCalledWith(
+            3,
+            42,
+            expected === null
+                ? expect.objectContaining({ reminderAt: null })
+                : expect.not.objectContaining({ reminderAt: null }),
+        )
+    })
+
     it('전체 링크 페이지 cursor에 저장 시각의 DB microsecond 값을 그대로 사용한다', async () => {
         const first = {
             id: 79,

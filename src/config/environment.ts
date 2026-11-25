@@ -155,6 +155,16 @@ const appEnvSchema = z
             })
         }
 
+        // Expo 계정에 푸시 보안 강화가 켜져 있어 토큰 없는 발송 요청은 거부된다.
+        if (env.APP_ENV === 'production' && !env.EXPO_ACCESS_TOKEN) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['EXPO_ACCESS_TOKEN'],
+                message:
+                    'production 환경에서는 EXPO_ACCESS_TOKEN이 필요합니다.',
+            })
+        }
+
         if (
             env.APP_ENV === 'development' &&
             env.SQS_CONSUMER_ENABLED &&
