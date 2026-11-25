@@ -128,6 +128,8 @@ export class LinkService {
             patch.reminderAt = input.reminderAt
                 ? new Date(input.reminderAt)
                 : null
+            // 일정을 바꾸면 새 리마인드로 보고, 이전 회차의 남은 재시도를 멈춘다.
+            patch.reminderOccurrenceId = null
         }
 
         if (input.isFavorite !== undefined) {
@@ -169,6 +171,7 @@ export class LinkService {
         await this.linkRepository.update(userId, linkId, {
             deletedAt: new Date(),
             updatedAt: new Date(),
+            reminderOccurrenceId: null,
         })
     }
 
