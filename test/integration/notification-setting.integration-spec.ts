@@ -141,9 +141,9 @@ describe('NotificationSettingRepository (PostgreSQL)', () => {
             )
             .returning({ id: links.id, userId: links.userId })
         const emailEnabledOf = async () => {
-            const targets = await reminderRepository.findEmailTargets(
-                new Date('2026-11-02T00:00:00.000Z'),
-            )
+            const now = new Date('2026-11-02T00:00:00.000Z')
+            await reminderRepository.assignOccurrences(now)
+            const targets = await reminderRepository.findTargets(now, now)
             return Object.fromEntries(
                 created.map((link) => [
                     link.userId,
