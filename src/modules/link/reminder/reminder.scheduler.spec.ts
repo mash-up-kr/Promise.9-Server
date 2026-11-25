@@ -9,6 +9,7 @@ describe('ReminderScheduler', () => {
             sendReminders: jest.fn().mockResolvedValue({
                 targetCount: 4,
                 finishedCount: 3,
+                skippedCount: 1,
                 email: { sent: 2, failed: 1 },
                 push: { sent: 3, failed: 0 },
             }),
@@ -26,7 +27,7 @@ describe('ReminderScheduler', () => {
         expect(reminderService.sendReminders).toHaveBeenCalledTimes(1)
         expect(reminderService.checkPushReceipts).toHaveBeenCalledTimes(1)
         expect(loggerSpy).toHaveBeenCalledWith(
-            '리마인드 배치를 완료했습니다. target=4 finished=3 email.sent=2 email.failed=1 push.sent=3 push.failed=0',
+            '리마인드 배치를 완료했습니다. target=4 finished=3 skipped=1 email.sent=2 email.failed=1 push.sent=3 push.failed=0',
         )
 
         loggerSpy.mockRestore()

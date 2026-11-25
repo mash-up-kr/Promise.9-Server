@@ -15,12 +15,12 @@ export class ReminderScheduler {
     })
     async sendReminders() {
         try {
-            const { targetCount, finishedCount, email, push } =
+            const { targetCount, finishedCount, skippedCount, email, push } =
                 await this.reminderService.sendReminders()
 
             if (targetCount > 0 || finishedCount > 0) {
                 this.logger.log(
-                    `리마인드 배치를 완료했습니다. target=${targetCount} finished=${finishedCount} email.sent=${email.sent} email.failed=${email.failed} push.sent=${push.sent} push.failed=${push.failed}`,
+                    `리마인드 배치를 완료했습니다. target=${targetCount} finished=${finishedCount} skipped=${skippedCount} email.sent=${email.sent} email.failed=${email.failed} push.sent=${push.sent} push.failed=${push.failed}`,
                 )
             }
         } catch (error) {

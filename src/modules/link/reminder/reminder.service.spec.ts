@@ -35,8 +35,6 @@ const createTarget = (
     memo: 'UT 준비할 때 참고하기',
     folderName: '디자인',
     folderColor: '#d5d76a',
-    emailEnabled: true,
-    pushEnabled: true,
     emailHistory: null,
     pushTokens: [{ id: 100, token: 'ExponentPushToken[first]' }],
     pushHistories: [],
@@ -59,15 +57,26 @@ const setup = (
     {
         emailResults,
         pushResults,
+        disabled = {},
     }: {
         emailResults?: (input: SendBulkEmailInput) => BulkEmailEntryResult[]
         pushResults?: (messages: readonly PushMessage[]) => PushSendResult[]
+        // 채널별로 수신을 끈 사용자 ID
+        disabled?: { email?: number[]; push?: number[] }
     } = {},
 ) => {
     let historyId = 1000
     const repository = {
         assignOccurrences: jest.fn().mockResolvedValue(undefined),
         findTargets: jest.fn().mockResolvedValue(targets),
+        findDisabledUserIds: jest.fn(
+            (userIds: number[], channel: 'email' | 'push') =>
+                Promise.resolve(
+                    (disabled[channel] ?? []).filter((id) =>
+                        userIds.includes(id),
+                    ),
+                ),
+        ),
         insertEmailHistory: jest.fn(() => Promise.resolve(++historyId)),
         insertPushHistory: jest.fn(() => Promise.resolve(++historyId)),
         retryEmailHistory: jest.fn().mockResolvedValue(true),
@@ -182,6 +191,7 @@ describe('ReminderService', () => {
         expect(result).toEqual({
             targetCount: 1,
             finishedCount: 1,
+            skippedCount: 0,
             email: { sent: 1, failed: 0 },
             push: { sent: 2, failed: 0 },
         })
@@ -320,13 +330,15 @@ describe('ReminderService', () => {
             }),
             createTarget({
                 linkId: 2,
+                userId: 20,
                 reminderAt: null,
-                emailEnabled: false,
                 emailHistory: failedHistory(5),
                 pushTokens: [],
             }),
         ]
-        const { service, repository, sendBulk, pushService } = setup(targets)
+        const { service, repository, sendBulk, pushService } = setup(targets, {
+            disabled: { email: [20] },
+        })
         repository.retryPushHistory.mockImplementation((id: number) =>
             Promise.resolve(id !== 4),
         )
@@ -342,18 +354,17 @@ describe('ReminderService', () => {
     })
 
     it.each([
-        [
-            '이메일·푸시 수신을 모두 껐으면',
-            { emailEnabled: false, pushEnabled: false },
-        ],
+        ['이메일·푸시 수신을 모두 껐으면', {}, { email: [10], push: [10] }],
         [
             '이메일을 끄고 푸시를 받을 기기가 없으면',
-            { emailEnabled: false, pushTokens: [] },
+            { pushTokens: [] },
+            { email: [10] },
         ],
-    ])('%s 보내지 않고 일정을 마친다', async (_, values) => {
-        const { service, repository, sendBulk, pushService } = setup([
-            createTarget(values),
-        ])
+    ])('%s 보내지 않고 일정을 마친다', async (_, values, disabled) => {
+        const { service, repository, sendBulk, pushService } = setup(
+            [createTarget(values)],
+            { disabled },
+        )
 
         const result = await service.sendReminders(now)
 
@@ -362,13 +373,59 @@ describe('ReminderService', () => {
         expect(sendBulk).not.toHaveBeenCalled()
         expect(pushService.send).not.toHaveBeenCalled()
         expect(repository.markSent).toHaveBeenCalledWith(1, 'occurrence-1', now)
-        expect(result.finishedCount).toBe(1)
+        expect(result).toMatchObject({ finishedCount: 1, skippedCount: 1 })
+    })
+
+    it('건너뛰려던 일정이 그사이 바뀌어 해제하지 못하면 건너뜀으로 세지 않는다', async () => {
+        const { service, repository } = setup([createTarget()], {
+            disabled: { email: [10], push: [10] },
+        })
+        repository.markSent.mockResolvedValue(false)
+
+        const result = await service.sendReminders(now)
+
+        expect(result).toMatchObject({ finishedCount: 0, skippedCount: 0 })
+    })
+
+    it('50건 묶음마다 보내기 직전에 수신 설정을 다시 읽어, 대상 조회 뒤 끈 채널로는 보내지 않는다', async () => {
+        const targets = Array.from({ length: 51 }, (_, index) =>
+            createTarget({
+                linkId: index + 1,
+                userId: index + 1,
+                occurrenceId: `occurrence-${index + 1}`,
+            }),
+        )
+        const { service, repository, sendBulk, pushService } = setup(targets, {
+            disabled: { email: [51], push: [2] },
+        })
+
+        const result = await service.sendReminders(now)
+
+        expect(repository.findDisabledUserIds.mock.calls).toEqual([
+            [targets.slice(0, 50).map((target) => target.userId), 'email'],
+            [targets.slice(0, 50).map((target) => target.userId), 'push'],
+            [[51], 'email'],
+            [[51], 'push'],
+        ])
+        expect(
+            sendBulk.mock.calls.map(([input]) => input.entries.length),
+        ).toEqual([50])
+        expect(
+            pushService.send.mock.calls.map(([messages]) => messages.length),
+        ).toEqual([49, 1])
+        expect(result).toMatchObject({
+            finishedCount: 51,
+            skippedCount: 0,
+            email: { sent: 50, failed: 0 },
+            push: { sent: 50, failed: 0 },
+        })
     })
 
     it('이메일 수신을 꺼도 푸시를 받을 기기가 있으면 푸시만 보낸다', async () => {
-        const { service, repository, sendBulk, pushService } = setup([
-            createTarget({ emailEnabled: false }),
-        ])
+        const { service, repository, sendBulk, pushService } = setup(
+            [createTarget()],
+            { disabled: { email: [10] } },
+        )
 
         await service.sendReminders(now)
 
@@ -381,7 +438,6 @@ describe('ReminderService', () => {
         const { service, repository } = setup(
             [
                 createTarget({
-                    emailEnabled: false,
                     pushTokens: [
                         { id: 100, token: 'ExponentPushToken[gone]' },
                         { id: 101, token: 'ExponentPushToken[credentials]' },
@@ -390,6 +446,7 @@ describe('ReminderService', () => {
                 }),
             ],
             {
+                disabled: { email: [10] },
                 pushResults: (messages) => [
                     {
                         to: messages[0].to,

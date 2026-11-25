@@ -134,7 +134,7 @@ describe('ReminderRepository (PostgreSQL)', () => {
         expect(await occurrenceOf(deletedLink.id)).toBeNull()
     })
 
-    it('발송 대상은 수신 설정 기본값과 지금 소유자의 기기를 함께 담는다', async () => {
+    it('발송 대상은 지금 소유자의 기기를 담고, 수신 설정은 채널별로 끈 사용자만 돌려준다', async () => {
         const link = await insertLink({ title: '읽어볼 링크' })
         const token = await insertToken()
         const movedToken = await insertToken()
@@ -157,12 +157,16 @@ describe('ReminderRepository (PostgreSQL)', () => {
             occurrenceId: await occurrenceOf(link.id),
             reminderAt: due,
             title: '읽어볼 링크',
-            emailEnabled: true,
-            pushEnabled: false,
             emailHistory: null,
             pushTokens: [token],
             pushHistories: [],
         })
+        expect(await repository.findDisabledUserIds([userId], 'email')).toEqual(
+            [],
+        )
+        expect(await repository.findDisabledUserIds([userId], 'push')).toEqual([
+            userId,
+        ])
     })
 
     it('삭제된 링크·탈퇴 회원·회차 없는 일정은 대상이 아니다', async () => {

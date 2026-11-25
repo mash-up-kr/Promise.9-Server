@@ -12,7 +12,6 @@ import {
     or,
     sql,
 } from 'drizzle-orm'
-import { alias } from 'drizzle-orm/pg-core'
 
 import type { DatabaseService } from '../../../config/database/database.service'
 import { folders } from '../../folder/folder.schema'
@@ -22,7 +21,6 @@ import {
     pushHistories,
     pushTokens,
 } from '../../notification/notification.schema'
-import { DEFAULT_NOTIFICATION_SETTINGS } from '../../user/notification-setting/notification-setting.constant'
 import { users } from '../../user/schema/user.schema'
 import { links } from '../link.schema'
 
@@ -32,9 +30,6 @@ import type {
     PushReceiptTarget,
     ReminderTarget,
 } from './reminder.type'
-
-const emailSettings = alias(notificationSettings, 'email_settings')
-const pushSettings = alias(notificationSettings, 'push_settings')
 
 type HistoryOwner = Pick<ReminderTarget, 'userId' | 'linkId' | 'occurrenceId'>
 type HistoryTable = typeof emailHistories | typeof pushHistories
@@ -84,8 +79,6 @@ export class ReminderRepository {
                 memo: links.memo,
                 folderName: folders.name,
                 folderColor: folders.color,
-                emailEnabled: emailSettings.enabled,
-                pushEnabled: pushSettings.enabled,
             })
             .from(links)
             .innerJoin(users, eq(users.id, links.userId))
@@ -95,20 +88,6 @@ export class ReminderRepository {
                     eq(folders.id, links.folderId),
                     eq(folders.userId, links.userId),
                     isNull(folders.deletedAt),
-                ),
-            )
-            .leftJoin(
-                emailSettings,
-                and(
-                    eq(emailSettings.userId, links.userId),
-                    eq(emailSettings.channel, 'email'),
-                ),
-            )
-            .leftJoin(
-                pushSettings,
-                and(
-                    eq(pushSettings.userId, links.userId),
-                    eq(pushSettings.channel, 'push'),
                 ),
             )
             .where(
@@ -194,10 +173,6 @@ export class ReminderRepository {
             return {
                 ...row,
                 occurrenceId: row.occurrenceId as string,
-                emailEnabled:
-                    row.emailEnabled ?? DEFAULT_NOTIFICATION_SETTINGS.email,
-                pushEnabled:
-                    row.pushEnabled ?? DEFAULT_NOTIFICATION_SETTINGS.push,
                 emailHistory: emailHistory
                     ? { ...emailHistory, errorCode: null }
                     : null,
@@ -210,6 +185,25 @@ export class ReminderRepository {
                 ),
             }
         })
+    }
+
+    /** 해당 채널 수신을 끈 사용자 ID를 반환한다. 설정 행이 없으면 수신으로 본다. */
+    async findDisabledUserIds(
+        userIds: number[],
+        channel: 'email' | 'push',
+    ): Promise<number[]> {
+        const rows = await this.db
+            .select({ userId: notificationSettings.userId })
+            .from(notificationSettings)
+            .where(
+                and(
+                    inArray(notificationSettings.userId, userIds),
+                    eq(notificationSettings.channel, channel),
+                    eq(notificationSettings.enabled, false),
+                ),
+            )
+
+        return rows.map((row) => row.userId)
     }
 
     // 유니크 제약으로 회차의 첫 발송을 한 번만 선점한다. 이미 있으면 undefined

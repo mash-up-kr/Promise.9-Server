@@ -19,9 +19,6 @@ export type ReminderTarget = {
     memo: string | null
     folderName: string | null
     folderColor: string | null
-    // 발송 시점의 수신 설정. 설정한 적 없으면 true
-    emailEnabled: boolean
-    pushEnabled: boolean
     emailHistory: ReminderHistory | null
     pushTokens: { id: number; token: string }[]
     pushHistories: (ReminderHistory & { pushTokenId: number | null })[]
@@ -59,8 +56,10 @@ export type ReminderChannelResult = {
 
 export type ReminderBatchResult = {
     targetCount: number
-    // 보냈거나, 보낼 채널이 없거나, 재시도 기한이 지나 마친 일정 수
+    // 보냈거나, 보낼 채널이 없거나, 재시도 기한이 지나 실제로 해제한 일정 수
     finishedCount: number
+    // 그중 보낼 채널이 없어 보내지 않고 해제한 일정 수
+    skippedCount: number
     email: ReminderChannelResult
     push: ReminderChannelResult
 }
