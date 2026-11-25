@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 
+import { JwtService } from '@nestjs/jwt'
 import { eq, inArray } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
@@ -9,6 +10,9 @@ import postgres from 'postgres'
 import { BaseException } from '../../src/common/exception/base.exception'
 import { DatabaseService } from '../../src/config/database/database.service'
 import * as schema from '../../src/config/database/schema'
+import { hashToken } from '../../src/modules/auth/crypto.utils'
+import { RefreshTokenRepository } from '../../src/modules/auth/repository/refresh-token.repository'
+import { refreshTokens } from '../../src/modules/auth/schema/refresh-token.schema'
 import { links } from '../../src/modules/link/link.schema'
 import {
     pushHistories,
@@ -35,6 +39,7 @@ const client = postgres(databaseUrl, {
 const db = drizzle(client, { schema, casing: 'snake_case' })
 const databaseService = { db } as unknown as DatabaseService
 const repository = new PushTokenRepository(databaseService)
+const refreshTokenRepository = new RefreshTokenRepository(databaseService)
 const userRepository = new UserRepository(
     databaseService,
     new SocialAccountRepository(databaseService),
@@ -114,7 +119,7 @@ describe('PushTokenRepository (PostgreSQL)', () => {
     it('계정 전환 후 이전 계정의 해제 요청은 새 소유자의 토큰을 지우지 않는다', async () => {
         await repository.register(userId, { token, platform: 'ios' })
         await repository.register(otherUserId, { token, platform: 'android' })
-        expect(await repository.unregister(userId, token)).toBe(true)
+        await repository.deleteByUserAndToken(userId, token)
         const [stored] = await db
             .select()
             .from(pushTokens)
@@ -137,7 +142,7 @@ describe('PushTokenRepository (PostgreSQL)', () => {
             token: otherToken,
             platform: 'ios',
         })
-        await repository.unregister(userId, token)
+        await repository.deleteByUserAndToken(userId, token)
         expect(
             await db
                 .select()
@@ -153,13 +158,98 @@ describe('PushTokenRepository (PostgreSQL)', () => {
         )
     })
 
-    it('없는 토큰과 반복 해제는 멱등하게 성공한다', async () => {
+    it('로그아웃의 두 삭제는 같은 트랜잭션에서 롤백하고 재시도할 수 있다', async () => {
+        const refreshToken = new JwtService().sign(
+            { sub: userId, type: 'refresh' },
+            { secret: 'integration-logout-secret', expiresIn: -60 },
+        )
+        const tokenHash = hashToken(refreshToken)
+        await refreshTokenRepository.insert({
+            userId,
+            tokenHash,
+            tokenFamily: randomUUID(),
+            purpose: 'primary',
+            expiresAt: new Date(Date.now() - 60000),
+        })
         await repository.register(userId, { token, platform: 'ios' })
-        expect(await repository.unregister(userId, token)).toBe(true)
-        expect(await repository.unregister(userId, token)).toBe(true)
+
+        const removeTokens = async () =>
+            db.transaction(async (tx) => {
+                await refreshTokenRepository.deleteByHashAndUser(
+                    tokenHash,
+                    userId,
+                    tx,
+                )
+                await repository.deleteByUserAndToken(userId, token, tx)
+                throw new Error('rollback-logout')
+            })
+        await expect(removeTokens()).rejects.toThrow('rollback-logout')
+        expect(await refreshTokenRepository.findByHash(tokenHash)).toBeDefined()
+        expect(
+            await db
+                .select()
+                .from(pushTokens)
+                .where(eq(pushTokens.token, token)),
+        ).toHaveLength(1)
+
+        for (let retry = 0; retry < 2; retry++) {
+            await db.transaction(async (tx) => {
+                await refreshTokenRepository.deleteByHashAndUser(
+                    tokenHash,
+                    userId,
+                    tx,
+                )
+                await repository.deleteByUserAndToken(userId, token, tx)
+            })
+        }
+        expect(
+            await db
+                .select()
+                .from(refreshTokens)
+                .where(eq(refreshTokens.tokenHash, tokenHash)),
+        ).toHaveLength(0)
+        expect(
+            await db
+                .select()
+                .from(pushTokens)
+                .where(eq(pushTokens.token, token)),
+        ).toHaveLength(0)
     })
 
-    it('존재하지 않거나 탈퇴한 계정은 등록·해제하지 않는다', async () => {
+    it('로그아웃의 토큰 삭제도 새 소유자와 다른 기기의 토큰을 보존한다', async () => {
+        await repository.register(userId, { token, platform: 'ios' })
+        await repository.register(userId, {
+            token: token + '-second',
+            platform: 'ios',
+        })
+        await repository.register(otherUserId, { token, platform: 'android' })
+        await db.transaction((tx) =>
+            repository.deleteByUserAndToken(userId, token, tx),
+        )
+        const remaining = await db
+            .select()
+            .from(pushTokens)
+            .where(inArray(pushTokens.userId, [userId, otherUserId]))
+        expect(remaining).toHaveLength(2)
+        expect(remaining).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ userId: otherUserId, token }),
+                expect.objectContaining({ userId, token: token + '-second' }),
+            ]),
+        )
+    })
+
+    it('없는 토큰과 반복 해제는 멱등하게 성공한다', async () => {
+        await repository.register(userId, { token, platform: 'ios' })
+        await expect(
+            repository.deleteByUserAndToken(userId, token),
+        ).resolves.toBeUndefined()
+        await expect(
+            repository.deleteByUserAndToken(userId, token),
+        ).resolves.toBeUndefined()
+    })
+
+    it('존재하지 않거나 탈퇴한 계정은 등록하지 않으며 삭제 재시도는 성공한다', async () => {
         await db
             .update(users)
             .set({ deletedAt: new Date() })
@@ -171,7 +261,9 @@ describe('PushTokenRepository (PostgreSQL)', () => {
                     platform: 'ios',
                 }),
             ).toBe(false)
-            expect(await repository.unregister(accountId, token)).toBe(false)
+            await expect(
+                repository.deleteByUserAndToken(accountId, token),
+            ).resolves.toBeUndefined()
         }
         expect(
             await db
@@ -201,7 +293,7 @@ describe('PushTokenRepository (PostgreSQL)', () => {
                 ticketId: 'integration-ticket',
             })
             .returning()
-        await repository.unregister(userId, token)
+        await repository.deleteByUserAndToken(userId, token)
         const [stored] = await db
             .select()
             .from(pushHistories)

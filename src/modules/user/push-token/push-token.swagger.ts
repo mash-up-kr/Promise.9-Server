@@ -6,10 +6,7 @@ import { ApiCommonErrorResponses } from '../../../common/swagger/api-response.de
 import { AUTH_ERROR } from '../../auth/auth-error.constant'
 import { USER_ERROR } from '../user-error.constant'
 
-import {
-    RegisterPushTokenDto,
-    UnregisterPushTokenDto,
-} from './dto/push-token.dto'
+import { RegisterPushTokenDto } from './dto/push-token.dto'
 
 const ApiPushTokenErrors = () =>
     ApiCommonErrorResponses(
@@ -28,17 +25,5 @@ export const ApiRegisterPushToken = () =>
         }),
         ApiBody({ type: RegisterPushTokenDto }),
         ApiNoContentResponse({ description: '등록·갱신 성공' }),
-        ApiPushTokenErrors(),
-    )
-
-export const ApiUnregisterPushToken = () =>
-    applyDecorators(
-        ApiOperation({
-            summary: '내 기기 푸시 토큰 해제',
-            description:
-                'JWT의 활성 사용자와 본문의 토큰을 함께 조건으로 연결을 해제한다. 이미 없거나 다른 사용자의 토큰이면 변경 없이 성공한다.',
-        }),
-        ApiBody({ type: UnregisterPushTokenDto }),
-        ApiNoContentResponse({ description: '해제 성공' }),
         ApiPushTokenErrors(),
     )

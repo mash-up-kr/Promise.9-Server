@@ -2,7 +2,7 @@
 
 > Base URL: `/api/v1` · [API 명세 인덱스](./api-spec.md) · [공통 응답](./common.md)
 
-푸시 토큰은 앱이 Expo의 `getExpoPushTokenAsync`로 발급받고, 이 API는 로그인한 사용자와 토큰의 연결을 관리한다. 두 API 모두 JWT 인증이 필요하며 사용자 ID는 JWT에서만 얻는다.
+푸시 토큰은 앱이 Expo의 `getExpoPushTokenAsync`로 발급받고, 이 API는 로그인한 사용자와 토큰의 연결을 등록·갱신한다. JWT 인증이 필요하며 사용자 ID는 JWT에서만 얻는다.
 
 `UserModule` 하위의 `src/modules/user/push-token`에서 구현한다. #150으로 반영된 `push_tokens` 테이블을 사용하며, 정상 요청은 본문 없는 `204`를 반환한다.
 
@@ -25,27 +25,19 @@ Content-Type: application/json
 
 사용자 행을 잠근 트랜잭션 안에서 활성 회원 여부 확인과 upsert를 처리한다. 존재하지 않거나 탈퇴한 계정이면 404를 반환한다.
 
-## 해제
+## 로그아웃 시 삭제
 
-```http
-DELETE /users/me/push-tokens
-Authorization: Bearer <accessToken>
-Content-Type: application/json
+[로그아웃 API](./auth.md#로그아웃)에 `refreshToken`과 선택 필드 `pushToken`을 함께 보낸다. 서명 검증을 통과한 리프레시 토큰의 사용자 ID와 해당 푸시 토큰을 함께 조건으로 삭제한다. 계정 전환 뒤 늦게 도착한 이전 계정의 로그아웃 요청은 새 소유자의 토큰을 삭제하지 않는다.
 
-{
-    "token": "ExpoPushToken[xxxxxxxxxxxxxxxxxxxxxx]"
-}
-```
+로그아웃 API는 만료된 리프레시 토큰도 허용하며 Access Token 없이 호출할 수 있다. 이미 삭제된 토큰의 재요청도 성공한다. 현재 `push_histories`는 푸시 토큰을 직접 참조하지 않으므로 토큰을 삭제해도 발송 이력은 변경하지 않는다.
 
-토큰 원문이 접근 로그 URL에 남지 않도록 본문으로 받는다. 활성 사용자 여부를 확인한 뒤 `userId`와 `token`을 함께 조건으로 삭제한다. 이미 없는 토큰이나 다른 사용자의 토큰에는 변경 없이 성공한다. 계정 전환 후 이전 계정이 해제 요청을 보내도 새 소유자의 토큰은 유지된다.
+회원 탈퇴 시에는 계정의 soft delete와 같은 트랜잭션에서 해당 사용자의 토큰을 정리한다. 등록과 탈퇴가 겹치더라도 사용자 행 잠금으로 처리 순서를 맞춘다.
 
-로그아웃할 때는 access token을 폐기하기 전에 호출해야 한다. 현재 `push_histories`는 푸시 토큰을 직접 참조하지 않으므로 토큰을 해제해도 발송 이력은 변경하지 않는다.
-
-회원 탈퇴 시에는 계정의 soft delete와 같은 트랜잭션에서 해당 사용자의 토큰을 정리한다. 등록·해제와 탈퇴가 겹치더라도 사용자 행 잠금으로 처리 순서를 맞춘다.
+세션 만료나 장기 미접속만으로 푸시 토큰을 삭제하지 않는다.
 
 ## 응답
 
-- `204 No Content`: 등록·갱신 또는 해제 성공. 본문 없음.
+- `204 No Content`: 등록·갱신 성공. 본문 없음.
 - `400 / 910001`: 토큰 형식·플랫폼·본문 필드 검증 실패.
 - `401 / 950001`: 인증 누락 또는 잘못된 JWT.
 - `404 / 960001`: 존재하지 않거나 탈퇴한 사용자.

@@ -89,7 +89,7 @@ export class AuthController {
     async logout(
         @Body(new ZodValidationPipe(logoutSchema)) dto: LogoutInput,
     ): Promise<void> {
-        await this.authService.logout(dto.refreshToken)
+        await this.authService.logout(dto.refreshToken, dto.pushToken)
     }
 
     @Delete('withdraw')

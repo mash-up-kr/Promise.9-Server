@@ -4,10 +4,7 @@ import { BaseException } from '../../../common/exception/base.exception'
 import { USER_ERROR } from '../user-error.constant'
 
 import { PushTokenRepository } from './push-token.repository'
-import {
-    RegisterPushTokenInput,
-    UnregisterPushTokenInput,
-} from './push-token.type'
+import { RegisterPushTokenInput } from './push-token.type'
 
 @Injectable()
 export class PushTokenService {
@@ -20,17 +17,5 @@ export class PushTokenService {
     ): Promise<void> {
         const registered = await this.repository.register(userId, input)
         if (!registered) throw new BaseException(USER_ERROR.NOT_FOUND)
-    }
-
-    /** 현재 사용자와 해당 기기 토큰의 연결을 해제한다. */
-    async unregister(
-        userId: number,
-        input: UnregisterPushTokenInput,
-    ): Promise<void> {
-        const unregistered = await this.repository.unregister(
-            userId,
-            input.token,
-        )
-        if (!unregistered) throw new BaseException(USER_ERROR.NOT_FOUND)
     }
 }

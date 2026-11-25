@@ -5,8 +5,10 @@ import { randomUUID } from 'crypto'
 import type { StringValue } from 'ms'
 
 import { BaseException } from '../../common/exception/base.exception'
+import { COMMON_ERROR } from '../../common/exception/common-error-code.constant'
 import { DatabaseService } from '../../config/database/database.service'
 import { ValidatedEnvironment } from '../../config/environment'
+import { PushTokenRepository } from '../user/push-token/push-token.repository'
 import { UserRepository } from '../user/repository/user.repository'
 
 import { SupportedProvider } from './dto/auth.dto'
@@ -50,6 +52,7 @@ export class AuthService {
         private readonly databaseService: DatabaseService,
         private readonly userRepository: UserRepository,
         private readonly refreshTokenRepository: RefreshTokenRepository,
+        private readonly pushTokenRepository: PushTokenRepository,
         private readonly jwtService: JwtService,
         private readonly googleProvider: GoogleProvider,
         private readonly kakaoProvider: KakaoProvider,
@@ -132,14 +135,30 @@ export class AuthService {
         )
     }
 
-    async logout(rawRefreshToken: string): Promise<void> {
-        const payload = this.verifyRefreshToken(rawRefreshToken)
+    async logout(rawRefreshToken: string, pushToken?: string): Promise<void> {
+        // 오프라인 로그아웃을 재시도할 수 있도록 만료만 무시하고 서명과 용도는 검증한다.
+        const payload = this.verifyRefreshToken(rawRefreshToken, true)
         const tokenHash = hashToken(rawRefreshToken)
 
-        await this.refreshTokenRepository.deleteByHashAndUser(
-            tokenHash,
-            payload.sub,
-        )
+        try {
+            await this.databaseService.db.transaction(async (tx) => {
+                await this.refreshTokenRepository.deleteByHashAndUser(
+                    tokenHash,
+                    payload.sub,
+                    tx,
+                )
+                if (pushToken) {
+                    await this.pushTokenRepository.deleteByUserAndToken(
+                        payload.sub,
+                        pushToken,
+                        tx,
+                    )
+                }
+            })
+        } catch {
+            // SQL 오류에 포함될 수 있는 토큰 원문과 해시를 응답·로그에 남기지 않는다.
+            throw new BaseException(COMMON_ERROR.INTERNAL_SERVER_ERROR)
+        }
     }
 
     async withdraw(rawRefreshToken: string): Promise<void> {
@@ -217,13 +236,21 @@ export class AuthService {
         return { accessToken, refreshToken: rawRefreshToken }
     }
 
-    private verifyRefreshToken(token: string): JwtRefreshPayload {
+    private verifyRefreshToken(
+        token: string,
+        ignoreExpiration = false,
+    ): JwtRefreshPayload {
         try {
             const payload = this.jwtService.verify<JwtRefreshPayload>(token, {
                 secret: this.refreshSecret,
+                ignoreExpiration,
             })
 
-            if (payload.type !== TOKEN_TYPE.REFRESH) {
+            if (
+                payload.type !== TOKEN_TYPE.REFRESH ||
+                !Number.isSafeInteger(payload.sub) ||
+                payload.sub <= 0
+            ) {
                 throw new BaseException(AUTH_ERROR.INVALID_TOKEN)
             }
 
