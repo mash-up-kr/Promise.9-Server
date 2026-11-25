@@ -28,7 +28,7 @@ const results = await pushService.send([
 
 `accepted`는 APNs·FCM 전달이나 기기 수신을 의미하지 않는다. SDK 예외의 원문, 공급자 메시지, debug 정보는 반환하거나 로그로 남기지 않는다. 반환값에는 후속 처리를 위한 토큰이 포함되므로 응답 전체를 로그나 공개 API에 노출하지 않는다.
 
-Expo 계정에 Enhanced push security가 켜져 있어 발송 요청에 `EXPO_ACCESS_TOKEN`이 필요하다. production 환경에서는 필수이며, 다른 환경에서는 선택 사항이다. 빈 값은 허용하지 않는다. 이 값은 사용자 기기의 Expo Push Token과 다르다. 운영 배포에서는 GitHub Actions secret `EXPO_ACCESS_TOKEN`에 설정하면 `.env.production`으로 전달된다. 설정하지 않은 경우에는 환경변수 항목을 생성하지 않는다.
+Expo 계정에 Enhanced push security가 켜져 있어 발송 요청에 `EXPO_ACCESS_TOKEN`이 필요하다. production 환경에서는 필수이며, 다른 환경에서는 선택 사항이다. 빈 값은 허용하지 않는다. 이 값은 사용자 기기의 Expo Push Token과 다르다. 운영 배포는 GitHub Actions secret `EXPO_ACCESS_TOKEN`을 필수로 검사하고 `.env.production`으로 전달한다. secret이 비어 있으면 배포를 시작하기 전에 실패한다.
 
 ## Receipt 조회
 
