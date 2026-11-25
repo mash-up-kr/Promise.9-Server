@@ -1,10 +1,9 @@
 import { Injectable } from '@nestjs/common'
-import { and, asc, eq, isNotNull, isNull, lte } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNotNull, isNull, lte } from 'drizzle-orm'
 
 import { DatabaseService } from '../../../config/database/database.service'
 import { folders } from '../../folder/folder.schema'
 import { notificationSettings } from '../../notification/notification.schema'
-import { DEFAULT_NOTIFICATION_SETTINGS } from '../../user/notification-setting/notification-setting.constant'
 import { users } from '../../user/schema/user.schema'
 import { links } from '../link.schema'
 
@@ -24,6 +23,7 @@ export class ReminderRepository {
         const rows = await this.db
             .select({
                 linkId: links.id,
+                userId: links.userId,
                 recipientEmail: users.email,
                 title: links.title,
                 originalUrl: links.originalUrl,
@@ -33,7 +33,6 @@ export class ReminderRepository {
                 memo: links.memo,
                 folderName: folders.name,
                 folderColor: folders.color,
-                emailEnabled: notificationSettings.enabled,
             })
             .from(links)
             .innerJoin(users, eq(users.id, links.userId))
@@ -43,13 +42,6 @@ export class ReminderRepository {
                     eq(folders.id, links.folderId),
                     eq(folders.userId, links.userId),
                     isNull(folders.deletedAt),
-                ),
-            )
-            .leftJoin(
-                notificationSettings,
-                and(
-                    eq(notificationSettings.userId, links.userId),
-                    eq(notificationSettings.channel, 'email'),
                 ),
             )
             .where(
@@ -65,9 +57,23 @@ export class ReminderRepository {
         return rows.map((row) => ({
             ...row,
             reminderAt: row.reminderAt as Date,
-            emailEnabled:
-                row.emailEnabled ?? DEFAULT_NOTIFICATION_SETTINGS.email,
         }))
+    }
+
+    /** 이메일 수신을 끈 사용자 ID를 반환한다. 설정 행이 없으면 수신으로 본다. */
+    async findEmailDisabledUserIds(userIds: number[]): Promise<number[]> {
+        const rows = await this.db
+            .select({ userId: notificationSettings.userId })
+            .from(notificationSettings)
+            .where(
+                and(
+                    inArray(notificationSettings.userId, userIds),
+                    eq(notificationSettings.channel, 'email'),
+                    eq(notificationSettings.enabled, false),
+                ),
+            )
+
+        return rows.map((row) => row.userId)
     }
 
     async markSent(

@@ -1,5 +1,6 @@
 export type ReminderEmailTarget = {
     linkId: number
+    userId: number
     recipientEmail: string
     title: string | null
     originalUrl: string
@@ -9,8 +10,6 @@ export type ReminderEmailTarget = {
     memo: string | null
     folderName: string | null
     folderColor: string | null
-    // 발송 시점의 이메일 수신 설정. 설정한 적 없으면 true
-    emailEnabled: boolean
 }
 
 export type ReminderEmailData = {
