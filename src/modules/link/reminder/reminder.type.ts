@@ -9,6 +9,8 @@ export type ReminderEmailTarget = {
     memo: string | null
     folderName: string | null
     folderColor: string | null
+    // 발송 시점의 이메일 수신 설정. 설정한 적 없으면 true
+    emailEnabled: boolean
 }
 
 export type ReminderEmailData = {
@@ -26,5 +28,7 @@ export type ReminderEmailData = {
 export type ReminderBatchResult = {
     targetCount: number
     sentCount: number
+    // 받을 채널이 없어 보내지 않고 일정을 마친 건수
+    skippedCount: number
     failedCount: number
 }

@@ -20,7 +20,7 @@ export class ReminderScheduler {
             if (result.targetCount === 0) return
 
             this.logger.log(
-                `리마인드 이메일 배치를 완료했습니다. target=${result.targetCount} sent=${result.sentCount} failed=${result.failedCount}`,
+                `리마인드 이메일 배치를 완료했습니다. target=${result.targetCount} sent=${result.sentCount} skipped=${result.skippedCount} failed=${result.failedCount}`,
             )
         } catch (error) {
             const message =

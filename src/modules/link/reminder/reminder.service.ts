@@ -25,10 +25,22 @@ export class ReminderService {
     ): Promise<ReminderBatchResult> {
         const reminders =
             await this.reminderRepository.findEmailTargets(batchStartedAt)
+        // 푸시 발송(#153) 전까지는 이메일만 보낼 채널로 본다.
+        const deliverable = reminders.filter(
+            (reminder) => reminder.emailEnabled,
+        )
         let sentCount = 0
+        let skippedCount = 0
 
-        for (let offset = 0; offset < reminders.length; offset += 50) {
-            const entries = reminders.slice(offset, offset + 50)
+        // 받을 채널이 없는 일정은 보낸 경우와 같이 마쳐 나중에 수신을 켜도 몰아서 보내지 않는다.
+        for (const reminder of reminders) {
+            if (!reminder.emailEnabled && (await this.markSent(reminder))) {
+                skippedCount += 1
+            }
+        }
+
+        for (let offset = 0; offset < deliverable.length; offset += 50) {
+            const entries = deliverable.slice(offset, offset + 50)
             const sendResults = await this.emailService.sendBulk(
                 buildReminderBulkEmail(
                     entries.map((reminder) => ({
@@ -69,7 +81,8 @@ export class ReminderService {
         return {
             targetCount: reminders.length,
             sentCount,
-            failedCount: reminders.length - sentCount,
+            skippedCount,
+            failedCount: reminders.length - sentCount - skippedCount,
         }
     }
 

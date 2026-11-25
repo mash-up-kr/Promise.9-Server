@@ -3,6 +3,8 @@ import { and, asc, eq, isNotNull, isNull, lte } from 'drizzle-orm'
 
 import { DatabaseService } from '../../../config/database/database.service'
 import { folders } from '../../folder/folder.schema'
+import { notificationSettings } from '../../notification/notification.schema'
+import { DEFAULT_NOTIFICATION_SETTINGS } from '../../user/notification-setting/notification-setting.constant'
 import { users } from '../../user/schema/user.schema'
 import { links } from '../link.schema'
 
@@ -31,6 +33,7 @@ export class ReminderRepository {
                 memo: links.memo,
                 folderName: folders.name,
                 folderColor: folders.color,
+                emailEnabled: notificationSettings.enabled,
             })
             .from(links)
             .innerJoin(users, eq(users.id, links.userId))
@@ -40,6 +43,13 @@ export class ReminderRepository {
                     eq(folders.id, links.folderId),
                     eq(folders.userId, links.userId),
                     isNull(folders.deletedAt),
+                ),
+            )
+            .leftJoin(
+                notificationSettings,
+                and(
+                    eq(notificationSettings.userId, links.userId),
+                    eq(notificationSettings.channel, 'email'),
                 ),
             )
             .where(
@@ -55,6 +65,8 @@ export class ReminderRepository {
         return rows.map((row) => ({
             ...row,
             reminderAt: row.reminderAt as Date,
+            emailEnabled:
+                row.emailEnabled ?? DEFAULT_NOTIFICATION_SETTINGS.email,
         }))
     }
 

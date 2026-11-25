@@ -7,8 +7,9 @@ describe('ReminderScheduler', () => {
     it('리마인드 배치를 실행하고 처리 건수를 기록한다', async () => {
         const reminderService = {
             sendReminderEmails: jest.fn().mockResolvedValue({
-                targetCount: 3,
+                targetCount: 4,
                 sentCount: 2,
+                skippedCount: 1,
                 failedCount: 1,
             }),
         }
@@ -23,7 +24,7 @@ describe('ReminderScheduler', () => {
 
         expect(reminderService.sendReminderEmails).toHaveBeenCalledTimes(1)
         expect(loggerSpy).toHaveBeenCalledWith(
-            '리마인드 이메일 배치를 완료했습니다. target=3 sent=2 failed=1',
+            '리마인드 이메일 배치를 완료했습니다. target=4 sent=2 skipped=1 failed=1',
         )
 
         loggerSpy.mockRestore()

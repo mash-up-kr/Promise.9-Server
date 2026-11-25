@@ -23,6 +23,7 @@ const createReminder = (
     memo: 'UT 준비할 때 참고하기',
     folderName: '디자인',
     folderColor: '#d5d76a',
+    emailEnabled: true,
     ...values,
 })
 
@@ -96,6 +97,80 @@ describe('ReminderService', () => {
         expect(result).toEqual({
             targetCount: 2,
             sentCount: 2,
+            skippedCount: 0,
+            failedCount: 0,
+        })
+    })
+
+    it('이메일 수신을 끈 사용자에게는 보내지 않고 그 일정을 마친다', async () => {
+        const disabled = createReminder({
+            linkId: 2,
+            recipientEmail: 'off@example.com',
+            emailEnabled: false,
+        })
+        const reminderRepository = {
+            findEmailTargets: jest
+                .fn()
+                .mockResolvedValue([createReminder(), disabled]),
+            markSent: jest.fn().mockResolvedValue(true),
+        }
+        const sendBulkMock = jest.fn<
+            Promise<BulkEmailEntryResult[]>,
+            [input: SendBulkEmailInput]
+        >()
+        sendBulkMock.mockResolvedValue([
+            { Status: 'SUCCESS', MessageId: 'message-id' },
+        ])
+        const service = new ReminderService(
+            reminderRepository as unknown as ReminderRepository,
+            { sendBulk: sendBulkMock } as unknown as EmailService,
+            urlSecurityService,
+            new ConfigService(),
+        )
+
+        const result = await service.sendReminderEmails()
+
+        expect(sendBulkMock).toHaveBeenCalledTimes(1)
+        expect(sendBulkMock.mock.calls[0]?.[0].entries).toEqual([
+            expect.objectContaining({ to: 'user@example.com' }),
+        ])
+        expect(reminderRepository.markSent).toHaveBeenCalledWith(
+            2,
+            disabled.reminderAt,
+            expect.any(Date),
+        )
+        expect(reminderRepository.markSent).toHaveBeenCalledTimes(2)
+        expect(result).toEqual({
+            targetCount: 2,
+            sentCount: 1,
+            skippedCount: 1,
+            failedCount: 0,
+        })
+    })
+
+    it('보낼 대상이 모두 수신을 껐다면 이메일을 호출하지 않는다', async () => {
+        const reminderRepository = {
+            findEmailTargets: jest
+                .fn()
+                .mockResolvedValue([createReminder({ emailEnabled: false })]),
+            markSent: jest.fn().mockResolvedValue(true),
+        }
+        const sendBulkMock = jest.fn()
+        const service = new ReminderService(
+            reminderRepository as unknown as ReminderRepository,
+            { sendBulk: sendBulkMock } as unknown as EmailService,
+            urlSecurityService,
+            new ConfigService(),
+        )
+
+        const result = await service.sendReminderEmails()
+
+        expect(sendBulkMock).not.toHaveBeenCalled()
+        expect(reminderRepository.markSent).toHaveBeenCalledTimes(1)
+        expect(result).toEqual({
+            targetCount: 1,
+            sentCount: 0,
+            skippedCount: 1,
             failedCount: 0,
         })
     })
@@ -151,6 +226,7 @@ describe('ReminderService', () => {
         expect(result).toEqual({
             targetCount: 51,
             sentCount: 51,
+            skippedCount: 0,
             failedCount: 0,
         })
     })
@@ -198,6 +274,7 @@ describe('ReminderService', () => {
         expect(result).toEqual({
             targetCount: 2,
             sentCount: 1,
+            skippedCount: 0,
             failedCount: 1,
         })
         expect(loggerErrorSpy).toHaveBeenCalledWith(
