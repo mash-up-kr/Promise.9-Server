@@ -5,6 +5,7 @@ import { BaseException } from '../../../common/exception/base.exception'
 import { COMMON_ERROR } from '../../../common/exception/common-error-code.constant'
 import {
     DatabaseService,
+    DbExecutor,
     Transaction,
 } from '../../../config/database/database.service'
 import { pushTokens } from '../../notification/notification.schema'
@@ -50,27 +51,24 @@ export class PushTokenRepository {
             })
     }
 
-    /** 현재 사용자의 토큰만 해제한다. 없는 토큰도 성공하며 비활성 계정은 false다. */
-    unregister(userId: number, token: string): Promise<boolean> {
-        return this.db
-            .transaction(async (tx) => {
-                if (!(await this.lockActiveUser(userId, tx))) return false
-
-                await tx
-                    .delete(pushTokens)
-                    .where(
-                        and(
-                            eq(pushTokens.userId, userId),
-                            eq(pushTokens.token, token),
-                        ),
-                    )
-
-                return true
-            })
-            .catch(() => {
-                // Drizzle 오류에는 토큰을 포함한 SQL 파라미터가 들어갈 수 있다.
-                throw new BaseException(COMMON_ERROR.INTERNAL_SERVER_ERROR)
-            })
+    /** 로그아웃 재시도와 계정 전환을 고려해 현재 소유자의 해당 토큰만 삭제한다. */
+    async deleteByUserAndToken(
+        userId: number,
+        token: string,
+        executor: DbExecutor = this.db,
+    ): Promise<void> {
+        try {
+            await executor
+                .delete(pushTokens)
+                .where(
+                    and(
+                        eq(pushTokens.userId, userId),
+                        eq(pushTokens.token, token),
+                    ),
+                )
+        } catch {
+            throw new BaseException(COMMON_ERROR.INTERNAL_SERVER_ERROR)
+        }
     }
 
     /** 회원 탈퇴와 토큰 변경이 겹쳐도 탈퇴 후 토큰이 새로 저장되지 않도록 잠근다. */

@@ -23,6 +23,6 @@ import { UserService } from './user.service'
         PushTokenService,
         PushTokenRepository,
     ],
-    exports: [UserRepository, SocialAccountRepository],
+    exports: [UserRepository, SocialAccountRepository, PushTokenRepository],
 })
 export class UserModule {}

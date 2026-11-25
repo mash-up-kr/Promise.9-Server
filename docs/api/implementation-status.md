@@ -55,7 +55,6 @@ API 명세, Swagger, controller endpoint, 실제 비즈니스 로직의 진행 �
 | API | 명세 | Swagger | Endpoint | 로직 | 남은 작업 |
 | --- | :--: | :-----: | :------: | :--: | --- |
 | `PUT /users/me/push-tokens` | O | O | O | O | - |
-| `DELETE /users/me/push-tokens` | O | O | O | O | - |
 
 ## 화면 단위 후속 작업
 

@@ -8,6 +8,7 @@ import { SqsModule } from './infrastructure/sqs/sqs.module'
 import { AuthModule } from './modules/auth/auth.module'
 import { FolderModule } from './modules/folder/folder.module'
 import { LinkModule } from './modules/link/link.module'
+import { NotificationModule } from './modules/notification/notification.module'
 import { RecommendationModule } from './modules/recommendation/recommendation.module'
 import { UserModule } from './modules/user/user.module'
 import { AppController } from './app.controller'
@@ -24,6 +25,7 @@ import { AppService } from './app.service'
         SqsModule,
         FolderModule,
         LinkModule,
+        NotificationModule,
         RecommendationModule,
         AuthModule,
         UserModule,

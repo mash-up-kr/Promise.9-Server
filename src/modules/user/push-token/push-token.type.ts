@@ -3,7 +3,7 @@ import { z } from 'zod'
 
 import { PUSH_TOKEN_PLATFORMS } from './push-token.constant'
 
-const expoPushTokenSchema = z
+export const expoPushTokenSchema = z
     .string()
     .trim()
     .min(1)
@@ -17,9 +17,4 @@ export const registerPushTokenSchema = z.strictObject({
     platform: z.enum(PUSH_TOKEN_PLATFORMS),
 })
 
-export const unregisterPushTokenSchema = z.strictObject({
-    token: expoPushTokenSchema,
-})
-
 export type RegisterPushTokenInput = z.infer<typeof registerPushTokenSchema>
-export type UnregisterPushTokenInput = z.infer<typeof unregisterPushTokenSchema>
