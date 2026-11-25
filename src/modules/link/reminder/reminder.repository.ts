@@ -13,7 +13,7 @@ import {
     sql,
 } from 'drizzle-orm'
 
-import type { DatabaseService } from '../../../config/database/database.service'
+import { DatabaseService } from '../../../config/database/database.service'
 import { folders } from '../../folder/folder.schema'
 import {
     emailHistories,
@@ -25,7 +25,7 @@ import { users } from '../../user/schema/user.schema'
 import { links } from '../link.schema'
 
 import { RETRYABLE_PUSH_ERRORS } from './reminder.constant'
-import type {
+import {
     PushHistoryResult,
     PushReceiptTarget,
     ReminderTarget,

@@ -1,20 +1,23 @@
 import { Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import type { BulkEmailEntryResult } from '@aws-sdk/client-sesv2'
+import { BulkEmailEntryResult } from '@aws-sdk/client-sesv2'
 
 import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
-import type { EmailService } from '../../../infrastructure/email/email.service'
-import type { SendBulkEmailInput } from '../../../infrastructure/email/email.type'
-import type { PushService } from '../../../infrastructure/push/push.service'
-import type {
+import { EmailService } from '../../../infrastructure/email/email.service'
+import { SendBulkEmailInput } from '../../../infrastructure/email/email.type'
+import { PushService } from '../../../infrastructure/push/push.service'
+import {
     PushMessage,
     PushReceiptResult,
     PushSendResult,
 } from '../../../infrastructure/push/push.type'
 
-import type { ReminderRepository } from './reminder.repository'
+import { ReminderRepository } from './reminder.repository'
 import { ReminderService } from './reminder.service'
-import type { PushReceiptTarget, ReminderTarget } from './reminder.type'
+import { PushReceiptTarget, ReminderTarget } from './reminder.type'
+
+// 실제 SDK는 ESM이라 jest에서 불러오지 않는다.
+jest.mock('expo-server-sdk', () => ({ Expo: jest.fn() }))
 
 const now = new Date('2026-11-26T03:15:00.000Z')
 const firstAttemptAt = new Date('2026-11-26T03:00:30.000Z')

@@ -3,6 +3,9 @@ import { Logger } from '@nestjs/common'
 import { ReminderScheduler } from './reminder.scheduler'
 import { ReminderService } from './reminder.service'
 
+// 실제 SDK는 ESM이라 jest에서 불러오지 않는다.
+jest.mock('expo-server-sdk', () => ({ Expo: jest.fn() }))
+
 describe('ReminderScheduler', () => {
     it('리마인드를 보낸 뒤 푸시 receipt를 조회하고 처리 건수를 기록한다', async () => {
         const reminderService = {

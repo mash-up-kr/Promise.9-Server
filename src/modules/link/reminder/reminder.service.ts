@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common'
-import type { ConfigService } from '@nestjs/config'
+import { ConfigService } from '@nestjs/config'
 
-import type { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
-import type { ValidatedEnvironment } from '../../../config/environment'
-import type { EmailService } from '../../../infrastructure/email/email.service'
-import type { PushService } from '../../../infrastructure/push/push.service'
+import { UrlSecurityService } from '../../../common/security/url-security/url-security.service'
+import { ValidatedEnvironment } from '../../../config/environment'
+import { EmailService } from '../../../infrastructure/email/email.service'
+import { PushService } from '../../../infrastructure/push/push.service'
 
 import {
     PUSH_RECEIPT_DELAY_MS,
@@ -12,8 +12,8 @@ import {
     REMINDER_RETRY_WINDOW_MS,
     RETRYABLE_PUSH_ERRORS,
 } from './reminder.constant'
-import type { ReminderRepository } from './reminder.repository'
-import type {
+import { ReminderRepository } from './reminder.repository'
+import {
     ReminderBatchResult,
     ReminderChannelResult,
     ReminderHistory,
