@@ -5,6 +5,7 @@ import { UrlSecurityService } from '../../../common/security/url-security/url-se
 import { ValidatedEnvironment } from '../../../config/environment'
 import { EmailService } from '../../../infrastructure/email/email.service'
 import { PushService } from '../../../infrastructure/push/push.service'
+import { PushSendResult } from '../../../infrastructure/push/push.type'
 
 import {
     PUSH_RECEIPT_DELAY_MS,
@@ -138,19 +139,25 @@ export class ReminderService {
         const pushClaims: PushClaim[] = []
 
         for (const target of chunk) {
-            try {
-                if (!emailOff.has(target.userId)) {
-                    emailClaims.push(
-                        ...(await this.claimEmail(target, retrySince, now)),
-                    )
-                }
-                if (!pushOff.has(target.userId)) {
-                    pushClaims.push(
-                        ...(await this.claimPush(target, retrySince, now)),
-                    )
-                }
-            } catch (error) {
-                this.logError('리마인드 발송 준비', target.linkId, error)
+            if (!emailOff.has(target.userId)) {
+                await this.attempt(
+                    '리마인드 이메일 준비',
+                    target.linkId,
+                    async () =>
+                        emailClaims.push(
+                            ...(await this.claimEmail(target, retrySince, now)),
+                        ),
+                )
+            }
+            if (!pushOff.has(target.userId)) {
+                await this.attempt(
+                    '리마인드 푸시 준비',
+                    target.linkId,
+                    async () =>
+                        pushClaims.push(
+                            ...(await this.claimPush(target, retrySince, now)),
+                        ),
+                )
             }
         }
 
@@ -250,12 +257,43 @@ export class ReminderService {
         now: Date,
         result: ReminderChannelResult,
     ): Promise<void> {
-        if (claims.length === 0) return
+        const entries: (EmailClaim & { url: string })[] = []
+
+        // 잘못된 URL 한 건이 묶음 전체를 막지 않도록 선점한 건마다 먼저 검사한다.
+        for (const claim of claims) {
+            const { target, historyId } = claim
+
+            try {
+                entries.push({
+                    ...claim,
+                    url: this.urlSecurityService
+                        .parseHttpUrl(target.finalUrl ?? target.originalUrl)
+                        .toString(),
+                })
+            } catch (error) {
+                result.failed += 1
+                this.logError('리마인드 이메일 URL 검사', target.linkId, error)
+                await this.attempt(
+                    '리마인드 이메일 결과 기록',
+                    target.linkId,
+                    () =>
+                        this.reminderRepository.recordEmail(
+                            historyId,
+                            null,
+                            now,
+                        ),
+                )
+            }
+        }
+
+        if (entries.length === 0) return
+
+        let sendResults: Awaited<ReturnType<EmailService['sendBulk']>>
 
         try {
-            const sendResults = await this.emailService.sendBulk(
+            sendResults = await this.emailService.sendBulk(
                 buildReminderBulkEmail(
-                    claims.map(({ target, scheduledAt }) => ({
+                    entries.map(({ target, scheduledAt, url }) => ({
                         recipientEmail: target.recipientEmail,
                         title: target.title,
                         linkId: target.linkId,
@@ -264,43 +302,44 @@ export class ReminderService {
                         memo: target.memo,
                         folderName: target.folderName,
                         folderColor: target.folderColor,
-                        url: this.urlSecurityService
-                            .parseHttpUrl(target.finalUrl ?? target.originalUrl)
-                            .toString(),
+                        url,
                     })),
                     this.config.get('EMAIL_ASSET_BASE_URL', { infer: true }),
                 ),
             )
-
-            for (const [index, { target, historyId }] of claims.entries()) {
-                const sendResult = sendResults[index]
-                const messageId =
-                    sendResult?.Status === 'SUCCESS'
-                        ? sendResult.MessageId
-                        : undefined
-
-                if (messageId) {
-                    sentLinkIds.add(target.linkId)
-                    result.sent += 1
-                } else {
-                    result.failed += 1
-                    this.logger.error(
-                        `리마인드 이메일 발송에 실패했습니다. linkId=${target.linkId} status=${sendResult?.Status ?? 'FAILED'}`,
-                    )
-                }
-
-                await this.reminderRepository.recordEmail(
-                    historyId,
-                    messageId ?? null,
-                    now,
-                )
-            }
         } catch (error) {
             // 발송 여부를 알 수 없는 이력은 PENDING으로 남겨 다시 보내지 않는다.
             this.logError(
                 '리마인드 이메일 발송',
-                claims[0].target.linkId,
+                entries[0].target.linkId,
                 error,
+            )
+            return
+        }
+
+        for (const [index, { target, historyId }] of entries.entries()) {
+            const sendResult = sendResults[index]
+            const messageId =
+                sendResult?.Status === 'SUCCESS'
+                    ? sendResult.MessageId
+                    : undefined
+
+            if (messageId) {
+                sentLinkIds.add(target.linkId)
+                result.sent += 1
+            } else {
+                result.failed += 1
+                this.logger.error(
+                    `리마인드 이메일 발송에 실패했습니다. linkId=${target.linkId} status=${sendResult?.Status ?? 'FAILED'}`,
+                )
+            }
+
+            await this.attempt('리마인드 이메일 결과 기록', target.linkId, () =>
+                this.reminderRepository.recordEmail(
+                    historyId,
+                    messageId ?? null,
+                    now,
+                ),
             )
         }
     }
@@ -313,55 +352,68 @@ export class ReminderService {
     ): Promise<void> {
         if (claims.length === 0) return
 
+        let sendResults: PushSendResult[]
+
         try {
-            const sendResults = await this.pushService.send(
+            sendResults = await this.pushService.send(
                 claims.map(({ target, token }) =>
                     buildReminderPushMessage(token.token, target),
                 ),
             )
+        } catch (error) {
+            this.logError('리마인드 푸시 발송', claims[0].target.linkId, error)
+            return
+        }
 
-            for (const [
-                index,
-                { target, historyId, token },
-            ] of claims.entries()) {
-                const sendResult = sendResults[index]
+        for (const [index, { target, historyId, token }] of claims.entries()) {
+            const sendResult = sendResults[index]
 
-                if (sendResult.status === 'accepted') {
-                    sentLinkIds.add(target.linkId)
-                    result.sent += 1
-                    await this.reminderRepository.recordPush(
-                        historyId,
-                        { status: 'ACCEPTED', ticketId: sendResult.ticketId },
-                        now,
-                    )
-                    continue
-                }
-
+            if (sendResult.status === 'accepted') {
+                sentLinkIds.add(target.linkId)
+                result.sent += 1
+            } else {
                 result.failed += 1
                 this.logger.error(
                     `리마인드 푸시 발송에 실패했습니다. linkId=${target.linkId} error=${sendResult.error}`,
                 )
-                await this.reminderRepository.recordPush(
-                    historyId,
-                    {
-                        status:
-                            sendResult.status === 'unknown'
-                                ? 'UNKNOWN'
-                                : 'FAILED',
-                        errorCode: sendResult.error,
-                    },
-                    now,
-                )
-
-                if (sendResult.error === 'DeviceNotRegistered') {
-                    await this.reminderRepository.deletePushToken(
-                        token.id,
-                        target.userId,
-                    )
-                }
             }
-        } catch (error) {
-            this.logError('리마인드 푸시 발송', claims[0].target.linkId, error)
+
+            await this.attempt(
+                '리마인드 푸시 결과 기록',
+                target.linkId,
+                async () => {
+                    if (sendResult.status === 'accepted') {
+                        await this.reminderRepository.recordPush(
+                            historyId,
+                            {
+                                status: 'ACCEPTED',
+                                ticketId: sendResult.ticketId,
+                            },
+                            now,
+                        )
+                        return
+                    }
+
+                    await this.reminderRepository.recordPush(
+                        historyId,
+                        {
+                            status:
+                                sendResult.status === 'unknown'
+                                    ? 'UNKNOWN'
+                                    : 'FAILED',
+                            errorCode: sendResult.error,
+                        },
+                        now,
+                    )
+
+                    if (sendResult.error === 'DeviceNotRegistered') {
+                        await this.reminderRepository.deletePushToken(
+                            token.id,
+                            target.userId,
+                        )
+                    }
+                },
+            )
         }
     }
 
@@ -384,6 +436,19 @@ export class ReminderService {
             this.logError('리마인드 일정 종료', target.linkId, error)
 
             return false
+        }
+    }
+
+    // 한 건의 실패가 같은 묶음의 나머지 처리를 막지 않게 한다.
+    private async attempt(
+        action: string,
+        linkId: number,
+        run: () => Promise<unknown>,
+    ): Promise<void> {
+        try {
+            await run()
+        } catch (error) {
+            this.logError(action, linkId, error)
         }
     }
 

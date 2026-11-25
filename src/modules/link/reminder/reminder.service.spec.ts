@@ -483,8 +483,8 @@ describe('ReminderService', () => {
         expect(result.push).toEqual({ sent: 0, failed: 3 })
     })
 
-    it('한 링크의 준비가 실패해도 다른 링크를 계속 보낸다', async () => {
-        const { service, repository, pushService } = setup([
+    it('한 채널의 준비가 실패해도 같은 링크의 다른 채널과 다른 링크를 계속 보낸다', async () => {
+        const { service, repository, sendBulk, pushService } = setup([
             createTarget({ linkId: 1 }),
             createTarget({ linkId: 2, occurrenceId: 'occurrence-2' }),
         ])
@@ -494,15 +494,60 @@ describe('ReminderService', () => {
 
         await service.sendReminders(now)
 
-        expect(pushService.send.mock.calls[0]?.[0]).toEqual([
-            expect.objectContaining({
-                data: { type: 'LINK_REMINDER', linkId: 2 },
-            }),
-        ])
+        expect(sendBulk.mock.calls[0]?.[0].entries).toHaveLength(1)
+        expect(
+            pushService.send.mock.calls[0]?.[0].map(
+                (message) => message.data?.linkId,
+            ),
+        ).toEqual([1, 2])
+        expect(repository.markSent).toHaveBeenCalledTimes(2)
         expect(loggerErrorSpy).toHaveBeenCalledWith(
             expect.stringContaining('linkId=1'),
             expect.any(String),
         )
+    })
+
+    it('URL이 잘못된 링크의 이메일만 실패로 기록하고 같은 묶음의 나머지 이메일은 보낸다', async () => {
+        const { service, repository, sendBulk } = setup([
+            createTarget({
+                linkId: 1,
+                originalUrl: 'javascript:alert(1)',
+                finalUrl: null,
+            }),
+            createTarget({
+                linkId: 2,
+                occurrenceId: 'occurrence-2',
+                recipientEmail: 'other@example.com',
+            }),
+        ])
+
+        const result = await service.sendReminders(now)
+
+        expect(sendBulk.mock.calls[0]?.[0].entries).toEqual([
+            expect.objectContaining({ to: 'other@example.com' }),
+        ])
+        expect(repository.recordEmail).toHaveBeenCalledWith(1001, null, now)
+        expect(repository.recordEmail).toHaveBeenCalledWith(
+            1003,
+            'message-0',
+            now,
+        )
+        expect(result.email).toEqual({ sent: 1, failed: 1 })
+    })
+
+    it('결과 기록 하나가 실패해도 나머지 이메일·푸시 결과는 기록한다', async () => {
+        const { service, repository } = setup([
+            createTarget({ linkId: 1 }),
+            createTarget({ linkId: 2, occurrenceId: 'occurrence-2' }),
+        ])
+        repository.recordEmail.mockRejectedValueOnce(new Error('DB error'))
+        repository.recordPush.mockRejectedValueOnce(new Error('DB error'))
+
+        await service.sendReminders(now)
+
+        expect(repository.recordEmail).toHaveBeenCalledTimes(2)
+        expect(repository.recordPush).toHaveBeenCalledTimes(2)
+        expect(repository.markSent).toHaveBeenCalledTimes(2)
     })
 
     it('고정 템플릿의 링크 제목을 escape하고 URL을 삽입한다', async () => {
