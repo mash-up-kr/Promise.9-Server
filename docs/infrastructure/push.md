@@ -4,7 +4,7 @@
 
 ## 발송
 
-DB와 무관한 Expo 호출만 필요하면 `PushModule`의 `PushService`를 사용한다. 저장된 기기 토큰으로 리마인드를 발송할 때는 `NotificationModule`의 `NotificationPushService`를 사용한다. 이 서비스는 ticket·receipt의 `DeviceNotRegistered`에 대해 해당 사용자의 토큰을 삭제한다.
+발송만 필요하면 호출 모듈의 `imports`에 `PushModule`을 추가하고 `PushService`를 주입한다.
 
 ```ts
 const results = await pushService.send([
@@ -47,20 +47,8 @@ const receipts = await pushService.getReceipts(ticketIds)
 
 ## 토큰 조회·삭제와 배치 연동
 
-`NotificationPushService`가 Expo 호출과 `PushTokenRepository`의 삭제를 연결한다. 인프라의 `PushService`는 Expo 응답을 정규화하며 DB에 직접 접근하지 않는다.
+토큰 조회·삭제는 테이블 PR이 반영된 후 실제 스키마에 맞춰 구현한다. 현재는 테이블, migration, 임시 repository를 추가하지 않는다.
 
-```ts
-const results = await notificationPushService.send(userId, messages)
-// accepted 결과의 ticketId·to와 발송 당시 userId를 영속 저장한다.
-const receipts = await notificationPushService.getReceipts(userId, [
-    { ticketId: storedTicketId, token: storedToken },
-])
-```
-
-두 메서드는 ticket 또는 receipt의 `DeviceNotRegistered`일 때만 `user_id = userId AND token = 해당 토큰`으로 삭제한다. 계정 전환 이후 이전 사용자에게 발송한 결과가 늦게 도착해도 새 사용자의 토큰을 삭제하지 않는다. 다른 기기의 토큰과 발송 이력도 유지한다.
-
-리마인드 배치(#153)에서는 발송 결과의 사용자·작업 ID, 토큰과 ticket ID를 저장하고 receipt를 조회해야 한다. 현재 `push_histories`에는 토큰 컬럼이 없으므로 ticket ID만으로 기기 토큰을 추측하거나 사용자의 모든 기기 토큰을 삭제하면 안 된다. 배치의 영속 작업 데이터에서 발송 당시 사용자와 ticket·토큰 쌍을 전달한다. 타임아웃, 인증정보 오류, `MessageTooBig` 같은 다른 오류는 토큰 삭제 근거로 사용하지 않는다.
-
-토큰 삭제의 DB 오류는 호출자에게 전달한다. 정리 실패를 이유로 이미 접수한 메시지를 자동 재발송하지 않으며, 배치에서는 발송과 정리 재시도를 구분해야 한다.
+배치에서는 발송 결과의 사용자·작업 ID, 토큰과 ticket ID를 저장하고 receipt를 조회한다. ticket 또는 receipt의 `DeviceNotRegistered`를 확인하면 원래 사용자와 토큰을 조건으로 삭제해야 한다. 타임아웃, 인증정보 오류, `MessageTooBig` 같은 다른 오류를 토큰 삭제 근거로 사용하지 않는다.
 
 현재 모듈은 서버 내부에서 사용하며 HTTP API를 추가하지 않는다.
