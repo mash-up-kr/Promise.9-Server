@@ -72,6 +72,19 @@ const setup = (
     const repository = {
         assignOccurrences: jest.fn().mockResolvedValue(undefined),
         findTargets: jest.fn().mockResolvedValue(targets),
+        // 기본값은 조회 때와 같은 소유자다.
+        findPushTokenOwners: jest.fn((tokenIds: number[]) =>
+            Promise.resolve(
+                targets.flatMap((target) =>
+                    target.pushTokens
+                        .filter((token) => tokenIds.includes(token.id))
+                        .map((token) => ({
+                            id: token.id,
+                            userId: target.userId,
+                        })),
+                ),
+            ),
+        ),
         findDisabledUserIds: jest.fn(
             (userIds: number[], channel: 'email' | 'push') =>
                 Promise.resolve(
@@ -396,6 +409,12 @@ describe('ReminderService', () => {
                 linkId: index + 1,
                 userId: index + 1,
                 occurrenceId: `occurrence-${index + 1}`,
+                pushTokens: [
+                    {
+                        id: 100 + index,
+                        token: `ExponentPushToken[${index}]`,
+                    },
+                ],
             }),
         )
         const { service, repository, sendBulk, pushService } = setup(targets, {
@@ -435,6 +454,45 @@ describe('ReminderService', () => {
         expect(sendBulk).not.toHaveBeenCalled()
         expect(pushService.send).toHaveBeenCalledTimes(1)
         expect(repository.markSent).toHaveBeenCalledTimes(1)
+    })
+
+    it('보내기 직전에 토큰이 지워졌거나 다른 계정으로 옮겨갔으면 보내지 않고 다시 보내지 않게 끝낸다', async () => {
+        const { service, repository, pushService } = setup(
+            [
+                createTarget({
+                    pushTokens: [
+                        { id: 100, token: 'ExponentPushToken[kept]' },
+                        { id: 101, token: 'ExponentPushToken[moved]' },
+                        { id: 102, token: 'ExponentPushToken[deleted]' },
+                    ],
+                }),
+            ],
+            { disabled: { email: [10] } },
+        )
+        repository.findPushTokenOwners.mockResolvedValue([
+            { id: 100, userId: 10 },
+            { id: 101, userId: 99 },
+        ])
+
+        const result = await service.sendReminders(now)
+
+        expect(repository.findPushTokenOwners).toHaveBeenCalledWith([
+            100, 101, 102,
+        ])
+        expect(pushService.send).toHaveBeenCalledWith([
+            expect.objectContaining({ to: 'ExponentPushToken[kept]' }),
+        ])
+        expect(repository.recordPush).toHaveBeenCalledWith(
+            1002,
+            { status: 'FAILED', errorCode: 'TOKEN_NOT_OWNED' },
+            now,
+        )
+        expect(repository.recordPush).toHaveBeenCalledWith(
+            1003,
+            { status: 'FAILED', errorCode: 'TOKEN_NOT_OWNED' },
+            now,
+        )
+        expect(result.push).toEqual({ sent: 1, failed: 2 })
     })
 
     it('기기 등록 해제 응답을 받은 토큰만 지우고 접수 여부를 모르는 요청은 다시 보내지 않게 기록한다', async () => {

@@ -352,11 +352,42 @@ export class ReminderService {
     ): Promise<void> {
         if (claims.length === 0) return
 
+        const sendable: PushClaim[] = []
         let sendResults: PushSendResult[]
 
         try {
+            // 조회 뒤 로그아웃·계정 전환된 기기로 이전 계정의 링크가 가지 않도록 보내기 직전에 소유자를 다시 확인한다.
+            const owners = new Map(
+                (
+                    await this.reminderRepository.findPushTokenOwners(
+                        claims.map(({ token }) => token.id),
+                    )
+                ).map(({ id, userId }) => [id, userId]),
+            )
+
+            for (const claim of claims) {
+                if (owners.get(claim.token.id) === claim.target.userId) {
+                    sendable.push(claim)
+                    continue
+                }
+
+                result.failed += 1
+                await this.attempt(
+                    '리마인드 푸시 결과 기록',
+                    claim.target.linkId,
+                    () =>
+                        this.reminderRepository.recordPush(
+                            claim.historyId,
+                            { status: 'FAILED', errorCode: 'TOKEN_NOT_OWNED' },
+                            now,
+                        ),
+                )
+            }
+
+            if (sendable.length === 0) return
+
             sendResults = await this.pushService.send(
-                claims.map(({ target, token }) =>
+                sendable.map(({ target, token }) =>
                     buildReminderPushMessage(token.token, target),
                 ),
             )
@@ -365,7 +396,10 @@ export class ReminderService {
             return
         }
 
-        for (const [index, { target, historyId, token }] of claims.entries()) {
+        for (const [
+            index,
+            { target, historyId, token },
+        ] of sendable.entries()) {
             const sendResult = sendResults[index]
 
             if (sendResult.status === 'accepted') {

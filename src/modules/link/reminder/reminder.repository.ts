@@ -280,6 +280,15 @@ export class ReminderRepository {
             .where(eq(pushHistories.id, id))
     }
 
+    async findPushTokenOwners(
+        ids: number[],
+    ): Promise<{ id: number; userId: number }[]> {
+        return this.db
+            .select({ id: pushTokens.id, userId: pushTokens.userId })
+            .from(pushTokens)
+            .where(inArray(pushTokens.id, ids))
+    }
+
     // 발송 당시 소유자를 조건으로 지워, 다른 계정으로 옮겨간 기기는 지우지 않는다.
     async deletePushToken(id: number, userId: number): Promise<void> {
         await this.db

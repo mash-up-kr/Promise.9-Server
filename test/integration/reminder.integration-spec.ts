@@ -362,6 +362,30 @@ describe('ReminderRepository (PostgreSQL)', () => {
         expect(history).toEqual({ pushTokenId: null })
     })
 
+    it('보내기 직전 확인용으로 토큰의 지금 소유자를 돌려주고 지워진 토큰은 뺀다', async () => {
+        const [kept, moved, deleted] = [
+            await insertToken(),
+            await insertToken(),
+            await insertToken(),
+        ]
+        await db
+            .update(pushTokens)
+            .set({ userId: otherUserId })
+            .where(eq(pushTokens.id, moved.id))
+        await db.delete(pushTokens).where(eq(pushTokens.id, deleted.id))
+
+        const owners = await repository.findPushTokenOwners([
+            kept.id,
+            moved.id,
+            deleted.id,
+        ])
+
+        expect(owners.sort((a, b) => a.id - b.id)).toEqual([
+            { id: kept.id, userId },
+            { id: moved.id, userId: otherUserId },
+        ])
+    })
+
     it('receipt는 접수 뒤 조회 시점이 된 이력만 조회한다', async () => {
         const link = await insertLink()
         await repository.assignOccurrences(now)
