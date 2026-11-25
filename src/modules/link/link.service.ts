@@ -186,11 +186,16 @@ export class LinkService {
             throw new BaseException(LINK_ERROR.NOT_DELETED)
         }
 
+        const now = new Date()
+
         // 복구된 링크는 "미분류"로 복원
         const row = await this.linkRepository.update(userId, linkId, {
             deletedAt: null,
             folderId: null,
-            updatedAt: new Date(),
+            updatedAt: now,
+            // 삭제된 동안 지난 리마인드는 복구해도 보내지 않는다. 아직 오지 않은 일정은 유지한다.
+            ...(link.reminderAt &&
+                link.reminderAt <= now && { reminderAt: null }),
         })
 
         return {
