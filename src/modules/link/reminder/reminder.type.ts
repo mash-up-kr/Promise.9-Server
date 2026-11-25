@@ -1,5 +1,6 @@
 export type ReminderEmailTarget = {
     linkId: number
+    userId: number
     recipientEmail: string
     title: string | null
     originalUrl: string
@@ -26,5 +27,7 @@ export type ReminderEmailData = {
 export type ReminderBatchResult = {
     targetCount: number
     sentCount: number
+    // 받을 채널이 없어 보내지 않고 일정을 마친 건수
+    skippedCount: number
     failedCount: number
 }

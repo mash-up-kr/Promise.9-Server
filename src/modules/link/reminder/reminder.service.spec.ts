@@ -14,6 +14,7 @@ const createReminder = (
     values: Partial<ReminderEmailTarget> = {},
 ): ReminderEmailTarget => ({
     linkId: 1,
+    userId: 1,
     recipientEmail: 'user@example.com',
     title: '읽어볼 링크',
     originalUrl: 'https://example.com/original',
@@ -41,6 +42,7 @@ describe('ReminderService', () => {
         ]
         const reminderRepository = {
             findEmailTargets: jest.fn().mockResolvedValue(reminders),
+            findEmailDisabledUserIds: jest.fn().mockResolvedValue([]),
             markSent: jest.fn().mockResolvedValue(true),
         }
         const sendBulkMock = jest.fn<
@@ -96,8 +98,127 @@ describe('ReminderService', () => {
         expect(result).toEqual({
             targetCount: 2,
             sentCount: 2,
+            skippedCount: 0,
             failedCount: 0,
         })
+    })
+
+    it('묶음마다 발송 직전의 이메일 수신 설정을 다시 읽어 꺼진 사용자는 보내지 않고 일정을 마친다', async () => {
+        const reminders = Array.from({ length: 51 }, (_, index) =>
+            createReminder({
+                linkId: index + 1,
+                userId: index < 50 ? 1 : 2,
+                recipientEmail: `user-${index + 1}@example.com`,
+            }),
+        )
+        const reminderRepository = {
+            findEmailTargets: jest.fn().mockResolvedValue(reminders),
+            // 첫 묶음 발송 중에 사용자 2가 이메일 수신을 껐다.
+            findEmailDisabledUserIds: jest
+                .fn()
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([2]),
+            markSent: jest.fn().mockResolvedValue(true),
+        }
+        const sendBulkMock = jest.fn<
+            Promise<BulkEmailEntryResult[]>,
+            [input: SendBulkEmailInput]
+        >()
+        sendBulkMock.mockImplementation((input) =>
+            Promise.resolve(
+                input.entries.map(() => ({
+                    Status: 'SUCCESS',
+                    MessageId: 'message-id',
+                })),
+            ),
+        )
+        const service = new ReminderService(
+            reminderRepository as unknown as ReminderRepository,
+            { sendBulk: sendBulkMock } as unknown as EmailService,
+            urlSecurityService,
+            new ConfigService(),
+        )
+
+        const result = await service.sendReminderEmails()
+
+        expect(reminderRepository.findEmailDisabledUserIds.mock.calls).toEqual([
+            [[1]],
+            [[2]],
+        ])
+        expect(
+            reminderRepository.findEmailDisabledUserIds.mock
+                .invocationCallOrder[1],
+        ).toBeGreaterThan(sendBulkMock.mock.invocationCallOrder[0])
+        expect(sendBulkMock).toHaveBeenCalledTimes(1)
+        expect(sendBulkMock.mock.calls[0]?.[0].entries).toHaveLength(50)
+        expect(reminderRepository.markSent).toHaveBeenCalledWith(
+            51,
+            reminders[50].reminderAt,
+            expect.any(Date),
+        )
+        expect(result).toEqual({
+            targetCount: 51,
+            sentCount: 50,
+            skippedCount: 1,
+            failedCount: 0,
+        })
+    })
+
+    it('보낼 대상이 모두 수신을 껐다면 이메일을 호출하지 않는다', async () => {
+        const reminderRepository = {
+            findEmailTargets: jest.fn().mockResolvedValue([createReminder()]),
+            findEmailDisabledUserIds: jest.fn().mockResolvedValue([1]),
+            markSent: jest.fn().mockResolvedValue(true),
+        }
+        const sendBulkMock = jest.fn()
+        const service = new ReminderService(
+            reminderRepository as unknown as ReminderRepository,
+            { sendBulk: sendBulkMock } as unknown as EmailService,
+            urlSecurityService,
+            new ConfigService(),
+        )
+
+        const result = await service.sendReminderEmails()
+
+        expect(sendBulkMock).not.toHaveBeenCalled()
+        expect(reminderRepository.markSent).toHaveBeenCalledTimes(1)
+        expect(result).toEqual({
+            targetCount: 1,
+            sentCount: 0,
+            skippedCount: 1,
+            failedCount: 0,
+        })
+    })
+
+    it('건너뛸 일정이 그사이 바뀌어 해제되지 않으면 건너뜀으로 세지 않는다', async () => {
+        const reminderRepository = {
+            findEmailTargets: jest.fn().mockResolvedValue([createReminder()]),
+            findEmailDisabledUserIds: jest.fn().mockResolvedValue([1]),
+            markSent: jest.fn().mockResolvedValue(false),
+        }
+        const loggerWarnSpy = jest
+            .spyOn(Logger.prototype, 'warn')
+            .mockImplementation()
+        const service = new ReminderService(
+            reminderRepository as unknown as ReminderRepository,
+            { sendBulk: jest.fn() } as unknown as EmailService,
+            urlSecurityService,
+            new ConfigService(),
+        )
+
+        const result = await service.sendReminderEmails()
+
+        expect(result).toEqual({
+            targetCount: 1,
+            sentCount: 0,
+            skippedCount: 0,
+            failedCount: 1,
+        })
+        expect(loggerWarnSpy).toHaveBeenCalledWith(
+            '수신 채널이 없어 건너뛰려던 리마인드가 변경되어 기존 일정을 해제하지 않았습니다. linkId=1',
+        )
+
+        loggerWarnSpy.mockRestore()
     })
 
     it('50건씩 발송하고 성공한 묶음을 다음 발송 전에 해제한다', async () => {
@@ -109,6 +230,7 @@ describe('ReminderService', () => {
         )
         const reminderRepository = {
             findEmailTargets: jest.fn().mockResolvedValue(reminders),
+            findEmailDisabledUserIds: jest.fn().mockResolvedValue([]),
             markSent: jest.fn().mockResolvedValue(true),
         }
         const sendBulkMock = jest.fn<
@@ -151,6 +273,7 @@ describe('ReminderService', () => {
         expect(result).toEqual({
             targetCount: 51,
             sentCount: 51,
+            skippedCount: 0,
             failedCount: 0,
         })
     })
@@ -165,6 +288,7 @@ describe('ReminderService', () => {
         ]
         const reminderRepository = {
             findEmailTargets: jest.fn().mockResolvedValue(reminders),
+            findEmailDisabledUserIds: jest.fn().mockResolvedValue([]),
             markSent: jest.fn().mockResolvedValue(true),
         }
         const sendBulkMock = jest.fn<
@@ -198,6 +322,7 @@ describe('ReminderService', () => {
         expect(result).toEqual({
             targetCount: 2,
             sentCount: 1,
+            skippedCount: 0,
             failedCount: 1,
         })
         expect(loggerErrorSpy).toHaveBeenCalledWith(
@@ -216,6 +341,7 @@ describe('ReminderService', () => {
                     finalUrl: null,
                 }),
             ]),
+            findEmailDisabledUserIds: jest.fn().mockResolvedValue([]),
             markSent: jest.fn().mockResolvedValue(true),
         }
         const sendBulkMock = jest.fn<

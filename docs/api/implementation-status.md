@@ -56,6 +56,13 @@ API 명세, Swagger, controller endpoint, 실제 비즈니스 로직의 진행 �
 | --- | :--: | :-----: | :------: | :--: | --- |
 | `PUT /users/me/push-tokens` | O | O | O | O | - |
 
+## 알림 수신 설정
+
+| API | 명세 | Swagger | Endpoint | 로직 | 남은 작업 |
+| --- | :--: | :-----: | :------: | :--: | --- |
+| `GET /users/me/notification-settings` | O | O | O | O | - |
+| `PATCH /users/me/notification-settings` | O | O | O | O | 푸시 설정은 푸시 발송(#153) 연결 후 적용 |
+
 ## 화면 단위 후속 작업
 
 | 화면 기능                    | 상태 | 남은 작업                                      |
