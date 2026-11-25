@@ -6,4 +6,5 @@ export const PUSH_RECEIPT_DELAY_MS = 15 * 60 * 1000
 export const PUSH_RECEIPT_TTL_MS = 24 * 60 * 60 * 1000
 
 // 보내지 못한 것이 확실한 일시 오류만 다시 보낸다. 요청 실패(UNKNOWN)는 중복 발송될 수 있어 다시 보내지 않는다.
-export const RETRYABLE_PUSH_ERRORS = ['MessageRateExceeded']
+// NOT_SENT는 Expo에 요청하기 전 단계(소유자 확인)에서 실패한 서버 내부 코드다.
+export const RETRYABLE_PUSH_ERRORS = ['MessageRateExceeded', 'NOT_SENT']

@@ -516,6 +516,46 @@ describe('ReminderService', () => {
         expect(result.push).toEqual({ sent: 1, failed: 2 })
     })
 
+    it('보내기 전 소유자 확인이 실패하면 보내지 않았음을 기록해 기한 안에 다시 보낼 수 있게 한다', async () => {
+        const { service, repository, pushService } = setup([createTarget()], {
+            disabled: { email: [10] },
+        })
+        repository.findPushTokenOwners.mockRejectedValueOnce(
+            new Error('DB error'),
+        )
+
+        const result = await service.sendReminders(now)
+
+        expect(pushService.send).not.toHaveBeenCalled()
+        expect(repository.recordPush).toHaveBeenCalledWith(
+            1001,
+            { status: 'FAILED', errorCode: 'NOT_SENT' },
+            now,
+        )
+        expect(repository.markSent).not.toHaveBeenCalled()
+        expect(result.push).toEqual({ sent: 0, failed: 1 })
+    })
+
+    it('보내지 않았음이 확실한 실패는 기한 안에서 다시 보낸다', async () => {
+        const { service, repository, pushService } = setup([
+            createTarget({
+                reminderAt: null,
+                emailHistory: { ...failedHistory(7), status: 'ACCEPTED' },
+                pushHistories: [
+                    {
+                        ...failedHistory(8, { errorCode: 'NOT_SENT' }),
+                        pushTokenId: 100,
+                    },
+                ],
+            }),
+        ])
+
+        await service.sendReminders(now)
+
+        expect(repository.retryPushHistory).toHaveBeenCalledWith(8, now)
+        expect(pushService.send).toHaveBeenCalledTimes(1)
+    })
+
     it('기기 등록 해제 응답을 받은 토큰만 지우고 접수 여부를 모르는 요청은 다시 보내지 않게 기록한다', async () => {
         const { service, repository } = setup(
             [

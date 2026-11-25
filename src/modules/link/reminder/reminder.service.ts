@@ -352,47 +352,54 @@ export class ReminderService {
     ): Promise<void> {
         if (claims.length === 0) return
 
-        const sendable: PushClaim[] = []
-        let sendResults: PushSendResult[]
+        let owners: Map<number, number>
 
         try {
             // 조회 뒤 로그아웃·계정 전환된 기기로 이전 계정의 링크가 가지 않도록 보내기 직전에 소유자를 다시 확인한다.
-            const owners = new Map(
+            owners = new Map(
                 (
                     await this.reminderRepository.findPushTokenOwners(
                         claims.map(({ token }) => token.id),
                     )
                 ).map(({ id, userId }) => [id, userId]),
             )
+        } catch (error) {
+            this.logError(
+                '리마인드 푸시 소유자 확인',
+                claims[0].target.linkId,
+                error,
+            )
+            // 아직 보내지 않았으므로 PENDING에 두지 않고 기한 안에 다시 보낼 수 있게 남긴다.
+            await this.recordUnsent(claims, 'NOT_SENT', now, result)
+            return
+        }
 
-            for (const claim of claims) {
-                if (owners.get(claim.token.id) === claim.target.userId) {
-                    sendable.push(claim)
-                    continue
-                }
+        const sendable = claims.filter(
+            ({ token, target }) => owners.get(token.id) === target.userId,
+        )
+        await this.recordUnsent(
+            claims.filter((claim) => !sendable.includes(claim)),
+            'TOKEN_NOT_OWNED',
+            now,
+            result,
+        )
 
-                result.failed += 1
-                await this.attempt(
-                    '리마인드 푸시 결과 기록',
-                    claim.target.linkId,
-                    () =>
-                        this.reminderRepository.recordPush(
-                            claim.historyId,
-                            { status: 'FAILED', errorCode: 'TOKEN_NOT_OWNED' },
-                            now,
-                        ),
-                )
-            }
+        if (sendable.length === 0) return
 
-            if (sendable.length === 0) return
+        let sendResults: PushSendResult[]
 
+        try {
             sendResults = await this.pushService.send(
                 sendable.map(({ target, token }) =>
                     buildReminderPushMessage(token.token, target),
                 ),
             )
         } catch (error) {
-            this.logError('리마인드 푸시 발송', claims[0].target.linkId, error)
+            this.logError(
+                '리마인드 푸시 발송',
+                sendable[0].target.linkId,
+                error,
+            )
             return
         }
 
@@ -447,6 +454,24 @@ export class ReminderService {
                         )
                     }
                 },
+            )
+        }
+    }
+
+    private async recordUnsent(
+        claims: PushClaim[],
+        errorCode: 'NOT_SENT' | 'TOKEN_NOT_OWNED',
+        now: Date,
+        result: ReminderChannelResult,
+    ) {
+        for (const { target, historyId } of claims) {
+            result.failed += 1
+            await this.attempt('리마인드 푸시 결과 기록', target.linkId, () =>
+                this.reminderRepository.recordPush(
+                    historyId,
+                    { status: 'FAILED', errorCode },
+                    now,
+                ),
             )
         }
     }
