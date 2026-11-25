@@ -156,8 +156,14 @@ describe('ReminderService', () => {
             ],
         })
         const { service, repository, sendBulk, pushService } = setup([target])
+        jest.useFakeTimers({
+            now: new Date('2026-11-26T03:16:00.000Z'),
+            doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'],
+        })
 
-        const result = await service.sendReminders(now)
+        const result = await service
+            .sendReminders(now)
+            .finally(() => jest.useRealTimers())
 
         expect(repository.assignOccurrences).toHaveBeenCalledWith(now)
         expect(repository.findTargets).toHaveBeenCalledWith(
@@ -199,10 +205,21 @@ describe('ReminderService', () => {
             now,
         )
         expect(repository.markSent).toHaveBeenCalledTimes(1)
-        expect(repository.markSent).toHaveBeenCalledWith(1, 'occurrence-1', now)
+        expect(repository.markSent).toHaveBeenCalledWith(
+            1,
+            'occurrence-1',
+            expect.any(Date),
+        )
+        // 배치 중 사용자가 바꾼 더 최근 수정 시각을 되돌리지 않도록 해제하는 시점의 시각을 쓴다.
+        const [, , finishedAt] = repository.markSent.mock.calls[0] as [
+            number,
+            string,
+            Date,
+        ]
+        expect(finishedAt.getTime()).toBeGreaterThan(now.getTime())
         expect(repository.finishExpired).toHaveBeenCalledWith(
             expiredAttemptAt,
-            now,
+            expect.any(Date),
         )
         expect(result).toEqual({
             targetCount: 1,
@@ -388,7 +405,11 @@ describe('ReminderService', () => {
         expect(repository.insertPushHistory).not.toHaveBeenCalled()
         expect(sendBulk).not.toHaveBeenCalled()
         expect(pushService.send).not.toHaveBeenCalled()
-        expect(repository.markSent).toHaveBeenCalledWith(1, 'occurrence-1', now)
+        expect(repository.markSent).toHaveBeenCalledWith(
+            1,
+            'occurrence-1',
+            expect.any(Date),
+        )
         expect(result).toMatchObject({ finishedCount: 1, skippedCount: 1 })
     })
 

@@ -73,7 +73,7 @@ export class ReminderService {
 
         result.finishedCount += await this.reminderRepository.finishExpired(
             retrySince,
-            now,
+            new Date(),
         )
 
         return result
@@ -174,7 +174,7 @@ export class ReminderService {
             if (!target.reminderAt) continue
             if (hasChannel && !sentLinkIds.has(target.linkId)) continue
             // 건너뛴 일정도 실제로 해제했을 때만 센다.
-            if (await this.markSent(target, now)) {
+            if (await this.markSent(target)) {
                 result.finishedCount += 1
                 if (!hasChannel) result.skippedCount += 1
             }
@@ -451,12 +451,13 @@ export class ReminderService {
         }
     }
 
-    private async markSent(target: ReminderTarget, now: Date) {
+    private async markSent(target: ReminderTarget) {
         try {
+            // 배치 중 사용자가 바꾼 더 최근 수정 시각을 되돌리지 않도록 해제하는 시점의 시각을 쓴다.
             const marked = await this.reminderRepository.markSent(
                 target.linkId,
                 target.occurrenceId,
-                now,
+                new Date(),
             )
 
             if (!marked) {
