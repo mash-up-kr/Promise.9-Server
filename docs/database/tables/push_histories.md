@@ -51,7 +51,7 @@ erDiagram
 - `status`는 CHECK로 필드 표에 명시된 값만 허용한다. `ACCEPTED`, `RECEIPT_OK` 상태는 `ticket_id`가 NULL일 수 없다.
 - `push_token_id`는 `push_tokens.id`를 참조하며, 토큰 삭제 시 `NULL`로 바꾸고 이력은 유지한다. (`ON DELETE SET NULL`)
 - `(link_id, occurrence_id, push_token_id)`는 유니크하다. 한 회차는 기기마다 한 번만 발송하며, 리마인드 배치는 이 제약으로 기기별 첫 발송을 선점한다. `push_token_id`가 `NULL`인 이력끼리는 겹칠 수 있다.
-- 기기 토큰 참조는 `0018`에서 뺐다가 #153에서 다시 추가했다. 기기별 중복 방지와 receipt의 `DeviceNotRegistered` 정리에 발송한 기기가 필요하다. 계정 전환으로 토큰 소유자가 바뀔 수 있어 소유자 복합 FK는 두지 않고, 정리할 때 이력의 `user_id`와 토큰 소유자를 함께 조건으로 쓴다.
+- 계정 전환으로 토큰 소유자가 바뀔 수 있어 `(push_token_id, user_id)` 소유자 복합 FK는 두지 않는다. `DeviceNotRegistered`로 토큰을 정리할 때는 이력의 `user_id`와 토큰 소유자를 함께 조건으로 쓴다.
 
 ## 인덱스 설계
 
