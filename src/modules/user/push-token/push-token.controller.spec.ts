@@ -30,7 +30,6 @@ describe('Push Token API', () => {
     let accessToken: string
     let repository: PushTokenRepository
     let register: jest.SpiedFunction<PushTokenRepository['register']>
-    let unregister: jest.SpiedFunction<PushTokenRepository['unregister']>
 
     beforeAll(async () => {
         const module = await Test.createTestingModule({
@@ -43,7 +42,7 @@ describe('Push Token API', () => {
                 PushTokenService,
                 {
                     provide: PushTokenRepository,
-                    useValue: { register: jest.fn(), unregister: jest.fn() },
+                    useValue: { register: jest.fn() },
                 },
                 JwtStrategy,
                 {
@@ -75,32 +74,23 @@ describe('Push Token API', () => {
             (token) => token === pushToken,
         )
         register = jest.spyOn(repository, 'register').mockResolvedValue(true)
-        unregister = jest
-            .spyOn(repository, 'unregister')
-            .mockResolvedValue(true)
     })
 
     afterEach(() => jest.restoreAllMocks())
     afterAll(async () => app?.close())
 
-    it.each(['put', 'delete'] as const)(
-        '%s는 인증 누락과 잘못된 JWT를 거부한다',
-        async (method) => {
-            const body = method === 'put' ? registration : { token: pushToken }
-
-            await request(app.getHttpServer())
-                [method](path)
-                .send(body)
-                .expect(401)
-            await request(app.getHttpServer())
-                [method](path)
-                .auth('invalid', { type: 'bearer' })
-                .send(body)
-                .expect(401)
-            expect(register).not.toHaveBeenCalled()
-            expect(unregister).not.toHaveBeenCalled()
-        },
-    )
+    it('등록은 인증 누락과 잘못된 JWT를 거부한다', async () => {
+        await request(app.getHttpServer())
+            .put(path)
+            .send(registration)
+            .expect(401)
+        await request(app.getHttpServer())
+            .put(path)
+            .auth('invalid', { type: 'bearer' })
+            .send(registration)
+            .expect(401)
+        expect(register).not.toHaveBeenCalled()
+    })
 
     it.each([
         {},
@@ -118,18 +108,6 @@ describe('Push Token API', () => {
         expect(register).not.toHaveBeenCalled()
     })
 
-    it.each([{}, { token: 'invalid' }, { token: pushToken, userId: 99 }])(
-        '잘못된 해제 입력은 저장소 호출 전에 거부한다: %j',
-        async (body) => {
-            await request(app.getHttpServer())
-                .delete(path)
-                .auth(accessToken, { type: 'bearer' })
-                .send(body)
-                .expect(400)
-            expect(unregister).not.toHaveBeenCalled()
-        },
-    )
-
     it('등록 시 JWT 사용자와 정규화된 토큰·플랫폼만 전달하고 본문 없는 204를 반환한다', async () => {
         register.mockResolvedValue(true)
         const response = await request(app.getHttpServer())
@@ -142,55 +120,45 @@ describe('Push Token API', () => {
         expect(response.text).toBe('')
     })
 
-    it('해제 시 JWT 사용자와 해당 토큰만 전달하고 본문 없는 204를 반환한다', async () => {
-        unregister.mockResolvedValue(true)
-        const response = await request(app.getHttpServer())
-            .delete(path + '?userId=99')
+    it('삭제 API를 제공하지 않는다', async () => {
+        await request(app.getHttpServer())
+            .delete(path)
             .auth(accessToken, { type: 'bearer' })
             .send({ token: pushToken })
-            .expect(204)
-
-        expect(unregister).toHaveBeenCalledWith(7, pushToken)
-        expect(response.text).toBe('')
+            .expect(404)
+        expect(register).not.toHaveBeenCalled()
     })
 
-    it.each(['put', 'delete'] as const)(
-        '%s는 존재하지 않거나 탈퇴한 사용자를 거부한다',
-        async (method) => {
-            if (method === 'put') register.mockResolvedValue(false)
-            else unregister.mockResolvedValue(false)
-            const response = await request(app.getHttpServer())
-                [method](path)
-                .auth(accessToken, { type: 'bearer' })
-                .send(method === 'put' ? registration : { token: pushToken })
-                .expect(404)
+    it('등록은 존재하지 않거나 탈퇴한 사용자를 거부한다', async () => {
+        register.mockResolvedValue(false)
+        const response = await request(app.getHttpServer())
+            .put(path)
+            .auth(accessToken, { type: 'bearer' })
+            .send(registration)
+            .expect(404)
 
-            expect(response.body).toMatchObject({
-                success: false,
-                error: {
-                    code: 404,
-                    errorCode: 960001,
-                    message: '유저를 찾을 수 없습니다.',
-                },
-            })
-            expect(response.text).not.toContain(pushToken)
-        },
-    )
+        expect(response.body).toMatchObject({
+            success: false,
+            error: {
+                code: 404,
+                errorCode: 960001,
+                message: '유저를 찾을 수 없습니다.',
+            },
+        })
+        expect(response.text).not.toContain(pushToken)
+    })
 
-    it('Swagger에 인증·등록/해제 요청·204와 비활성 계정의 404 상태를 명시한다', () => {
+    it('Swagger에 등록 API만 노출하고 인증·204·404 상태를 명시한다', () => {
         const document = SwaggerModule.createDocument(
             app,
             new DocumentBuilder().addBearerAuth().build(),
         )
-        for (const operation of [
-            document.paths[path].put,
-            document.paths[path].delete,
-        ]) {
-            expect(operation?.security).toEqual([{ bearer: [] }])
-            expect(operation?.responses).toHaveProperty('204')
-            expect(operation?.responses).toHaveProperty('404')
-            expect(operation?.responses).not.toHaveProperty('501')
-            expect(operation?.requestBody).toBeDefined()
-        }
+        expect(document.paths[path].delete).toBeUndefined()
+        const operation = document.paths[path].put
+        expect(operation?.security).toEqual([{ bearer: [] }])
+        expect(operation?.responses).toHaveProperty('204')
+        expect(operation?.responses).toHaveProperty('404')
+        expect(operation?.responses).not.toHaveProperty('501')
+        expect(operation?.requestBody).toBeDefined()
     })
 })

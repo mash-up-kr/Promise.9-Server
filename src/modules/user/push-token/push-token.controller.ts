@@ -1,7 +1,6 @@
 import {
     Body,
     Controller,
-    Delete,
     HttpCode,
     HttpStatus,
     Put,
@@ -14,15 +13,10 @@ import { AuthUser, JwtAuthGuard } from '../../../common/guards/jwt-auth.guard'
 import { ZodValidationPipe } from '../../../common/pipe/zod-validation.pipe'
 
 import { PushTokenService } from './push-token.service'
-import {
-    ApiRegisterPushToken,
-    ApiUnregisterPushToken,
-} from './push-token.swagger'
+import { ApiRegisterPushToken } from './push-token.swagger'
 import {
     RegisterPushTokenInput,
     registerPushTokenSchema,
-    UnregisterPushTokenInput,
-    unregisterPushTokenSchema,
 } from './push-token.type'
 
 @ApiTags('Push Token')
@@ -42,17 +36,5 @@ export class PushTokenController {
         input: RegisterPushTokenInput,
     ) {
         return this.pushTokenService.register(user.userId, input)
-    }
-
-    /** 로그아웃 등으로 현재 기기 토큰의 사용자 연결을 해제한다. */
-    @Delete()
-    @HttpCode(HttpStatus.NO_CONTENT)
-    @ApiUnregisterPushToken()
-    unregister(
-        @CurrentUser() user: AuthUser,
-        @Body(new ZodValidationPipe(unregisterPushTokenSchema))
-        input: UnregisterPushTokenInput,
-    ) {
-        return this.pushTokenService.unregister(user.userId, input)
     }
 }

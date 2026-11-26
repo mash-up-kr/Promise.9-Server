@@ -161,16 +161,21 @@ export const ApiRefreshToken = () =>
 
 export const ApiLogout = () =>
     applyDecorators(
-        ApiOperation({ summary: '로그아웃' }),
+        ApiOperation({
+            summary: '로그아웃',
+            description:
+                '리프레시 토큰과 해당 사용자의 기기 푸시 토큰을 같은 트랜잭션에서 삭제합니다. 리프레시 토큰의 서명과 용도는 검증하며 만료는 허용합니다. 이미 삭제된 토큰의 재요청도 성공합니다.',
+        }),
         ApiBody({
             type: LogoutDto,
-            description: '- `refreshToken` (필수): 폐기할 Refresh Token',
+            description:
+                '- `refreshToken` (필수): 폐기할 Refresh Token (만료 허용)\n- `pushToken` (선택): 해당 기기의 Expo Push Token. 누락·잘못된 형식은 무시합니다.',
         }),
         ApiNoContentResponse({ description: '로그아웃 성공 (응답 본문 없음)' }),
         ApiCommonErrorResponses(
             COMMON_ERROR.VALIDATION,
             AUTH_ERROR.INVALID_TOKEN,
-            AUTH_ERROR.EXPIRED_TOKEN,
+            COMMON_ERROR.INTERNAL_SERVER_ERROR,
         ),
     )
 

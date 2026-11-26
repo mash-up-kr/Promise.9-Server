@@ -1,5 +1,7 @@
-import { ApiProperty } from '@nestjs/swagger'
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { z } from 'zod'
+
+import { expoPushTokenSchema } from '../../user/push-token/push-token.type'
 
 export const SUPPORTED_PROVIDERS = ['google', 'kakao', 'apple'] as const
 export type SupportedProvider = (typeof SUPPORTED_PROVIDERS)[number]
@@ -17,6 +19,7 @@ export type RefreshInput = z.infer<typeof refreshSchema>
 
 export const logoutSchema = z.object({
     refreshToken: z.string().min(1),
+    pushToken: expoPushTokenSchema.optional().catch(undefined),
 })
 export type LogoutInput = z.infer<typeof logoutSchema>
 
@@ -61,6 +64,13 @@ export class LogoutDto {
         description: '[필수] 폐기할 리프레시 토큰',
     })
     refreshToken!: string
+
+    @ApiPropertyOptional({
+        example: 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]',
+        description:
+            '로그아웃하는 기기의 Expo Push Token. 생략하거나 형식이 잘못되면 푸시 토큰 삭제만 건너뜁니다.',
+    })
+    pushToken?: string
 }
 
 export class WithdrawDto {
