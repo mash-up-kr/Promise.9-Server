@@ -13,7 +13,15 @@ const booleanQuerySchema = z.preprocess((value) => {
     return value
 }, z.boolean())
 
-const customTitleSchema = z.string().trim().min(1).max(512).nullish()
+const customTitleSchema = z
+    .string()
+    .trim()
+    .min(1)
+    // PostgreSQL varchar 길이와 동일하게 UTF-16 코드 단위 대신 코드 포인트를 센다.
+    .refine((value) => [...value].length <= 512, {
+        message: '사용자 지정 제목은 최대 512자까지 입력할 수 있습니다.',
+    })
+    .nullish()
 
 const reminderAtSchema = z.iso
     .datetime({ offset: true })
