@@ -66,6 +66,7 @@ export const links = pgTable(
         finalUrl: text(),
         domain: varchar({ length: 255 }),
         title: varchar({ length: 512 }),
+        customTitle: varchar({ length: 512 }),
         // OG/favicon/description/이미지/색상 등 확장 메타데이터
         metadata: jsonb().$type<LinkMetadata>(),
         aiSummary: text(),
@@ -128,7 +129,7 @@ export const links = pgTable(
         index('links_title_search_trgm_idx')
             .using(
                 'gin',
-                sql`${normalizedSearchText([table.title])} gin_trgm_ops`,
+                sql`${normalizedSearchText([sql`coalesce(${table.customTitle}, ${table.title})`])} gin_trgm_ops`,
             )
             .where(sql`${table.deletedAt} is null`),
         index('links_content_search_trgm_idx')

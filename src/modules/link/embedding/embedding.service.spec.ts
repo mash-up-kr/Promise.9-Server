@@ -47,6 +47,7 @@ describe('EmbeddingService', () => {
             2,
             11,
             embedding,
+            source,
         )
     })
 
@@ -71,7 +72,12 @@ describe('EmbeddingService', () => {
         await expect(service.embedLink(2, 11)).resolves.toBe(false)
 
         expect(aiService.embedText).not.toHaveBeenCalled()
-        expect(linkRepository.updateEmbedding).toHaveBeenCalledWith(2, 11, null)
+        expect(linkRepository.updateEmbedding).toHaveBeenCalledWith(
+            2,
+            11,
+            null,
+            emptySource,
+        )
     })
 
     it('활성 링크에 embedding을 저장하지 못하면 실패를 반환한다', async () => {
@@ -81,4 +87,53 @@ describe('EmbeddingService', () => {
 
         await expect(service.embedLink(2, 11)).resolves.toBe(false)
     })
+
+    it.each(['바꾼 제목', '수집 제목'])(
+        '이전 임베딩이 늦게 끝나도 제목 변경·해제 후 벡터를 덮어쓰지 않는다: %s',
+        async (title) => {
+            let current = { ...source }
+            let stored: number[] | null = null
+            let finishFirst!: (value: number[]) => void
+            const repository = {
+                findEmbeddingSource: jest.fn(() =>
+                    Promise.resolve({ ...current }),
+                ),
+                updateEmbedding: jest.fn(
+                    (
+                        _userId: number,
+                        _linkId: number,
+                        embedding: number[] | null,
+                        expected?: LinkEmbeddingSource,
+                    ) => {
+                        if (expected && expected.title !== current.title) {
+                            return Promise.reject(
+                                new Error('임베딩 원본이 변경되었습니다.'),
+                            )
+                        }
+                        stored = embedding
+                        return Promise.resolve(true)
+                    },
+                ),
+            }
+            const service = new EmbeddingService(
+                aiService as unknown as AiService,
+                repository as unknown as LinkRepository,
+            )
+            aiService.embedText
+                .mockImplementationOnce(
+                    () => new Promise((resolve) => (finishFirst = resolve)),
+                )
+                .mockResolvedValueOnce([2])
+
+            const first = service.embedLink(2, 11)
+            await new Promise(setImmediate)
+            current = { ...source, title }
+            await expect(service.embedLink(2, 11)).resolves.toBe(true)
+            const stale = expect(first).rejects.toThrow('원본')
+            finishFirst([1])
+            await stale
+
+            expect(stored).toEqual([2])
+        },
+    )
 })

@@ -135,7 +135,7 @@ export async function runBackfillCli(args: string[]): Promise<void> {
                 select
                     l.id,
                     l.user_id,
-                    l.title,
+                    coalesce(l.custom_title, l.title) as title,
                     l.ai_summary,
                     coalesce(
                         array_agg(t.name order by t.sort_order, t.id)
@@ -343,7 +343,7 @@ async function embedAndSave(
                 where id = ${row.id}
                   and user_id = ${row.user_id}
                   and deleted_at is null
-                  and title is not distinct from ${row.title}
+                  and coalesce(custom_title, title) is not distinct from ${row.title}
                   and ai_summary is not distinct from ${row.ai_summary}
                   and coalesce((
                       select array_agg(t.name order by t.sort_order, t.id)
@@ -386,7 +386,7 @@ async function embedAndSave(
                   and user_id = ${row.user_id}
                   and deleted_at is null
                   and ${embeddingCondition}
-                  and title is not distinct from ${row.title}
+                  and coalesce(custom_title, title) is not distinct from ${row.title}
                   and ai_summary is not distinct from ${row.ai_summary}
                   and coalesce((
                       select array_agg(t.name order by t.sort_order, t.id)

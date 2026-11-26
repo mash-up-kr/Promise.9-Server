@@ -145,10 +145,14 @@ URL을 먼저 저장하고 링크 정보·대표 이미지 수집, 이미지 색
 ```json
 {
     "url": "https://toss.tech/article/example",
+    "customTitle": "다시 읽을 개발 가이드",
     "folderId": null,
     "memo": null
 }
 ```
+
+- `customTitle`은 선택 입력이며, 앞뒤 공백을 제거한 1~512자 문자열이다. 빈 문자열·공백만 있는 값은 `400`으로 거부한다.
+- `customTitle`을 생략하거나 `null`로 보내면 수집된 제목을 사용한다.
 
 **Response `201`**
 
@@ -158,6 +162,8 @@ URL을 먼저 저장하고 링크 정보·대표 이미지 수집, 이미지 색
     "data": {
         "linkId": 42,
         "url": "https://toss.tech/article/example",
+        "title": "다시 읽을 개발 가이드",
+        "customTitle": "다시 읽을 개발 가이드",
         "savedAt": "2026-07-13T00:00:00.000Z"
     }
 }
@@ -202,6 +208,7 @@ GET /links/{linkId}
         },
         "thumbnailUrl": "https://static.example.com/thumbnail.png",
         "title": "신입 디자이너가 알아야 할 실험 설계 팁",
+        "customTitle": null,
         "source": "toss.tech",
         "publishedAt": "2026-06-19T00:00:00.000Z",
         "savedAt": "2026-07-13T00:00:00.000Z",
@@ -228,6 +235,9 @@ GET /links/{linkId}
     }
 }
 ```
+
+- `title`은 최종 표시 제목이며, 제목이 없으면 `null`이다. 제목 선택 규칙은 [사용자 지정 제목 정책](../policy/link.md#6-사용자-지정-제목-정책)을 따른다.
+- `customTitle`은 사용자 지정 제목이며, 설정하지 않았거나 해제했으면 `null`이다.
 
 ### 비동기 처리 중 응답
 
@@ -257,19 +267,21 @@ DB의 `ai_summary_status`에는 개발자 검토용 `NEEDS_REVIEW` 값이 추가
 PATCH /links/{linkId}
 ```
 
-폴더, 메모, 즐겨찾기 중 전달된 필드만 변경한다.
+사용자 지정 제목, 폴더, 메모, 리마인더, 즐겨찾기 중 전달된 필드만 변경한다.
 
 **Request Body**
 
 ```json
 {
+    "customTitle": "다시 읽을 개발 가이드",
     "folderId": 3,
     "memo": "나중에 다시 보기",
     "isFavorite": true
 }
 ```
 
-`folderId=null`은 미분류로 이동한다는 의미다.
+- `customTitle`을 생략하면 기존 값을 유지하고, `null`로 보내면 사용자 지정 제목을 해제한다.
+- `folderId=null`은 미분류로 이동한다는 의미다.
 
 **Response `200`**
 
@@ -279,6 +291,8 @@ PATCH /links/{linkId}
     "data": {
         "linkId": 42,
         "folderId": 3,
+        "title": "다시 읽을 개발 가이드",
+        "customTitle": "다시 읽을 개발 가이드",
         "memo": "나중에 다시 보기",
         "isFavorite": true,
         "updatedAt": "2026-07-13T00:00:00.000Z"

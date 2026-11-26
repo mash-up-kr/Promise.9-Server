@@ -1,6 +1,11 @@
 import { MAX_BULK_MOVE_LINKS } from '../link.constants'
 
-import { listLinksQuerySchema, moveLinksToFolderSchema } from './link.dto'
+import {
+    createLinkSchema,
+    listLinksQuerySchema,
+    moveLinksToFolderSchema,
+    updateLinkSchema,
+} from './link.dto'
 
 describe('listLinksQuerySchema', () => {
     it('전체 링크는 저장 시각 최신순 cursor 페이지네이션 기본값을 적용한다', () => {
@@ -80,5 +85,63 @@ describe('moveLinksToFolderSchema', () => {
         expect(
             moveLinksToFolderSchema.safeParse({ linkIds: [42] }).success,
         ).toBe(false)
+    })
+})
+
+describe('사용자 지정 제목', () => {
+    it.each([
+        null,
+        '제목',
+        '가'.repeat(512),
+        '😀'.repeat(257),
+        '😀'.repeat(512),
+        '가'.repeat(511) + '😀',
+    ])('생성과 수정에서 제목을 허용한다', (customTitle) => {
+        expect(
+            createLinkSchema.parse({
+                url: 'https://example.com',
+                customTitle,
+            }).customTitle,
+        ).toBe(customTitle)
+        expect(updateLinkSchema.parse({ customTitle }).customTitle).toBe(
+            customTitle,
+        )
+    })
+
+    it.each([
+        '',
+        '   ',
+        '가'.repeat(513),
+        '😀'.repeat(513),
+        '가'.repeat(512) + '😀',
+        123,
+    ])('빈 제목과 잘못된 입력을 거부한다', (customTitle) => {
+        expect(
+            createLinkSchema.safeParse({
+                url: 'https://example.com',
+                customTitle,
+            }).success,
+        ).toBe(false)
+        expect(updateLinkSchema.safeParse({ customTitle }).success).toBe(false)
+    })
+
+    it('앞뒤 공백을 제거한 뒤 보충 평면 문자 512자를 허용한다', () => {
+        const title = '😀'.repeat(512)
+        const customTitle = `  ${title}  `
+        expect(
+            createLinkSchema.parse({ url: 'https://example.com', customTitle })
+                .customTitle,
+        ).toBe(title)
+        expect(updateLinkSchema.parse({ customTitle }).customTitle).toBe(title)
+    })
+
+    it('앞뒤 공백을 제거하고 생략한 수정 요청은 거부한다', () => {
+        expect(updateLinkSchema.parse({ customTitle: '  제목  ' })).toEqual({
+            customTitle: '제목',
+        })
+        expect(updateLinkSchema.safeParse({}).success).toBe(false)
+        expect(
+            createLinkSchema.parse({ url: 'https://example.com' }).customTitle,
+        ).toBeUndefined()
     })
 })

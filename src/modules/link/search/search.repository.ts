@@ -78,7 +78,9 @@ export class SearchRepository {
         tokens: readonly string[],
         options: SearchCandidateOptions,
     ): Promise<number[]> {
-        const searchText = normalizedSearchText([links.title])
+        const searchText = normalizedSearchText([
+            sql`coalesce(${links.customTitle}, ${links.title})`,
+        ])
         const keyword = this.buildTokenKeywordCondition(searchText, tokens)
 
         if (!keyword) return []
@@ -234,7 +236,9 @@ export class SearchRepository {
         const rows = await this.db
             .select({
                 id: links.id,
-                title: links.title,
+                title: sql<
+                    string | null
+                >`coalesce(${links.customTitle}, ${links.title})`,
                 domain: links.domain,
                 originalUrl: links.originalUrl,
                 finalUrl: links.finalUrl,
